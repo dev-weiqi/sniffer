@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { HttpMockRule, HttpRow } from './state'
-import { copyText, fmtDuration, fmtSize, fmtTime, statusClass, toCurl, urlParts } from './util'
+import { copyText, fmtDuration, fmtSize, fmtTime, statusClass, toCurl, urlParts, useDetailWidth, useListKeys } from './util'
 import { newRuleId } from './util'
 import { JsonView } from './JsonView'
 
@@ -26,6 +26,9 @@ export function HttpView({ rows, onMock, onClear }: {
 
   // rows arrive in chronological order; reversing yields newest-first
   const sorted = useMemo(() => (sortDesc ? [...rows].reverse() : rows), [rows, sortDesc])
+  const ids = useMemo(() => sorted.map(r => r.id), [sorted])
+  useListKeys(ids, selectedId, setSelectedId)
+  const [detailWidth, startDetailDrag] = useDetailWidth()
 
   useEffect(() => {
     const el = listRef.current
@@ -33,7 +36,7 @@ export function HttpView({ rows, onMock, onClear }: {
   }, [rows.length, selectedId, sortDesc])
 
   return (
-    <div className="split">
+    <div className="split" style={{ ['--detail-w' as string]: `${detailWidth}px` }}>
       <div className="list-pane">
         <div className="panel-toolbar">
           <span className="dim">API traffic</span>
@@ -89,6 +92,7 @@ export function HttpView({ rows, onMock, onClear }: {
         </div>
       </div>
 
+      {selected && <div className="pane-resizer" onMouseDown={startDetailDrag} />}
       {selected && <HttpDetail row={selected} onMock={onMock} onClose={() => setSelectedId(null)} />}
     </div>
   )

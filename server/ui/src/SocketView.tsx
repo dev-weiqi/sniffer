@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SocketConn, SocketMockRule, SocketRow } from './state'
-import { fmtTime, newRuleId } from './util'
+import { fmtTime, newRuleId, useDetailWidth, useListKeys } from './util'
 import { JsonView } from './JsonView'
 import { KV, Section } from './HttpView'
 
@@ -17,16 +17,33 @@ export function SocketView({ events, conns, deviceId, onMockAck, onPushPrefill, 
   const selected = events.find(e => e.id === selectedId) ?? null
   const sorted = sortDesc ? [...events].reverse() : events
   const liveConns = conns.filter(c => c.deviceId === deviceId && c.status === 'connected')
+  const ids = useMemo(() => sorted.map(e => e.id), [sorted])
+  useListKeys(ids, selectedId, setSelectedId)
+  const [detailWidth, startDetailDrag] = useDetailWidth()
+  const listRef = useRef<HTMLDivElement>(null)
+  const stickBottom = useRef(true)
+
+  useEffect(() => {
+    const el = listRef.current
+    if (el && !sortDesc && stickBottom.current && !selectedId) el.scrollTop = el.scrollHeight
+  }, [events.length, selectedId, sortDesc])
 
   return (
-    <div className="split">
+    <div className="split" style={{ ['--detail-w' as string]: `${detailWidth}px` }}>
       <div className="list-pane">
         <div className="panel-toolbar">
           <span className="dim">Socket events</span>
           <span className="spacer" />
           <button className="clear-btn" disabled={events.length === 0} onClick={onClear}>Clear Socket</button>
         </div>
-        <div className="list-scroll">
+        <div
+          className="list-scroll"
+          ref={listRef}
+          onScroll={e => {
+            const el = e.currentTarget
+            stickBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+          }}
+        >
         {liveConns.length > 0 && (
           <div className="conn-bar">
             {liveConns.map(c => (
@@ -73,6 +90,7 @@ export function SocketView({ events, conns, deviceId, onMockAck, onPushPrefill, 
         </div>
       </div>
 
+      {selected && <div className="pane-resizer" onMouseDown={startDetailDrag} />}
       <aside className="detail-pane">
         {selected ? (
           <>

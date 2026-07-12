@@ -165,8 +165,13 @@ button.danger:hover { color: var(--err); border-color: color-mix(in srgb, var(--
 }
 .panel-toolbar .clear-btn { padding: 3px 10px; font-size: 13px; }
 
+.pane-resizer {
+  width: 5px; flex-shrink: 0; cursor: col-resize;
+  background: transparent; transition: background 0.15s;
+}
+.pane-resizer:hover { background: var(--accent); }
 .detail-pane {
-  width: 420px; min-width: 320px; max-width: 45%;
+  width: var(--detail-w, 420px); min-width: 320px; max-width: 60vw;
   overflow: auto;
   border-left: 1px solid var(--border);
   background: var(--bg-panel);
