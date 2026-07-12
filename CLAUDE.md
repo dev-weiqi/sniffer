@@ -86,8 +86,9 @@ public key published to keys.openpgp.org). POM metadata lives in `client/gradle.
 3. Verify: `npm view @dev-weiqi/sniffer version`, then install the tarball in a temp dir and
    smoke-test `sniffer start` + `curl /api/state`.
 
-The daemon resolves the UI from `ui-dist/` (published package) or `../ui/dist` (repo
-checkout) — keep both layouts working if you move files.
+The daemon resolves the UI from `../ui/dist` (repo checkout) first, then `ui-dist/`
+(published package) — repo first, or a stale `ui-dist/` left by npm pack shadows fresh
+builds. `postpack` removes the staging dir; keep both layouts working if you move files.
 
 ## Style
 

@@ -14,9 +14,10 @@ const PORT = Number(process.env.PORT ?? 9091)
 const MAX_STORED_MESSAGES = 2000
 // UI location differs by layout: `ui-dist/` sits next to `dist/` in the published npm package;
 // `../ui/dist` is the repo checkout (running from src/ via tsx).
+// repo layout first: a stale ui-dist/ left behind by npm pack must never shadow ui/dist
 const UI_DIST = [
-  fileURLToPath(new URL('../ui-dist', import.meta.url)),
   fileURLToPath(new URL('../../ui/dist', import.meta.url)),
+  fileURLToPath(new URL('../ui-dist', import.meta.url)),
 ].find(existsSync) ?? fileURLToPath(new URL('../../ui/dist', import.meta.url))
 
 // ---------- state (in-memory, cleared on restart) ----------

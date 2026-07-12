@@ -25,7 +25,8 @@
     "start": "tsx src/server.ts",
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json",
-    "prepack": "npm run build && npm --prefix ../ui run build && rm -rf ui-dist && cp -R ../ui/dist ui-dist"
+    "prepack": "npm run build && npm --prefix ../ui run build && rm -rf ui-dist && cp -R ../ui/dist ui-dist",
+    "postpack": "rm -rf ui-dist"
   },
   "dependencies": {
     "socket.io": "^4.8.1",
