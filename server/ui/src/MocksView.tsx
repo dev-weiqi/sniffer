@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { HttpMockRule, Mocks, SocketConn, SocketMockRule } from './state'
 import { api } from './state'
 import { newRuleId } from './util'
@@ -197,6 +197,7 @@ function PushRecordCard({ record, conns, deviceId, onChange, onDelete }: {
   onDelete: () => void
 }) {
   const [status, setStatus] = useState<'sent' | 'error' | null>(null)
+  const payloadRef = useRef<HTMLTextAreaElement>(null)
 
   const liveOptions = conns.filter(c => c.deviceId === deviceId && c.status === 'connected').map(c => ({
     key: c.connectionId,
@@ -236,11 +237,11 @@ function PushRecordCard({ record, conns, deviceId, onChange, onDelete }: {
       {!targetMissing && liveOptions.length === 0 && (
         <div className="dim hint">No active socket connections for this device; All connections will send when the SDK has a live socket.</div>
       )}
-      <textarea className="mono" rows={3} placeholder="payload (JSON or plain text)" value={record.payload}
+      <textarea ref={payloadRef} className="mono" rows={3} placeholder="payload (JSON or plain text)" value={record.payload}
         onChange={e => onChange({ ...record, payload: e.target.value })} />
       <div className="rule-body-tools">
         <JsonTool label="Pretty JSON" body={record.payload} transform={v => JSON.stringify(v, null, 2)} onResult={p => onChange({ ...record, payload: p })} />
-        <PlaceholderTools onInsert={token => onChange({ ...record, payload: record.payload + token })} />
+        <PlaceholderTools value={record.payload} onValue={payload => onChange({ ...record, payload })} taRef={payloadRef} />
       </div>
     </div>
   )
@@ -252,6 +253,7 @@ function HttpRuleEditor({ rule, onChange, onDelete }: {
   onDelete: () => void
 }) {
   const [sub, setSub] = useState<'body' | 'headers'>('body')
+  const bodyRef = useRef<HTMLTextAreaElement>(null)
   const headerCount = Object.keys(rule.headers).length
   return (
     <div className="rule-card" data-disabled={!rule.enabled || undefined}>
@@ -294,12 +296,12 @@ function HttpRuleEditor({ rule, onChange, onDelete }: {
           </div>
           {sub === 'body' ? (
             <>
-              <textarea className="mono" rows={5} placeholder="response body" value={rule.body}
+              <textarea ref={bodyRef} className="mono" rows={5} placeholder="response body" value={rule.body}
                 onChange={e => onChange({ ...rule, body: e.target.value })} />
               <div className="rule-body-tools">
                 <JsonTool label="Pretty JSON" body={rule.body} transform={v => JSON.stringify(v, null, 2)}
                   onResult={body => onChange({ ...rule, body })} />
-                <PlaceholderTools onInsert={token => onChange({ ...rule, body: rule.body + token })} />
+                <PlaceholderTools value={rule.body} onValue={body => onChange({ ...rule, body })} taRef={bodyRef} />
               </div>
             </>
           ) : (
@@ -387,6 +389,7 @@ function SocketRuleEditor({ rule, onChange, onDelete }: {
   onChange: (r: SocketMockRule) => void
   onDelete: () => void
 }) {
+  const ackRef = useRef<HTMLTextAreaElement>(null)
   return (
     <div className="rule-card" data-disabled={!rule.enabled || undefined}>
       <div className="rule-row">
@@ -410,13 +413,13 @@ function SocketRuleEditor({ rule, onChange, onDelete }: {
           {rule.transport === 'socketio' ? 'Ack payload' : 'Reply frame'}
         </button>
       </div>
-      <textarea className="mono" rows={5}
+      <textarea ref={ackRef} className="mono" rows={5}
         placeholder={rule.transport === 'socketio' ? 'ack payload (JSON array = multiple args)' : 'fake reply frame (raw text)'}
         value={rule.ackPayload} onChange={e => onChange({ ...rule, ackPayload: e.target.value })} />
       <div className="rule-body-tools">
         <JsonTool label="Pretty JSON" body={rule.ackPayload} transform={v => JSON.stringify(v, null, 2)}
           onResult={ackPayload => onChange({ ...rule, ackPayload })} />
-        <PlaceholderTools onInsert={token => onChange({ ...rule, ackPayload: rule.ackPayload + token })} />
+        <PlaceholderTools value={rule.ackPayload} onValue={ackPayload => onChange({ ...rule, ackPayload })} taRef={ackRef} />
       </div>
     </div>
   )
@@ -438,13 +441,29 @@ function PlaceholderGuide() {
   )
 }
 
-function PlaceholderTools({ onInsert }: { onInsert: (token: string) => void }) {
+function PlaceholderTools({ value, onValue, taRef }: {
+  value: string
+  onValue: (next: string) => void
+  taRef: React.RefObject<HTMLTextAreaElement | null>
+}) {
+  const insert = (token: string) => {
+    const ta = taRef.current
+    // insert at the textarea's cursor (selection survives the button click's blur)
+    const start = ta?.selectionStart ?? value.length
+    const end = ta?.selectionEnd ?? start
+    onValue(value.slice(0, start) + token + value.slice(end))
+    if (ta) requestAnimationFrame(() => {
+      ta.focus()
+      const pos = start + token.length
+      ta.setSelectionRange(pos, pos)
+    })
+  }
   return (
     <>
       {PlaceholderTokens.map(item => (
         <button key={item.key} className="pill-btn" title={item.label} onClick={() => {
           const token = buildPlaceholderToken(item.key)
-          if (token) onInsert(token)
+          if (token) insert(token)
         }}>
           {item.syntax}
         </button>
