@@ -52,6 +52,7 @@ export interface HttpRow {
   respBase64?: boolean
   respSize?: number
   durationMs?: number
+  delayedMs?: number
   mocked?: boolean
   error?: string | null
 }
@@ -125,6 +126,8 @@ function applyDeviceMessage(state: State, deviceId: string, m: Msg): State {
         respBase64: m.bodyBase64 ?? false,
         respSize: m.bodySize ?? 0, durationMs: m.durationMs, mocked: m.mocked,
         error: m.error,
+        // absent on follow-up updates (e.g. SSE tee) must not erase an earlier value
+        delayedMs: m.delayedMs ?? r.delayedMs,
       } : r)
       return { ...state, http }
     }

@@ -32,7 +32,8 @@ content (`body: null`). Bodies over **1 MB** are truncated and flagged
 
 { "type": "http-response", "id": "<uuid>", "status": 200, "headers": {},
   "body": "{...}", "bodySize": 18879, "bodyTruncated": false,
-  "durationMs": 115, "mocked": false, "error": null, "timestamp": 0 }
+  "durationMs": 115, "mocked": false, "error": null, "timestamp": 0,
+  "delayedMs": 0 }        // optional: latency injected by a delay-only rule (real request still ran)
 // on transport failure: status=0, error=<message>
 
 // socket connection lifecycle

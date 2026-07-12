@@ -55,9 +55,15 @@ internal class SnifferInterceptor(
         // Golden rule: a Sniffer bug must never break the host app's traffic. Everything
         // except the real chain.proceed runs fenced — on any SDK failure the request and
         // response pass through untouched.
+        var injectedDelayMs = 0L
         try {
             reportRequest(id, request)
-            mockResponse(id, request)?.let { return it }
+            val rule = MockRegistry.matchHttp(request.method, request.url.toString())
+            if (rule != null) {
+                if (rule.delayMs > 0) Thread.sleep(rule.delayMs)
+                if (rule.delayOnly) injectedDelayMs = rule.delayMs
+                else return mockResponse(id, request, rule)
+            }
         } catch (t: Throwable) {
             // restore the flag so host cancellation semantics survive the fence
             if (t is InterruptedException) Thread.currentThread().interrupt()
@@ -74,13 +80,14 @@ internal class SnifferInterceptor(
                         bodySize = 0, bodyTruncated = false,
                         durationMs = (System.nanoTime() - start) / 1_000_000,
                         mocked = false, error = e.toString(), timestamp = now(),
+                        delayedMs = injectedDelayMs,
                     )
                 )
             }
             throw e
         }
         return try {
-            reportResponse(id, start, response)
+            reportResponse(id, start, response, injectedDelayMs)
         } catch (t: Throwable) {
             response
         }
@@ -108,10 +115,7 @@ internal class SnifferInterceptor(
         )
     }
 
-    private fun mockResponse(id: String, request: Request): Response? {
-        val rule = MockRegistry.matchHttp(request.method, request.url.toString()) ?: return null
-        if (rule.delayMs > 0) Thread.sleep(rule.delayMs)
-        if (rule.delayOnly) return null // delay applied; fall through to the real request
+    private fun mockResponse(id: String, request: Request, rule: dev.weiqi.sniffer.core.HttpMockRule): Response {
         val body = expandMockPlaceholders(rule.body)
         val contentType = rule.headers.entries
             .firstOrNull { it.key.equals("content-type", true) }?.value ?: "application/json"
@@ -133,7 +137,7 @@ internal class SnifferInterceptor(
         return response
     }
 
-    private fun reportResponse(id: String, start: Long, response: Response): Response {
+    private fun reportResponse(id: String, start: Long, response: Response, delayedMs: Long): Response {
         val durationMs = (System.nanoTime() - start) / 1_000_000
 
         val respCt = response.header("content-type")
@@ -151,7 +155,7 @@ internal class SnifferInterceptor(
                     bodySize = bytes?.size?.toLong() ?: 0,
                     bodyTruncated = bytes != null && !fits,
                     durationMs = durationMs, mocked = false, error = null,
-                    timestamp = now(), bodyBase64 = fits,
+                    timestamp = now(), bodyBase64 = fits, delayedMs = delayedMs,
                 )
             )
             return response
@@ -165,7 +169,7 @@ internal class SnifferInterceptor(
                 HttpResponseMsg(
                     id = id, status = response.code, headers = response.headers.toMap(),
                     body = null, bodySize = 0, bodyTruncated = false,
-                    durationMs = durationMs, mocked = false, error = null, timestamp = now(),
+                    durationMs = durationMs, mocked = false, error = null, timestamp = now(), delayedMs = delayedMs,
                 )
             )
             return response.newBuilder()
@@ -181,7 +185,7 @@ internal class SnifferInterceptor(
             HttpResponseMsg(
                 id = id, status = response.code, headers = response.headers.toMap(),
                 body = respBody.body, bodySize = respBody.size, bodyTruncated = respBody.truncated,
-                durationMs = durationMs, mocked = false, error = null, timestamp = now(),
+                durationMs = durationMs, mocked = false, error = null, timestamp = now(), delayedMs = delayedMs,
             )
         )
         return response

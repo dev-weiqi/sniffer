@@ -216,6 +216,7 @@ table.grid tbody tr[data-selected] { background: var(--accent-soft); box-shadow:
   vertical-align: 1px;
 }
 .badge.mock { background: var(--mock); color: #fff; }
+.badge.delay { background: var(--warn); color: #fff; }
 .badge.lib { background: var(--bg-alt); color: var(--text-dim); border: 1px solid var(--border); }
 
 .dir-out { color: var(--info); font-weight: 700; }

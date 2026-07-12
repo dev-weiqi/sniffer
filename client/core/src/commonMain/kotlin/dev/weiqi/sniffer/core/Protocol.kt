@@ -54,6 +54,8 @@ data class HttpResponseMsg(
     val timestamp: Long,
     // when true, [body] is base64-encoded raw bytes (e.g. an image) rather than text
     val bodyBase64: Boolean = false,
+    // latency injected by a matched delay-only rule (0 = none); the real request still ran
+    val delayedMs: Long = 0,
 ) : DeviceMessage
 
 @Serializable

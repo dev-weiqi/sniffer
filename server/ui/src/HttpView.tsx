@@ -77,6 +77,7 @@ export function HttpView({ rows, onMock, onClear }: {
                   </td>
                   <td className="url-cell">
                     {r.mocked && <span className="badge mock">MOCK</span>}
+                    {!r.mocked && (r.delayedMs ?? 0) > 0 && <span className="badge delay">DELAY</span>}
                     <span className="dim">{domain}</span>
                     <span>{path}</span>
                   </td>
@@ -136,6 +137,7 @@ function HttpDetail({ row, onMock, onClose }: {
         <KV k="Method" v={row.method} />
         <KV k="Library" v={row.library} />
         {row.durationMs !== undefined && <KV k="Duration" v={fmtDuration(row.durationMs)} />}
+        {(row.delayedMs ?? 0) > 0 && <KV k="Delayed" v={`+${row.delayedMs} ms injected by a delay-only rule`} />}
         {row.mocked && <KV k="Mocked" v="yes (short-circuited on device, no network)" />}
         {row.error && <KV k="Error" v={row.error} />}
       </Section>

@@ -119,6 +119,7 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
         request.attributes.put(StatusHolderKey, statusHolder)
         // Golden rule: a Sniffer bug must never break the host app's traffic. The
         // report/mock section runs fenced; on any SDK failure the request proceeds untouched.
+        var injectedDelayMs = 0L
         try {
             val reqBodyRaw = when (val body = request.body) {
                 is TextContent -> body.text
@@ -156,7 +157,10 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
                 )
                 return@on mockCall
             }
-            if (rule != null && rule.delayOnly && rule.delayMs > 0) delay(rule.delayMs)
+            if (rule != null && rule.delayOnly && rule.delayMs > 0) {
+                delay(rule.delayMs)
+                injectedDelayMs = rule.delayMs
+            }
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
             // fall through to the real request
@@ -179,6 +183,7 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
                     mocked = false,
                     error = e.toString(),
                     timestamp = now(),
+                    delayedMs = injectedDelayMs,
                 )
             )
             throw e
@@ -192,6 +197,7 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
                     bodySize = 0, bodyTruncated = false, durationMs = now() - start,
                     mocked = false, error = if (captured == null) e.toString() else null,
                     timestamp = now(),
+                    delayedMs = injectedDelayMs,
                 )
             )
             throw e
@@ -214,7 +220,7 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
                         id = id, status = call.response.status.value,
                         headers = call.response.headers.flattenEntries().toMap(),
                         body = null, bodySize = 0, bodyTruncated = false,
-                        durationMs = durationMs, mocked = false, error = null, timestamp = now(),
+                        durationMs = durationMs, mocked = false, error = null, timestamp = now(), delayedMs = injectedDelayMs,
                     )
                 )
                 return@on teeEventStream(client, call, id, durationMs)
@@ -228,7 +234,7 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
                         id = id, status = call.response.status.value,
                         headers = call.response.headers.flattenEntries().toMap(),
                         body = null, bodySize = 0, bodyTruncated = false,
-                        durationMs = durationMs, mocked = false, error = null, timestamp = now(),
+                        durationMs = durationMs, mocked = false, error = null, timestamp = now(), delayedMs = injectedDelayMs,
                     )
                 )
                 return@on call
@@ -269,7 +275,7 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
                     id = id, status = call.response.status.value,
                     headers = call.response.headers.flattenEntries().toMap(),
                     body = respBody.body, bodySize = respBody.size, bodyTruncated = respBody.truncated,
-                    durationMs = durationMs, mocked = false, error = null, timestamp = now(),
+                    durationMs = durationMs, mocked = false, error = null, timestamp = now(), delayedMs = injectedDelayMs,
                 )
             )
             resultCall
