@@ -92,7 +92,7 @@ class DemoController {
             },
             DemoAction("IMG") {
                 io {
-                    okhttp.newCall(okhttp3.Request.Builder().url("$BASE/test/image").build()).execute().use { resp ->
+                    okhttp.newCall(okhttp3.Request.Builder().url("https://picsum.photos/200/300").build()).execute().use { resp ->
                         log("okhttp IMG → ${resp.code} ${resp.body.bytes().size} bytes", resp.kind())
                     }
                 }
@@ -135,7 +135,7 @@ class DemoController {
                 log("ktor GET /test/error → ${resp.status.value}", resp.status.value.kind())
             },
             DemoAction("IMG") {
-                val resp = ktor.get("$BASE/test/image")
+                val resp = ktor.get("https://picsum.photos/200/300")
                 val bytes: ByteArray = resp.body()
                 log("ktor IMG → ${resp.status.value} ${bytes.size} bytes", resp.status.value.kind())
             },

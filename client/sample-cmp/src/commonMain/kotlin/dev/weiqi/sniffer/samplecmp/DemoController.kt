@@ -74,7 +74,7 @@ class DemoController {
                 log("GET /test/error → ${resp.status.value}", resp.status.value.kind())
             },
             DemoAction("IMG") {
-                val resp = ktor.get("$BASE/test/image")
+                val resp = ktor.get("https://picsum.photos/200/300")
                 val bytes: ByteArray = resp.body()
                 log("IMG → ${resp.status.value} ${bytes.size} bytes", resp.status.value.kind())
             },

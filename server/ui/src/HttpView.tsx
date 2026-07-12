@@ -204,9 +204,10 @@ function WebpPlayer({ src, base64, info }: { src: string; base64: string; info: 
     let decoded: ImageBitmap[] = []
     ;(async () => {
       const Decoder = (window as unknown as {
-        ImageDecoder: new (init: { data: Blob; type: string }) => ImageDecoderLike
+        // ImageDecoder accepts BufferSource/ReadableStream — a Blob throws TypeError at construction
+        ImageDecoder: new (init: { data: Uint8Array; type: string }) => ImageDecoderLike
       }).ImageDecoder
-      const decoder = new Decoder({ data: base64ToBlob(base64, 'image/webp'), type: 'image/webp' })
+      const decoder = new Decoder({ data: base64ToBytes(base64), type: 'image/webp' })
       const nextFrames: ImageBitmap[] = []
       for (let i = 0; i < info.frames; i++) {
         const result = await decoder.decode({ frameIndex: i })
@@ -229,9 +230,14 @@ function WebpPlayer({ src, base64, info }: { src: string; base64: string; info: 
     const canvas = canvasRef.current
     const frame = frames[index]
     if (!canvas || !frame) return
-    canvas.width = frame.width
-    canvas.height = frame.height
-    canvas.getContext('2d')?.drawImage(frame, 0, 0)
+    // ImageDecoder yields VideoFrames, which size via displayWidth/Height (width is undefined)
+    const f = frame as unknown as { width?: number; height?: number; displayWidth?: number; displayHeight?: number }
+    const w = f.displayWidth ?? f.width ?? 0
+    const h = f.displayHeight ?? f.height ?? 0
+    if (!w || !h) return
+    canvas.width = w
+    canvas.height = h
+    canvas.getContext('2d')?.drawImage(frame as unknown as CanvasImageSource, 0, 0)
   }, [frames, index])
 
   useEffect(() => {
