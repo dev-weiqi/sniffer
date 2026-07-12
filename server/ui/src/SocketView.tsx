@@ -4,9 +4,10 @@ import { fmtTime, newRuleId, useDetailWidth, useListKeys } from './util'
 import { JsonView } from './JsonView'
 import { KV, Section } from './HttpView'
 
-export function SocketView({ events, conns, deviceId, onMockAck, onPushPrefill, onClear }: {
+export function SocketView({ events, conns, connUrls, deviceId, onMockAck, onPushPrefill, onClear }: {
   events: SocketRow[]
   conns: SocketConn[]
+  connUrls: Record<string, string>
   deviceId: string
   onMockAck: (rule: SocketMockRule, deviceId: string) => void
   onPushPrefill: (prefill: { connectionId: string; event: string; payload: string }) => void
@@ -126,10 +127,7 @@ export function SocketView({ events, conns, deviceId, onMockAck, onPushPrefill, 
               <KV k="Event" v={selected.event} />
               <KV k="Direction" v={selected.direction === 'out' ? 'client → server' : 'server → client'} />
               <KV k="Transport" v={selected.transport} />
-              <KV k="Connection" v={
-                conns.find(c => c.connectionId === selected.connectionId)?.url
-                  || selected.connectionId.slice(0, 8)
-              } />
+              <KV k="Connection" v={connUrls[selected.connectionId] || selected.connectionId.slice(0, 8)} />
               {selected.mocked && <KV k="Mocked" v="yes" />}
             </Section>
             <Section title="Payload">

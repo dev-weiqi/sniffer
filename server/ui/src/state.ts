@@ -83,6 +83,8 @@ export interface State {
   devices: Device[]
   http: HttpRow[]
   socketConns: SocketConn[]
+  /** connectionId → url, never pruned: historical events must resolve after their conn is gone */
+  connUrls: Record<string, string>
   socketEvents: SocketRow[]
   mocksByDevice: Record<string, Mocks>
 }
@@ -95,6 +97,7 @@ export const initialState: State = {
   devices: [],
   http: [],
   socketConns: [],
+  connUrls: {},
   socketEvents: [],
   mocksByDevice: {},
 }
@@ -132,11 +135,12 @@ function applyDeviceMessage(state: State, deviceId: string, m: Msg): State {
       }
       // one connection per endpoint: a fresh connect kills its predecessors, so apps
       // that recreate sockets per reconnect don't pile up zombie connections
+      const connUrls = m.url ? { ...state.connUrls, [m.connectionId]: m.url } : state.connUrls
       const rest = state.socketConns.filter(c =>
         c.connectionId !== m.connectionId &&
         !(m.status === 'connected' && c.deviceId === deviceId &&
           c.transport === m.transport && c.url === m.url))
-      return { ...state, socketConns: [...rest, conn] }
+      return { ...state, socketConns: [...rest, conn], connUrls }
     }
     case 'socket-event': {
       const row: SocketRow = {
