@@ -75,7 +75,6 @@ export function SocketView({ events, conns, deviceId, onMockAck, onPushPrefill, 
                 </td>
                 <td className="mono">
                   {e.mocked && <span className="badge mock">MOCK</span>}
-                  <span className="badge lib">{e.transport === 'socketio' ? 'sio' : 'ws'}</span>
                   {e.event}
                 </td>
                 <td className="mono dim ellipsis">{e.payload}</td>

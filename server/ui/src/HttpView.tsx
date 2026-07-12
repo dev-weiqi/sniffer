@@ -77,7 +77,6 @@ export function HttpView({ rows, onMock, onClear }: {
                   </td>
                   <td className="url-cell">
                     {r.mocked && <span className="badge mock">MOCK</span>}
-                    <span className="badge lib">{r.library}</span>
                     <span className="dim">{domain}</span>
                     <span>{path}</span>
                   </td>
@@ -135,6 +134,7 @@ function HttpDetail({ row, onMock, onClose }: {
       <Section title="Request">
         <KV k="URL" v={row.url} />
         <KV k="Method" v={row.method} />
+        <KV k="Library" v={row.library} />
         {row.durationMs !== undefined && <KV k="Duration" v={fmtDuration(row.durationMs)} />}
         {row.mocked && <KV k="Mocked" v="yes (short-circuited on device, no network)" />}
         {row.error && <KV k="Error" v={row.error} />}
