@@ -31,6 +31,23 @@ export default function App() {
   }, [theme])
 
   useEffect(() => { localStorage.setItem('sniffer-tab', tab) }, [tab])
+
+  // ←/→ cycle the tabs (↑/↓ walk list rows inside a view); form fields keep their arrows
+  useEffect(() => {
+    const TABS: Tab[] = ['http', 'socket', 'mocks']
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+      e.preventDefault()
+      setTab(cur => {
+        const i = TABS.indexOf(cur)
+        return TABS[(i + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length]
+      })
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
   useEffect(() => {
     if (deviceId) localStorage.setItem('sniffer-device', deviceId)
     else localStorage.removeItem('sniffer-device')
