@@ -1,0 +1,9 @@
+{
+  "name": "sniffer",
+  "private": true,
+  "scripts": {
+    "setup": "cd server/daemon && npm install && cd ../ui && npm install && npm run build",
+    "prestart": "node -e \"const {existsSync}=require('fs');if(!existsSync('server/ui/dist')||!existsSync('server/daemon/node_modules')){console.log('First run — setting up…');require('child_process').execSync('npm run setup',{stdio:'inherit'})}\"",
+    "start": "cd server/daemon && npm run start"
+  }
+}

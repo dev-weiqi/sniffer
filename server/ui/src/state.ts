@@ -1,0 +1,241 @@
+// UI-side data model and /ui WebSocket stream, mirroring PROTOCOL.md
+
+export interface Device {
+  deviceId: string
+  deviceName: string
+  platform: string
+  appId: string
+  sdkVersion: string
+  capabilities: string[]
+  connected: boolean
+}
+
+export interface HttpMockRule {
+  id: string
+  enabled: boolean
+  method: string | null
+  urlPattern: string
+  status: number
+  headers: Record<string, string>
+  body: string
+  delayMs: number
+  delayOnly: boolean
+}
+
+export interface SocketMockRule {
+  id: string
+  enabled: boolean
+  transport: 'socketio' | 'ktor-ws'
+  event: string
+  ackPayload: string
+  delayMs: number
+}
+
+export interface Mocks {
+  http: HttpMockRule[]
+  socket: SocketMockRule[]
+}
+
+export interface HttpRow {
+  id: string
+  deviceId: string
+  ts: number
+  method: string
+  url: string
+  library: string
+  reqHeaders: Record<string, string>
+  reqBody: string | null
+  reqSize: number
+  status?: number
+  respHeaders?: Record<string, string>
+  respBody?: string | null
+  respBase64?: boolean
+  respSize?: number
+  durationMs?: number
+  mocked?: boolean
+  error?: string | null
+}
+
+export interface SocketConn {
+  connectionId: string
+  deviceId: string
+  transport: string
+  url: string
+  status: string
+}
+
+export interface SocketRow {
+  id: string
+  connectionId: string
+  deviceId: string
+  ts: number
+  transport: string
+  direction: 'in' | 'out'
+  event: string
+  payload: string
+  mocked: boolean
+  ackPayload?: string | null
+  ackMocked?: boolean
+}
+
+export interface State {
+  wsConnected: boolean
+  devices: Device[]
+  http: HttpRow[]
+  socketConns: SocketConn[]
+  socketEvents: SocketRow[]
+  mocksByDevice: Record<string, Mocks>
+}
+
+export const emptyMocks: Mocks = { http: [], socket: [] }
+const MAX_MONITOR_ROWS = 500
+
+export const initialState: State = {
+  wsConnected: false,
+  devices: [],
+  http: [],
+  socketConns: [],
+  socketEvents: [],
+  mocksByDevice: {},
+}
+
+type Msg = Record<string, any>
+
+function appendCapped<T>(rows: T[], row: T): T[] {
+  const next = [...rows, row]
+  return next.length > MAX_MONITOR_ROWS ? next.slice(next.length - MAX_MONITOR_ROWS) : next
+}
+
+function applyDeviceMessage(state: State, deviceId: string, m: Msg): State {
+  switch (m.type) {
+    case 'http-request': {
+      const row: HttpRow = {
+        id: m.id, deviceId, ts: m.timestamp, method: m.method, url: m.url,
+        library: m.library, reqHeaders: m.headers ?? {}, reqBody: m.body,
+        reqSize: m.bodySize ?? 0,
+      }
+      return { ...state, http: appendCapped(state.http, row) }
+    }
+    case 'http-response': {
+      const http = state.http.map(r => r.id === m.id ? {
+        ...r, status: m.status, respHeaders: m.headers ?? {}, respBody: m.body,
+        respBase64: m.bodyBase64 ?? false,
+        respSize: m.bodySize ?? 0, durationMs: m.durationMs, mocked: m.mocked,
+        error: m.error,
+      } : r)
+      return { ...state, http }
+    }
+    case 'socket-status': {
+      const conn: SocketConn = {
+        connectionId: m.connectionId, deviceId, transport: m.transport,
+        url: m.url, status: m.status,
+      }
+      const rest = state.socketConns.filter(c => c.connectionId !== m.connectionId)
+      return { ...state, socketConns: [...rest, conn] }
+    }
+    case 'socket-event': {
+      const row: SocketRow = {
+        id: m.id, connectionId: m.connectionId, deviceId, ts: m.timestamp,
+        transport: m.transport, direction: m.direction, event: m.event,
+        payload: m.payload, mocked: m.mocked,
+      }
+      return { ...state, socketEvents: appendCapped(state.socketEvents, row) }
+    }
+    case 'socket-ack': {
+      const socketEvents = state.socketEvents.map(e =>
+        e.id === m.id ? { ...e, ackPayload: m.payload, ackMocked: m.mocked } : e)
+      return { ...state, socketEvents }
+    }
+    default:
+      return state
+  }
+}
+
+export type Action =
+  | { type: 'ws'; connected: boolean }
+  | { type: 'server'; msg: Msg }
+
+export function reducer(state: State, action: Action): State {
+  if (action.type === 'ws') return { ...state, wsConnected: action.connected }
+  const m = action.msg
+  switch (m.type) {
+    case 'init': {
+      let s: State = {
+        ...initialState,
+        wsConnected: true,
+        devices: m.devices ?? [],
+        mocksByDevice: m.mocksByDevice ?? {},
+      }
+      for (const e of m.entries ?? []) s = applyDeviceMessage(s, e.deviceId, e.message)
+      return s
+    }
+    case 'event':
+      return applyDeviceMessage(state, m.deviceId, m.message)
+    case 'device-status': {
+      const existing = state.devices.find(d => d.deviceId === m.deviceId)
+      const devices = existing
+        ? state.devices.map(d => d.deviceId === m.deviceId ? { ...d, ...(m.info ?? {}), connected: m.connected } : d)
+        : [...state.devices, { ...(m.info ?? {}), deviceId: m.deviceId, connected: m.connected }]
+      return { ...state, devices }
+    }
+    case 'mocks-changed':
+      return {
+        ...state,
+        mocksByDevice: { ...state.mocksByDevice, [m.deviceId]: m.mocks },
+      }
+    case 'entries-cleared':
+      return { ...state, http: [], socketEvents: [], socketConns: [] }
+    case 'http-entries-cleared':
+      return { ...state, http: [] }
+    case 'socket-entries-cleared':
+      return { ...state, socketEvents: [] }
+    case 'device-deleted': {
+      const { [m.deviceId]: _, ...mocksByDevice } = state.mocksByDevice
+      return {
+        ...state,
+        devices: state.devices.filter(d => d.deviceId !== m.deviceId),
+        http: state.http.filter(r => r.deviceId !== m.deviceId),
+        socketConns: state.socketConns.filter(c => c.deviceId !== m.deviceId),
+        socketEvents: state.socketEvents.filter(e => e.deviceId !== m.deviceId),
+        mocksByDevice,
+      }
+    }
+    default:
+      return state
+  }
+}
+
+export function connectStream(dispatch: (a: Action) => void): () => void {
+  let ws: WebSocket | null = null
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let closed = false
+
+  const open = () => {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+    ws = new WebSocket(`${proto}://${location.host}/ui`)
+    ws.onopen = () => dispatch({ type: 'ws', connected: true })
+    ws.onmessage = ev => dispatch({ type: 'server', msg: JSON.parse(ev.data) })
+    ws.onclose = () => {
+      dispatch({ type: 'ws', connected: false })
+      if (!closed) timer = setTimeout(open, 2000)
+    }
+  }
+  open()
+  return () => {
+    closed = true
+    if (timer) clearTimeout(timer)
+    ws?.close()
+  }
+}
+
+export const api = {
+  saveMocks: (deviceId: string, mocks: Mocks) =>
+    fetch('/api/mocks', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ deviceId, ...mocks }) }),
+  pushEvent: (deviceId: string, connectionId: string | null, event: string, payload: string) =>
+    fetch('/api/push-event', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ deviceId, connectionId, event, payload }) }),
+  clearEntries: () => fetch('/api/entries', { method: 'DELETE' }),
+  clearHttpEntries: () => fetch('/api/entries/http', { method: 'DELETE' }),
+  clearSocketEntries: () => fetch('/api/entries/socket', { method: 'DELETE' }),
+  deleteOfflineDevices: () => fetch('/api/devices/offline', { method: 'DELETE' }),
+  deleteDevice: (deviceId: string) => fetch(`/api/devices/${encodeURIComponent(deviceId)}`, { method: 'DELETE' }),
+}

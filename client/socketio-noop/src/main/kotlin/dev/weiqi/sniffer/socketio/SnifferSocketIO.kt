@@ -1,0 +1,20 @@
+package dev.weiqi.sniffer.socketio
+
+import io.socket.client.Socket
+import io.socket.emitter.Emitter
+
+/** Release-build stand-in: an Emitter-compatible wrapper that forwards straight to the delegate. */
+object SnifferSocketIO {
+    fun wrap(socket: Socket, url: String = ""): SnifferSocket = SnifferSocket(socket)
+}
+
+class SnifferSocket internal constructor(val delegate: Socket) : Emitter() {
+    override fun on(event: String, fn: Listener): Emitter = delegate.on(event, fn)
+    override fun once(event: String, fn: Listener): Emitter = delegate.once(event, fn)
+    override fun off(): Emitter = delegate.off()
+    override fun off(event: String): Emitter = delegate.off(event)
+    override fun emit(event: String, vararg args: Any?): Emitter = delegate.emit(event, *args)
+    fun connect(): SnifferSocket = apply { delegate.connect() }
+    fun disconnect(): SnifferSocket = apply { delegate.disconnect() }
+    fun connected(): Boolean = delegate.connected()
+}

@@ -1,0 +1,300 @@
+package dev.weiqi.sniffer.ktor
+
+import dev.weiqi.sniffer.core.HttpMockRule
+import dev.weiqi.sniffer.core.HttpRequestMsg
+import dev.weiqi.sniffer.core.HttpResponseMsg
+import dev.weiqi.sniffer.core.MAX_BODY_CHARS
+import dev.weiqi.sniffer.core.MockRegistry
+import dev.weiqi.sniffer.core.Sniffer
+import dev.weiqi.sniffer.core.capBody
+import dev.weiqi.sniffer.core.expandMockPlaceholders
+import dev.weiqi.sniffer.core.newId
+import dev.weiqi.sniffer.core.now
+import io.ktor.client.HttpClient
+import io.ktor.client.call.HttpClientCall
+import io.ktor.client.call.body
+import io.ktor.client.call.save
+import io.ktor.client.plugins.ResponseException
+import io.ktor.client.request.HttpRequestData
+import io.ktor.client.request.HttpResponseData
+import io.ktor.client.utils.EmptyContent
+import io.ktor.utils.io.ByteChannel
+import io.ktor.utils.io.InternalAPI
+import io.ktor.utils.io.readAvailable
+import io.ktor.utils.io.writeFully
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.client.plugins.api.Send
+import io.ktor.client.plugins.api.createClientPlugin
+import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.request.request
+import io.ktor.client.request.takeFrom
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.charset
+import io.ktor.http.content.ByteArrayContent
+import io.ktor.http.content.TextContent
+import io.ktor.http.contentType
+import io.ktor.util.AttributeKey
+import io.ktor.util.flattenEntries
+import io.ktor.utils.io.charsets.Charsets
+import kotlinx.coroutines.delay
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
+
+private val MockRuleKey = AttributeKey<HttpMockRule>("SnifferMockRule")
+
+// Captured in onResponse so the real status survives even when a downstream validator
+// (e.g. Eden's HttpResponseValidator) rethrows the error as a custom exception without a cause.
+private class ResponseStatusHolder(var status: Int? = null, var headers: Map<String, String> = emptyMap())
+private val StatusHolderKey = AttributeKey<ResponseStatusHolder>("SnifferStatusHolder")
+
+// when a mock rule matches, route the request to an internal MockEngine to fabricate the HttpClientCall
+private val mockClient by lazy {
+    HttpClient(MockEngine { req ->
+        val rule = req.attributes[MockRuleKey]
+        respond(
+            content = rule.body,
+            status = HttpStatusCode.fromValue(rule.status),
+            headers = io.ktor.http.headers {
+                rule.headers.forEach { (k, v) -> append(k, v) }
+                if (rule.headers.keys.none { it.equals("content-type", true) }) {
+                    append("content-type", "application/json")
+                }
+            },
+        )
+    })
+}
+
+private fun isTextual(contentType: ContentType?): Boolean =
+    contentType == null ||
+        contentType.match(ContentType.Text.Any) ||
+        contentType.contentSubtype.contains("json", true) ||
+        contentType.contentSubtype.contains("xml", true) ||
+        contentType.contentSubtype.contains("x-www-form-urlencoded", true)
+
+/** HttpClient { install(SnifferKtor) } */
+val SnifferKtor = createClientPlugin("SnifferKtor") {
+    Sniffer.registerCapability("http")
+
+    // fires when a response is received, before any response validator can convert it to an exception
+    onResponse { response ->
+        response.call.attributes.getOrNull(StatusHolderKey)?.let { holder ->
+            holder.status = response.status.value
+            holder.headers = response.headers.flattenEntries().toMap()
+        }
+    }
+
+    on(Send) { request ->
+        val id = newId()
+        val start = now()
+        val statusHolder = ResponseStatusHolder()
+        request.attributes.put(StatusHolderKey, statusHolder)
+        val reqBodyRaw = when (val body = request.body) {
+            is TextContent -> body.text
+            is ByteArrayContent ->
+                if (isTextual(body.contentType)) runCatching {
+                    body.bytes().decodeToString()
+                }.getOrNull() else null
+            else -> null
+        }
+        val reqBody = capBody(reqBodyRaw)
+        val url = request.url.buildString()
+        Sniffer.report(
+            HttpRequestMsg(
+                id = id, method = request.method.value, url = url,
+                headers = request.headers.build().flattenEntries().toMap(),
+                body = reqBody.body, bodySize = reqBody.size, bodyTruncated = reqBody.truncated,
+                library = "ktor", timestamp = now(),
+            )
+        )
+
+        val rule = MockRegistry.matchHttp(request.method.value, url)
+        if (rule != null && !rule.delayOnly) {
+            if (rule.delayMs > 0) delay(rule.delayMs)
+            val body = expandMockPlaceholders(rule.body)
+            val mockCall = mockClient.request(HttpRequestBuilder().takeFrom(request).apply {
+                attributes.put(MockRuleKey, rule.copy(body = body))
+            }).call
+            Sniffer.report(
+                HttpResponseMsg(
+                    id = id, status = rule.status, headers = rule.headers,
+                    body = body, bodySize = body.length.toLong(), bodyTruncated = false,
+                    durationMs = rule.delayMs, mocked = true, error = null, timestamp = now(),
+                )
+            )
+            return@on mockCall
+        }
+        if (rule != null && rule.delayOnly && rule.delayMs > 0) delay(rule.delayMs)
+
+        val call = try {
+            proceed(request)
+        } catch (e: ResponseException) {
+            val responseBody = runCatching { e.response.bodyAsText() }.getOrNull()
+            val cappedBody = capBody(responseBody)
+            Sniffer.report(
+                HttpResponseMsg(
+                    id = id, status = e.response.status.value,
+                    headers = e.response.headers.flattenEntries().toMap(),
+                    body = cappedBody.body,
+                    bodySize = cappedBody.size,
+                    bodyTruncated = cappedBody.truncated,
+                    durationMs = now() - start,
+                    mocked = false,
+                    error = e.toString(),
+                    timestamp = now(),
+                )
+            )
+            throw e
+        } catch (e: Throwable) {
+            // a validator may have rethrown a real HTTP error as a custom exception; recover the
+            // status captured in onResponse. Only a genuine transport failure leaves status null.
+            val captured = statusHolder.status
+            Sniffer.report(
+                HttpResponseMsg(
+                    id = id, status = captured ?: 0, headers = statusHolder.headers, body = null,
+                    bodySize = 0, bodyTruncated = false, durationMs = now() - start,
+                    mocked = false, error = if (captured == null) e.toString() else null,
+                    timestamp = now(),
+                )
+            )
+            throw e
+        }
+        val durationMs = now() - start
+
+        var resultCall = call
+        var respBodyRaw: String? = null
+        // a 101 (WebSocket upgrade) body is a live connection -- save() would freeze it, pass through.
+        // SSE is a never-ending stream: tee it as the app consumes it, reporting body updates.
+        val ct = call.response.contentType()
+        val isUpgrade = call.response.status.value == 101
+        val isEventStream = ct?.contentSubtype?.contains("event-stream", ignoreCase = true) == true
+        if (isEventStream) {
+            Sniffer.report(
+                HttpResponseMsg(
+                    id = id, status = call.response.status.value,
+                    headers = call.response.headers.flattenEntries().toMap(),
+                    body = null, bodySize = 0, bodyTruncated = false,
+                    durationMs = durationMs, mocked = false, error = null, timestamp = now(),
+                )
+            )
+            return@on teeEventStream(client, call, id, durationMs)
+        }
+        // images: capture raw bytes (<= 1MB) as base64 so the UI can render a preview
+        if (!isUpgrade && ct?.contentType.equals("image", ignoreCase = true)) {
+            var b64: String? = null
+            var size = 0L
+            var truncated = false
+            runCatching {
+                resultCall = call.save()
+                val bytes = resultCall.body<ByteArray>()
+                size = bytes.size.toLong()
+                if (bytes.size <= MAX_BODY_CHARS) b64 = encodeBase64(bytes) else truncated = true
+            }
+            Sniffer.report(
+                HttpResponseMsg(
+                    id = id, status = call.response.status.value,
+                    headers = call.response.headers.flattenEntries().toMap(),
+                    body = b64, bodySize = size, bodyTruncated = truncated,
+                    durationMs = durationMs, mocked = false, error = null,
+                    timestamp = now(), bodyBase64 = b64 != null,
+                )
+            )
+            return@on resultCall
+        }
+        if (!isUpgrade && isTextual(ct)) {
+            runCatching {
+                resultCall = call.save()
+                respBodyRaw = resultCall.response.bodyAsText(
+                    call.response.contentType()?.charset() ?: Charsets.UTF_8
+                )
+            }
+        }
+        val respBody = capBody(respBodyRaw)
+        Sniffer.report(
+            HttpResponseMsg(
+                id = id, status = call.response.status.value,
+                headers = call.response.headers.flattenEntries().toMap(),
+                body = respBody.body, bodySize = respBody.size, bodyTruncated = respBody.truncated,
+                durationMs = durationMs, mocked = false, error = null, timestamp = now(),
+            )
+        )
+        resultCall
+    }
+}
+
+@OptIn(ExperimentalEncodingApi::class)
+private fun encodeBase64(bytes: ByteArray): String = Base64.encode(bytes)
+
+/** Rebuilds the call with a teed body channel; captured bytes are reported as throttled updates. */
+@OptIn(InternalAPI::class)
+private fun teeEventStream(
+    client: HttpClient,
+    call: HttpClientCall,
+    id: String,
+    durationMs: Long,
+): HttpClientCall {
+    val response = call.response
+    val status = response.status
+    val headers = response.headers
+    val headersMap = headers.flattenEntries().toMap()
+    val original = response.rawContent
+    val teed = ByteChannel(autoFlush = true)
+    val captured = StringBuilder()
+    var lastReport = 0L
+
+    fun report(final: Boolean) {
+        val nowMs = now()
+        if (!final && nowMs - lastReport < 1000) return
+        lastReport = nowMs
+        val capped = capBody(captured.toString())
+        Sniffer.report(
+            HttpResponseMsg(
+                id = id, status = status.value, headers = headersMap,
+                body = capped.body, bodySize = capped.size, bodyTruncated = capped.truncated,
+                durationMs = durationMs, mocked = false, error = null, timestamp = nowMs,
+            )
+        )
+    }
+
+    call.launch {
+        val buffer = ByteArray(8192)
+        try {
+            while (true) {
+                val n = original.readAvailable(buffer, 0, buffer.size)
+                if (n == -1) break
+                if (n > 0) {
+                    teed.writeFully(buffer, 0, n)
+                    if (captured.length < MAX_BODY_CHARS) {
+                        captured.append(buffer.decodeToString(0, n))
+                    }
+                    report(final = false)
+                }
+            }
+        } finally {
+            teed.close()
+            report(final = true)
+        }
+    }
+
+    val requestData = HttpRequestData(
+        url = call.request.url,
+        method = call.request.method,
+        headers = call.request.headers,
+        body = EmptyContent,
+        executionContext = Job(call.coroutineContext[Job]),
+        attributes = call.request.attributes,
+    )
+    val responseData = HttpResponseData(
+        statusCode = status,
+        requestTime = response.requestTime,
+        headers = headers,
+        version = response.version,
+        body = teed,
+        callContext = call.coroutineContext,
+    )
+    return HttpClientCall(client, requestData, responseData)
+}

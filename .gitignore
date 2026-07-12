@@ -1,0 +1,45 @@
+# macOS
+.DS_Store
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+.claude/
+
+# Local machine config
+local.properties
+.env
+.env.*
+!.env.example
+
+# Gradle / Kotlin / Android
+.gradle/
+.kotlin/
+build/
+.cxx/
+.externalNativeBuild/
+captures/
+outputs/
+
+# Xcode / SwiftPM local state
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.swiftpm/
+
+# Node
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime output
+*.log
+
+# npm package staging (server/daemon prepack)
+ui-dist/

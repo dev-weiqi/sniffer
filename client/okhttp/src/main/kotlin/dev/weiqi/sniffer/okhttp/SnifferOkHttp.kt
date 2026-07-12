@@ -1,0 +1,204 @@
+package dev.weiqi.sniffer.okhttp
+
+import dev.weiqi.sniffer.core.HttpRequestMsg
+import dev.weiqi.sniffer.core.HttpResponseMsg
+import dev.weiqi.sniffer.core.MAX_BODY_CHARS
+import dev.weiqi.sniffer.core.MockRegistry
+import dev.weiqi.sniffer.core.Sniffer
+import dev.weiqi.sniffer.core.capBody
+import dev.weiqi.sniffer.core.expandMockPlaceholders
+import dev.weiqi.sniffer.core.newId
+import dev.weiqi.sniffer.core.now
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import okio.Buffer
+import okio.buffer as okioBuffer
+import java.io.IOException
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
+
+object SnifferOkHttp {
+    /** Attach via OkHttpClient.Builder().addInterceptor(...). */
+    fun interceptor(): Interceptor = SnifferInterceptor()
+}
+
+private val TEXTUAL = listOf("json", "text", "xml", "x-www-form-urlencoded", "javascript")
+
+private fun isTextual(contentType: String?): Boolean =
+    contentType == null || TEXTUAL.any { contentType.contains(it, ignoreCase = true) }
+
+private fun isImage(contentType: String?): Boolean =
+    contentType?.trim()?.startsWith("image/", ignoreCase = true) == true
+
+internal class SnifferInterceptor : Interceptor {
+    init {
+        Sniffer.registerCapability("http")
+    }
+
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val id = newId()
+        val start = System.nanoTime()
+
+        val reqBodyRaw = request.body?.let { body ->
+            if (body.isOneShot() || body.isDuplex() || !isTextual(body.contentType()?.toString())) null
+            else runCatching { Buffer().also(body::writeTo).readUtf8() }.getOrNull()
+        }
+        val reqBody = capBody(reqBodyRaw)
+        Sniffer.report(
+            HttpRequestMsg(
+                id = id, method = request.method, url = request.url.toString(),
+                headers = request.headers.toMap(),
+                body = reqBody.body,
+                bodySize = request.body?.let { runCatching { it.contentLength() }.getOrNull() } ?: reqBody.size,
+                bodyTruncated = reqBody.truncated,
+                library = "okhttp", timestamp = now(),
+            )
+        )
+
+        MockRegistry.matchHttp(request.method, request.url.toString())?.let { rule ->
+            if (rule.delayMs > 0) Thread.sleep(rule.delayMs)
+            if (rule.delayOnly) return@let  // delay applied; fall through to the real request
+            val body = expandMockPlaceholders(rule.body)
+            val contentType = rule.headers.entries
+                .firstOrNull { it.key.equals("content-type", true) }?.value ?: "application/json"
+            val response = Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(rule.status)
+                .message("Sniffer Mock")
+                .apply { rule.headers.forEach { (k, v) -> addHeader(k, v) } }
+                .body(body.toResponseBody(contentType.toMediaTypeOrNull()))
+                .build()
+            Sniffer.report(
+                HttpResponseMsg(
+                    id = id, status = rule.status, headers = rule.headers,
+                    body = body, bodySize = body.length.toLong(), bodyTruncated = false,
+                    durationMs = rule.delayMs, mocked = true, error = null, timestamp = now(),
+                )
+            )
+            return response
+        }
+
+        val response = try {
+            chain.proceed(request)
+        } catch (e: IOException) {
+            Sniffer.report(
+                HttpResponseMsg(
+                    id = id, status = 0, headers = emptyMap(), body = null,
+                    bodySize = 0, bodyTruncated = false,
+                    durationMs = (System.nanoTime() - start) / 1_000_000,
+                    mocked = false, error = e.toString(), timestamp = now(),
+                )
+            )
+            throw e
+        }
+        val durationMs = (System.nanoTime() - start) / 1_000_000
+
+        val respCt = response.header("content-type")
+        // images: capture the raw bytes (<= 1MB) as base64 so the UI can render a preview
+        if (isImage(respCt)) {
+            val bytes = runCatching { response.peekBody((MAX_BODY_CHARS + 1).toLong()).bytes() }.getOrNull()
+            val fits = bytes != null && bytes.size <= MAX_BODY_CHARS
+            Sniffer.report(
+                HttpResponseMsg(
+                    id = id, status = response.code, headers = response.headers.toMap(),
+                    body = if (fits) encodeBase64(bytes!!) else null,
+                    bodySize = bytes?.size?.toLong() ?: 0,
+                    bodyTruncated = bytes != null && !fits,
+                    durationMs = durationMs, mocked = false, error = null,
+                    timestamp = now(), bodyBase64 = fits,
+                )
+            )
+            return response
+        }
+        // streaming responses (SSE) must not be peeked: peekBody blocks until the stream ends.
+        // Instead, tee the body as the app consumes it and report updates with the same id.
+        if (respCt?.contains("event-stream", ignoreCase = true) == true) {
+            Sniffer.report(
+                HttpResponseMsg(
+                    id = id, status = response.code, headers = response.headers.toMap(),
+                    body = null, bodySize = 0, bodyTruncated = false,
+                    durationMs = durationMs, mocked = false, error = null, timestamp = now(),
+                )
+            )
+            return response.newBuilder()
+                .body(TeeResponseBody(response.body, id, response.code, response.headers.toMap(), durationMs))
+                .build()
+        }
+        val respBodyRaw =
+            if (isTextual(respCt))
+                runCatching { response.peekBody((1024 * 1024 + 1).toLong()).string() }.getOrNull()
+            else null
+        val respBody = capBody(respBodyRaw)
+        Sniffer.report(
+            HttpResponseMsg(
+                id = id, status = response.code, headers = response.headers.toMap(),
+                body = respBody.body, bodySize = respBody.size, bodyTruncated = respBody.truncated,
+                durationMs = durationMs, mocked = false, error = null, timestamp = now(),
+            )
+        )
+        return response
+    }
+}
+
+private fun okhttp3.Headers.toMap(): Map<String, String> =
+    names().associateWith { name -> values(name).joinToString(", ") }
+
+@OptIn(ExperimentalEncodingApi::class)
+private fun encodeBase64(bytes: ByteArray): String = Base64.encode(bytes)
+
+/** Captures a streaming body (SSE) as the app reads it, reporting throttled body updates. */
+private class TeeResponseBody(
+    private val delegate: okhttp3.ResponseBody,
+    private val id: String,
+    private val status: Int,
+    private val headers: Map<String, String>,
+    private val durationMs: Long,
+) : okhttp3.ResponseBody() {
+    private val captured = java.io.ByteArrayOutputStream()
+    private var lastReport = 0L
+    private var finished = false
+
+    override fun contentType() = delegate.contentType()
+    override fun contentLength() = delegate.contentLength()
+
+    override fun source(): okio.BufferedSource =
+        object : okio.ForwardingSource(delegate.source()) {
+            override fun read(sink: Buffer, byteCount: Long): Long {
+                val read = super.read(sink, byteCount)
+                if (read > 0 && captured.size() < MAX_BODY_CHARS) {
+                    sink.copyTo(captured, sink.size - read, read)
+                    maybeReport(final = false)
+                } else if (read == -1L) {
+                    maybeReport(final = true)
+                }
+                return read
+            }
+
+            override fun close() {
+                maybeReport(final = true)
+                super.close()
+            }
+        }.okioBuffer()
+
+    private fun maybeReport(final: Boolean) {
+        if (finished) return
+        if (final) finished = true
+        val nowMs = now()
+        if (!final && nowMs - lastReport < 1000) return
+        lastReport = nowMs
+        val text = captured.toString(Charsets.UTF_8)
+        val capped = capBody(text)
+        Sniffer.report(
+            HttpResponseMsg(
+                id = id, status = status, headers = headers,
+                body = capped.body, bodySize = capped.size, bodyTruncated = capped.truncated,
+                durationMs = durationMs, mocked = false, error = null, timestamp = nowMs,
+            )
+        )
+    }
+}

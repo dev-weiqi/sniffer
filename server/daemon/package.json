@@ -1,0 +1,41 @@
+{
+  "name": "@dev-weiqi/sniffer",
+  "version": "0.1.0",
+  "description": "Self-hosted Flipper alternative: local daemon + web UI to monitor and mock an app's HTTP & Socket traffic.",
+  "license": "MIT",
+  "homepage": "https://github.com/dev-weiqi/sniffer",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dev-weiqi/sniffer.git"
+  },
+  "type": "module",
+  "bin": {
+    "sniffer": "bin/sniffer.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "ui-dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "npm run build && npm --prefix ../ui run build && rm -rf ui-dist && cp -R ../ui/dist ui-dist"
+  },
+  "dependencies": {
+    "socket.io": "^4.8.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.12",
+    "socket.io-client": "^4.8.3",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
