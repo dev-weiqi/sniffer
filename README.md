@@ -24,29 +24,26 @@ Sniffer keeps the network debugging pieces in a small stack we can maintain.
 
 ## Install the monitor
 
-Run the local daemon on your development machine. It serves the browser UI,
-stores mock rules, and automatically runs `adb reverse` for Android devices.
-
-Install with npm:
+The daemon runs on your dev machine: it serves the browser UI, stores mock
+rules, and keeps `adb reverse` alive for Android devices. All it needs is
+[Node.js](https://nodejs.org) 20+.
 
 ```bash
 npm install -g @dev-weiqi/sniffer
 ```
 
-Or run it without installing:
+```bash
+sniffer start
+```
+
+The UI is now at [http://localhost:9091](http://localhost:9091). Or skip the
+install and run it straight:
 
 ```bash
 npx @dev-weiqi/sniffer start
 ```
 
-Start the monitor:
-
-```bash
-sniffer start
-open http://localhost:9091
-```
-
-Use another port when needed:
+Port 9091 taken?
 
 ```bash
 PORT=9092 sniffer start
