@@ -107,6 +107,10 @@ export function SocketView({ events, conns, deviceId, onMockAck, onPushPrefill, 
               <KV k="Event" v={selected.event} />
               <KV k="Direction" v={selected.direction === 'out' ? 'client → server' : 'server → client'} />
               <KV k="Transport" v={selected.transport} />
+              <KV k="Connection" v={
+                conns.find(c => c.connectionId === selected.connectionId)?.url
+                  || selected.connectionId.slice(0, 8)
+              } />
               {selected.mocked && <KV k="Mocked" v="yes" />}
             </Section>
             <Section title="Payload">
