@@ -10,6 +10,66 @@ const PlaceholderTokens = [
   { key: 'randomString', syntax: '${randomString(length)}', label: 'lorem string with the length you enter' },
 ]
 
+
+const httpSig = (r: HttpMockRule) => `${r.method ?? 'ANY'}|${r.urlPattern}`
+const socketSig = (r: SocketMockRule) => `${r.transport}|${r.event}`
+
+/** ids of enabled rules whose matcher collides with another enabled rule */
+function duplicateIds<T extends { id: string; enabled: boolean }>(rules: T[], sig: (r: T) => string): Set<string> {
+  const groups = new Map<string, T[]>()
+  for (const r of rules) if (r.enabled) groups.set(sig(r), [...(groups.get(sig(r)) ?? []), r])
+  const out = new Set<string>()
+  for (const g of groups.values()) if (g.length > 1) for (const r of g) out.add(r.id)
+  return out
+}
+
+/** SDK matching is first-wins: reorder duplicates newest-first in the sync payload only,
+    so the newest rule takes effect while the on-screen order stays put */
+function orderForSync(mocks: Mocks): Mocks {
+  const reorder = <T extends { id: string; enabled: boolean; createdAt?: number }>(rules: T[], sig: (r: T) => string): T[] => {
+    const dups = duplicateIds(rules, sig)
+    if (dups.size === 0) return rules
+    const slots = rules.map((r, i) => ({ r, i }))
+    const groups = new Map<string, { r: T; i: number }[]>()
+    for (const slot of slots) if (dups.has(slot.r.id)) {
+      const k = sig(slot.r)
+      groups.set(k, [...(groups.get(k) ?? []), slot])
+    }
+    const next = [...rules]
+    for (const g of groups.values()) {
+      const sorted = [...g].sort((a, b) => (b.r.createdAt ?? 0) - (a.r.createdAt ?? 0))
+      g.forEach((slot, idx) => { next[slot.i] = sorted[idx].r })
+    }
+    return next
+  }
+  return {
+    http: reorder(mocks.http as (HttpMockRule & { enabled: boolean })[], httpSig as never),
+    socket: reorder(mocks.socket as (SocketMockRule & { enabled: boolean })[], socketSig as never),
+  }
+}
+
+
+function CopyIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 6h18" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
+  )
+}
+
 export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRule, pushPrefill, onPendingConsumed }: {
   deviceId: string | null
   mocks: Mocks
@@ -38,7 +98,7 @@ export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRu
   useEffect(() => {
     if (pendingRule && deviceId) {
       // click-to-prefill lands on top so it's immediately visible
-      setDraft(d => ({ ...d, http: [pendingRule, ...d.http] }))
+      setDraft(d => ({ ...d, http: [{ ...pendingRule, createdAt: Date.now() }, ...d.http] }))
       setDirty(true)
       onPendingConsumed()
     }
@@ -46,7 +106,7 @@ export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRu
 
   useEffect(() => {
     if (pendingSocketRule && deviceId) {
-      setDraft(d => ({ ...d, socket: [pendingSocketRule, ...d.socket] }))
+      setDraft(d => ({ ...d, socket: [{ ...pendingSocketRule, createdAt: Date.now() }, ...d.socket] }))
       setDirty(true)
       onPendingConsumed()
     }
@@ -61,7 +121,7 @@ export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRu
   useEffect(() => {
     if (!dirty || !deviceId) return
     const t = setTimeout(() => {
-      api.saveMocks(deviceId, draft)
+      api.saveMocks(deviceId, orderForSync(draft))
         .then(() => {
           setDirty(false)
           setSaved(true)
@@ -102,6 +162,9 @@ export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRu
     }).catch(() => alert('Not a valid mock rules JSON file'))
   }
 
+  const httpDups = duplicateIds(draft.http, httpSig)
+  const socketDups = duplicateIds(draft.socket, socketSig)
+
   if (!deviceId) {
     return <div className="empty">Connect a device to manage mocks</div>
   }
@@ -136,7 +199,12 @@ export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRu
             )}
           </div>
           {draft.http.map((r, i) => (
-            <HttpRuleEditor key={r.id} rule={r}
+            <HttpRuleEditor key={r.id} rule={r} dup={httpDups.has(r.id)}
+              onDuplicate={() => update({ ...draft, http: [
+                ...draft.http.slice(0, i + 1),
+                { ...r, id: newRuleId(), createdAt: Date.now() },
+                ...draft.http.slice(i + 1),
+              ] })}
               onChange={next => update({ ...draft, http: draft.http.map((x, j) => j === i ? next : x) })}
               onDelete={() => update({ ...draft, http: draft.http.filter((_, j) => j !== i) })}
             />
@@ -144,7 +212,7 @@ export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRu
           <button className="ghost add" onClick={() => update({
             ...draft,
             http: [...draft.http, {
-              id: newRuleId(), enabled: true, method: null, urlPattern: '/api/',
+              id: newRuleId(), createdAt: Date.now(), enabled: true, method: null, urlPattern: '/api/',
               status: 200, headers: { 'content-type': 'application/json' }, body: '{}', delayMs: 0, delayOnly: false,
             }],
           })}>+ Add HTTP rule</button>
@@ -159,21 +227,23 @@ export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRu
             )}
           </div>
           {draft.socket.map((r, i) => (
-            <SocketRuleEditor key={r.id} rule={r}
+            <SocketRuleEditor key={r.id} rule={r} dup={socketDups.has(r.id)}
+              onDuplicate={() => update({ ...draft, socket: [
+                ...draft.socket.slice(0, i + 1),
+                { ...r, id: newRuleId(), createdAt: Date.now() },
+                ...draft.socket.slice(i + 1),
+              ] })}
               onChange={next => update({ ...draft, socket: draft.socket.map((x, j) => j === i ? next : x) })}
               onDelete={() => update({ ...draft, socket: draft.socket.filter((_, j) => j !== i) })}
             />
           ))}
           <button className="ghost add" onClick={() => update({
             ...draft,
-            socket: [...draft.socket, { id: newRuleId(), enabled: true, transport: 'socketio' as const, event: '', ackPayload: '[{"ok":true}]', delayMs: 0 }],
+            socket: [...draft.socket, { id: newRuleId(), createdAt: Date.now(), enabled: true, transport: 'socketio' as const, event: '', ackPayload: '[{"ok":true}]', delayMs: 0 }],
           })}>+ Add socket rule</button>
         </section>
 
         <section className="mocks-column push-column">
-          <div className="mocks-section-head">
-            <h2>Push Server → Client event</h2>
-          </div>
           <PushEventPanel conns={conns} deviceId={deviceId} prefill={pushPrefill} onConsumed={onPendingConsumed} />
         </section>
       </div>
@@ -206,10 +276,21 @@ function PushEventPanel({ conns, deviceId, prefill, onConsumed }: {
 
   return (
     <>
+      <div className="mocks-section-head">
+        <h2>Push Server → Client event</h2>
+        {records.length > 0 && (
+          <button className="ghost danger"
+            onClick={() => { if (confirm('Clear all push events?')) setRecords([]) }}>Clear all</button>
+        )}
+      </div>
       {records.map(r => (
         <PushRecordCard key={r.id} record={r} conns={conns} deviceId={deviceId}
           onChange={next => setRecords(rs => rs.map(x => x.id === r.id ? next : x))}
           onDelete={() => setRecords(rs => rs.filter(x => x.id !== r.id))}
+          onDuplicate={() => setRecords(rs => {
+            const i = rs.findIndex(x => x.id === r.id)
+            return [...rs.slice(0, i + 1), { ...r, id: newRuleId() }, ...rs.slice(i + 1)]
+          })}
         />
       ))}
       <button className="ghost add" onClick={() =>
@@ -228,12 +309,13 @@ function loadRecords(key: string): PushRecord[] {
   }
 }
 
-function PushRecordCard({ record, conns, deviceId, onChange, onDelete }: {
+function PushRecordCard({ record, conns, deviceId, onChange, onDelete, onDuplicate }: {
   record: PushRecord
   conns: SocketConn[]
   deviceId: string
   onChange: (r: PushRecord) => void
   onDelete: () => void
+  onDuplicate: () => void
 }) {
   const [status, setStatus] = useState<'sent' | 'error' | null>(null)
   const payloadRef = useRef<HTMLTextAreaElement>(null)
@@ -265,7 +347,8 @@ function PushRecordCard({ record, conns, deviceId, onChange, onDelete }: {
         </select>
         <input className="grow mono" placeholder="event name (e.g. chat:new)" value={record.event}
           onChange={e => onChange({ ...record, event: e.target.value })} />
-        <button className="ghost danger" onClick={onDelete}>Delete</button>
+        <button className="ghost icon-btn" title="Duplicate" onClick={onDuplicate}><CopyIcon /></button>
+        <button className="ghost icon-btn danger" title="Delete" onClick={onDelete}><TrashIcon /></button>
         <button disabled={!record.event || targetMissing} onClick={send}>
           {status === 'sent' ? 'Sent ✓' : status === 'error' ? 'Failed' : 'Send'}
         </button>
@@ -286,10 +369,12 @@ function PushRecordCard({ record, conns, deviceId, onChange, onDelete }: {
   )
 }
 
-function HttpRuleEditor({ rule, onChange, onDelete }: {
+function HttpRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
   rule: HttpMockRule
+  dup: boolean
   onChange: (r: HttpMockRule) => void
   onDelete: () => void
+  onDuplicate: () => void
 }) {
   const [sub, setSub] = useState<'body' | 'headers'>('body')
   const bodyRef = useRef<HTMLTextAreaElement>(null)
@@ -306,6 +391,21 @@ function HttpRuleEditor({ rule, onChange, onDelete }: {
         </select>
         <input className="grow mono" placeholder="URL contains… (substring)" value={rule.urlPattern}
           onChange={e => onChange({ ...rule, urlPattern: e.target.value })} />
+        <button className="ghost icon-btn" title="Duplicate rule" onClick={onDuplicate}><CopyIcon /></button>
+        <button className="ghost icon-btn danger" title="Delete rule"
+          onClick={() => { if (confirm('Delete this rule?')) onDelete() }}><TrashIcon /></button>
+      </div>
+      {dup && <div className="hint dup-warning">⚠ Another enabled rule has the same matcher — the newest one takes effect.</div>}
+      <div className="rule-tabs">
+        {!rule.delayOnly && (
+          <>
+            <button type="button" data-active={sub === 'body' || undefined} onClick={() => setSub('body')}>Body</button>
+            <button type="button" data-active={sub === 'headers' || undefined} onClick={() => setSub('headers')}>
+              Headers{headerCount > 0 && <span className="count">{headerCount}</span>}
+            </button>
+          </>
+        )}
+        <span className="spacer" />
         {!rule.delayOnly && (
           <label className="field">status
             <NumberField className="mono w-status" value={rule.status} fallback={200}
@@ -321,18 +421,11 @@ function HttpRuleEditor({ rule, onChange, onDelete }: {
             onChange={e => onChange({ ...rule, delayOnly: e.target.checked })} />
           delay only
         </label>
-        <button className="ghost" onClick={() => { if (confirm('Delete this rule?')) onDelete() }}>Delete</button>
       </div>
       {rule.delayOnly ? (
         <div className="dim hint">Real response passes through untouched; only the {rule.delayMs} ms delay is injected.</div>
       ) : (
         <>
-          <div className="rule-tabs">
-            <button type="button" data-active={sub === 'body' || undefined} onClick={() => setSub('body')}>Body</button>
-            <button type="button" data-active={sub === 'headers' || undefined} onClick={() => setSub('headers')}>
-              Headers{headerCount > 0 && <span className="count">{headerCount}</span>}
-            </button>
-          </div>
           {sub === 'body' ? (
             <>
               <textarea ref={bodyRef} className="mono" rows={5} placeholder="response body" value={rule.body}
@@ -423,10 +516,12 @@ function JsonTool({ label, body, transform, onResult }: {
   return <button className="pill-btn" onClick={run}>{bad ? 'Invalid JSON' : label}</button>
 }
 
-function SocketRuleEditor({ rule, onChange, onDelete }: {
+function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
   rule: SocketMockRule
+  dup: boolean
   onChange: (r: SocketMockRule) => void
   onDelete: () => void
+  onDuplicate: () => void
 }) {
   const ackRef = useRef<HTMLTextAreaElement>(null)
   return (
@@ -445,8 +540,11 @@ function SocketRuleEditor({ rule, onChange, onDelete }: {
           <NumberField className="mono w-delay" value={rule.delayMs} fallback={0}
             onCommit={n => onChange({ ...rule, delayMs: n })} />
         </label>
-        <button className="ghost" onClick={() => { if (confirm('Delete this rule?')) onDelete() }}>Delete</button>
+        <button className="ghost icon-btn" title="Duplicate rule" onClick={onDuplicate}><CopyIcon /></button>
+        <button className="ghost icon-btn danger" title="Delete rule"
+          onClick={() => { if (confirm('Delete this rule?')) onDelete() }}><TrashIcon /></button>
       </div>
+      {dup && <div className="hint dup-warning">⚠ Another enabled rule has the same matcher — the newest one takes effect.</div>}
       <div className="rule-tabs">
         <button type="button" data-active>
           {rule.transport === 'socketio' ? 'Ack payload' : 'Reply frame'}

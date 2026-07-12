@@ -394,7 +394,8 @@ button.add { margin-top: 2px; }
 
 .mocks-section-head { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 8px; }
 .mocks-section-head h2 { margin: 0; }
-.rule-tabs { display: flex; gap: 2px; margin-bottom: 8px; }
+.rule-tabs { display: flex; align-items: center; gap: 2px; margin-bottom: 8px; }
+.rule-tabs .field { margin-left: 12px; }
 .rule-tabs button { border: none; background: transparent; color: var(--text-dim); padding: 3px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; }
 .rule-tabs button[data-active] { background: var(--bg-alt); color: var(--text); font-weight: 600; }
 .pill-btn { background: var(--bg-alt); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 3px 10px; font-size: 13px; cursor: pointer; }
@@ -450,3 +451,7 @@ button.add { margin-top: 2px; }
   .push-column,
   .socket-column { grid-column: auto; grid-row: auto; }
 }
+
+.icon-btn { padding: 4px 7px; line-height: 0; display: inline-flex; align-items: center; }
+.icon-btn.danger:hover { border-color: var(--err); color: var(--err); }
+.dup-warning { color: var(--warn); padding: 0 12px; }

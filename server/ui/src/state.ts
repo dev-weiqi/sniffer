@@ -12,6 +12,8 @@ export interface Device {
 
 export interface HttpMockRule {
   id: string
+  /** UI-stamped creation time; newest wins among duplicate matchers */
+  createdAt?: number
   enabled: boolean
   method: string | null
   urlPattern: string
@@ -24,6 +26,8 @@ export interface HttpMockRule {
 
 export interface SocketMockRule {
   id: string
+  /** UI-stamped creation time; newest wins among duplicate matchers */
+  createdAt?: number
   enabled: boolean
   transport: 'socketio' | 'ktor-ws'
   event: string
