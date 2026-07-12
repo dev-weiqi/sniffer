@@ -22,6 +22,13 @@ Self-hosted Flipper alternative: monitor and mock an app's HTTP/Socket traffic.
 
 ## Before you say "done"
 
+**Always report what changed, split by side, before declaring done:**
+
+```
+server：<daemon / ui changes, or 無>
+client：<SDK / sample changes, or 無>
+```
+
 The bar is **automated tests + typecheck + build passing** — not just compiling:
 
 ```bash
