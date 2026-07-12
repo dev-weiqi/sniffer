@@ -34,19 +34,20 @@ export function HttpView({ rows, onMock, onClear }: {
 
   return (
     <div className="split">
-      <div
-        className="list-pane"
-        ref={listRef}
-        onScroll={e => {
-          const el = e.currentTarget
-          stickBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
-        }}
-      >
+      <div className="list-pane">
         <div className="panel-toolbar">
           <span className="dim">API traffic</span>
           <span className="spacer" />
           <button className="clear-btn" disabled={rows.length === 0} onClick={onClear}>Clear API</button>
         </div>
+        <div
+          className="list-scroll"
+          ref={listRef}
+          onScroll={e => {
+            const el = e.currentTarget
+            stickBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+          }}
+        >
         <table className="grid">
           <thead>
             <tr>
@@ -85,6 +86,7 @@ export function HttpView({ rows, onMock, onClear }: {
           </tbody>
         </table>
         {rows.length === 0 && <div className="empty">No requests yet — traffic appears live once the app starts</div>}
+        </div>
       </div>
 
       {selected && <HttpDetail row={selected} onMock={onMock} onClose={() => setSelectedId(null)} />}

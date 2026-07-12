@@ -26,6 +26,7 @@ export function SocketView({ events, conns, deviceId, onMockAck, onPushPrefill, 
           <span className="spacer" />
           <button className="clear-btn" disabled={events.length === 0} onClick={onClear}>Clear Socket</button>
         </div>
+        <div className="list-scroll">
         {liveConns.length > 0 && (
           <div className="conn-bar">
             {liveConns.map(c => (
@@ -69,6 +70,7 @@ export function SocketView({ events, conns, deviceId, onMockAck, onPushPrefill, 
           </tbody>
         </table>
         {events.length === 0 && <div className="empty">No socket events yet</div>}
+        </div>
       </div>
 
       <aside className="detail-pane">
