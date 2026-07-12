@@ -18,7 +18,9 @@ Self-hosted Flipper alternative: monitor and mock an app's HTTP/Socket traffic.
 2. **Non-trivial logic ships with a test.** Pure logic (mock matching, placeholder expansion, protocol (de)serialization) → `client/core/src/commonTest`. Keep the existing `MockRegistryTest` / `MockPlaceholdersTest` style.
 3. **The SDK must never affect the host app.** Swallow errors, reconnect silently, cap buffers (1000 msgs offline). A monitoring bug must not surface in production traffic.
 4. **Keep `sample` and `sample-cmp` in parity** — same layout, headers, and action labels. The only allowed difference: CMP is ktor-only (no okhttp / socketio).
-5. **Commits:** split by feature; end messages with the `Co-Authored-By` trailer. Don't push unless asked.
+5. **Commits:** split by feature; end messages with the `Co-Authored-By` trailer.
+   **Never push without explicit approval for that push** — committing locally is fine,
+   pushing (normal or force) always waits for the user's go-ahead.
 
 ## Before you say "done"
 

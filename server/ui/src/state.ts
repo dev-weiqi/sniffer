@@ -12,6 +12,8 @@ export interface Device {
 
 export interface HttpMockRule {
   id: string
+  /** optional user label; UI-only, ignored by the SDK */
+  name?: string
   /** UI-stamped creation time; newest wins among duplicate matchers */
   createdAt?: number
   enabled: boolean
@@ -26,6 +28,8 @@ export interface HttpMockRule {
 
 export interface SocketMockRule {
   id: string
+  /** optional user label; UI-only, ignored by the SDK */
+  name?: string
   /** UI-stamped creation time; newest wins among duplicate matchers */
   createdAt?: number
   enabled: boolean

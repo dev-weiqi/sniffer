@@ -49,6 +49,17 @@ function orderForSync(mocks: Mocks): Mocks {
 }
 
 
+
+function TagIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24H4a1 1 0 0 0-1 1v5.59c0 .53.21 1.04.59 1.41l9.58 9.59a2 2 0 0 0 2.83 0l4.59-4.59a2 2 0 0 0 0-2.83z" />
+      <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />
+    </svg>
+  )
+}
+
 function CopyIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -251,7 +262,7 @@ export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRu
   )
 }
 
-type PushRecord = { id: string; target: string; event: string; payload: string }
+type PushRecord = { id: string; target: string; event: string; payload: string; name?: string }
 
 function PushEventPanel({ conns, deviceId, prefill, onConsumed }: {
   conns: SocketConn[]
@@ -341,6 +352,11 @@ function PushRecordCard({ record, conns, deviceId, onChange, onDelete, onDuplica
 
   return (
     <div className="rule-card">
+      <div className="rule-name-row">
+        <TagIcon />
+        <input className="rule-name" placeholder="name this push… (optional)" value={record.name ?? ''}
+          onChange={e => onChange({ ...record, name: e.target.value || undefined })} />
+      </div>
       <div className="rule-row">
         <select value={record.target} onChange={e => onChange({ ...record, target: e.target.value })}>
           {options.map(o => <option key={o.key} value={o.key} disabled={o.disabled}>{o.label}</option>)}
@@ -381,6 +397,11 @@ function HttpRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
   const headerCount = Object.keys(rule.headers).length
   return (
     <div className="rule-card" data-disabled={!rule.enabled || undefined}>
+      <div className="rule-name-row">
+        <TagIcon />
+        <input className="rule-name" placeholder="name this rule… (optional)" value={rule.name ?? ''}
+          onChange={e => onChange({ ...rule, name: e.target.value || undefined })} />
+      </div>
       <div className="rule-row">
         <label className="toggle">
           <input type="checkbox" checked={rule.enabled} onChange={e => onChange({ ...rule, enabled: e.target.checked })} />
@@ -526,6 +547,11 @@ function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
   const ackRef = useRef<HTMLTextAreaElement>(null)
   return (
     <div className="rule-card" data-disabled={!rule.enabled || undefined}>
+      <div className="rule-name-row">
+        <TagIcon />
+        <input className="rule-name" placeholder="name this rule… (optional)" value={rule.name ?? ''}
+          onChange={e => onChange({ ...rule, name: e.target.value || undefined })} />
+      </div>
       <div className="rule-row">
         <label className="toggle">
           <input type="checkbox" checked={rule.enabled} onChange={e => onChange({ ...rule, enabled: e.target.checked })} />

@@ -477,3 +477,15 @@ button.add { margin-top: 2px; }
 .conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); flex-shrink: 0; }
 .conn-dot.on { background: var(--ok); }
 .conn-live { color: var(--ok); font-weight: 600; font-size: 12px; }
+
+.rule-name-row {
+  display: flex; align-items: center; gap: 7px;
+  margin: 8px 12px 0; color: var(--text-dim);
+}
+.rule-name {
+  flex: 1;
+  border: none; border-radius: 0; background: transparent; outline: none;
+  font-weight: 600; font-size: 14px; color: var(--text);
+  padding: 0;
+}
+.rule-name::placeholder { font-weight: 400; color: var(--text-dim); opacity: .55; }
