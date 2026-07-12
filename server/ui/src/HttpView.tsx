@@ -194,12 +194,19 @@ function HttpDetail({ row, onMock, onClose }: {
 }
 
 function ImagePreview({ contentType, base64 }: { contentType: string; base64: string }) {
+  const [dims, setDims] = useState<string | null>(null)
   const src = `data:${contentType};base64,${base64}`
   const webpInfo = contentType === 'image/webp' ? parseWebpAnimation(base64) : null
   if (webpInfo?.animated) {
     return <WebpPlayer src={src} base64={base64} info={webpInfo} />
   }
-  return <img className="body-image" alt="response" src={src} />
+  return (
+    <>
+      <img className="body-image" alt="response" src={src}
+        onLoad={e => setDims(`${e.currentTarget.naturalWidth} × ${e.currentTarget.naturalHeight}`)} />
+      {dims && <div className="dim hint">{contentType} · {dims}</div>}
+    </>
+  )
 }
 
 interface WebpAnimationInfo {
@@ -287,7 +294,8 @@ function WebpPlayer({ src, base64, info }: { src: string; base64: string; info: 
     setPlaying(p => !p)
   }
 
-  const summary = `${info.frames} frames · ${fmtDuration(info.durationMs)} · ${info.loopCount === 0 ? 'infinite loop' : `${info.loopCount} loops`}`
+  const size = info.canvasWidth && info.canvasHeight ? ` · ${info.canvasWidth} × ${info.canvasHeight}` : ''
+  const summary = `${info.frames} frames · ${fmtDuration(info.durationMs)} · ${info.loopCount === 0 ? 'infinite loop' : `${info.loopCount} loops`}${size}`
 
   return (
     <div className="webp-player">
