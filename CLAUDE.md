@@ -86,6 +86,10 @@ public key published to keys.openpgp.org). POM metadata lives in `client/gradle.
 3. Verify: `npm view @dev-weiqi/sniffer version`, then install the tarball in a temp dir and
    smoke-test `sniffer start` + `curl /api/state`.
 
+npm credentials live in `~/.npmrc` (machine-local): a granular access token scoped to
+`@dev-weiqi/sniffer` with bypass-2FA, so publishing is non-interactive. Rotate it at
+npmjs.com → Access Tokens when it expires.
+
 The daemon resolves the UI from `../ui/dist` (repo checkout) first, then `ui-dist/`
 (published package) — repo first, or a stale `ui-dist/` left by npm pack shadows fresh
 builds. `postpack` removes the staging dir; keep both layouts working if you move files.
