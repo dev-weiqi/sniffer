@@ -1,5 +1,6 @@
 package dev.weiqi.sniffer.socketio
 
+import io.socket.client.Manager
 import io.socket.client.Socket
 import io.socket.emitter.Emitter
 
@@ -21,4 +22,8 @@ class SnifferSocket internal constructor(val delegate: Socket) : Emitter() {
     fun connect(): SnifferSocket = apply { delegate.connect() }
     fun disconnect(): SnifferSocket = apply { delegate.disconnect() }
     fun connected(): Boolean = delegate.connected()
+    fun open(): SnifferSocket = apply { delegate.open() }
+    fun close(): SnifferSocket = apply { delegate.close() }
+    fun io(): Manager = delegate.io()
+    fun id(): String? = delegate.id()
 }

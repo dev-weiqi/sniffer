@@ -9,6 +9,7 @@ import dev.weiqi.sniffer.core.expandMockPlaceholders
 import dev.weiqi.sniffer.core.newId
 import dev.weiqi.sniffer.core.now
 import io.socket.client.Ack
+import io.socket.client.Manager
 import io.socket.client.Socket
 import io.socket.emitter.Emitter
 import io.socket.thread.EventThread
@@ -164,6 +165,14 @@ class SnifferSocket internal constructor(
     }
 
     fun connected(): Boolean = delegate.connected()
+
+    // Socket API mirrors so wrap() stays a drop-in replacement (io.socket aliases:
+    // open == connect, close == disconnect -- routed through ours to keep the push
+    // handler lifecycle correct)
+    fun open(): SnifferSocket = connect()
+    fun close(): SnifferSocket = disconnect()
+    fun io(): Manager = delegate.io()
+    fun id(): String? = delegate.id()
 }
 
 /** Payload string (JSON array = multiple args, anything else = single arg) → socket.io args. */

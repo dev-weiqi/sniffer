@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
@@ -24,9 +25,22 @@ allprojects {
 subprojects {
     if (name == "sample" || name == "sample-cmp") return@subprojects
 
-    // published library jars must target JVM 17 bytecode so consumers on JDK 17 can read them
+    // published library jars must target JVM 17 bytecode so consumers on JDK 17 can read them,
+    // and Kotlin 2.2 metadata so consumers on older compilers (which read at most n+1) can too
     tasks.withType(KotlinCompile::class.java).configureEach {
         compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
+    }
+    tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask::class.java).configureEach {
+        compilerOptions {
+            languageVersion.set(KotlinVersion.KOTLIN_2_2)
+            apiVersion.set(KotlinVersion.KOTLIN_2_2)
+        }
+    }
+    // ...and must not drag a newer kotlin-stdlib onto the consumer's compile classpath
+    plugins.withType(org.jetbrains.kotlin.gradle.plugin.KotlinBasePlugin::class.java) {
+        extensions.configure(org.jetbrains.kotlin.gradle.dsl.KotlinProjectExtension::class.java) {
+            coreLibrariesVersion = "2.2.0"
+        }
     }
 
     // JVM-only modules (okhttp, socketio + their -noop twins)
