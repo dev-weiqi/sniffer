@@ -83,6 +83,15 @@ export interface SocketRow {
   ackMocked?: boolean
 }
 
+export interface ConnLogEntry {
+  deviceId: string
+  connectionId: string
+  transport: string
+  url: string
+  status: string
+  ts: number
+}
+
 export interface State {
   wsConnected: boolean
   devices: Device[]
@@ -90,6 +99,8 @@ export interface State {
   socketConns: SocketConn[]
   /** connectionId → url, never pruned: historical events must resolve after their conn is gone */
   connUrls: Record<string, string>
+  /** append-only socket-status history — the lifecycle timeline survives endpoint-kill pruning */
+  connLog: ConnLogEntry[]
   socketEvents: SocketRow[]
   mocksByDevice: Record<string, Mocks>
 }
@@ -103,6 +114,7 @@ export const initialState: State = {
   http: [],
   socketConns: [],
   connUrls: {},
+  connLog: [],
   socketEvents: [],
   mocksByDevice: {},
 }
@@ -143,11 +155,15 @@ function applyDeviceMessage(state: State, deviceId: string, m: Msg): State {
       // one connection per endpoint: a fresh connect kills its predecessors, so apps
       // that recreate sockets per reconnect don't pile up zombie connections
       const connUrls = m.url ? { ...state.connUrls, [m.connectionId]: m.url } : state.connUrls
+      const connLog = appendCapped(state.connLog, {
+        deviceId, connectionId: m.connectionId, transport: m.transport,
+        url: m.url, status: m.status, ts: m.timestamp ?? Date.now(),
+      })
       const rest = state.socketConns.filter(c =>
         c.connectionId !== m.connectionId &&
         !(m.status === 'connected' && c.deviceId === deviceId &&
           c.transport === m.transport && c.url === m.url))
-      return { ...state, socketConns: [...rest, conn], connUrls }
+      return { ...state, socketConns: [...rest, conn], connUrls, connLog }
     }
     case 'socket-event': {
       const row: SocketRow = {
@@ -205,7 +221,7 @@ export function reducer(state: State, action: Action): State {
         mocksByDevice: { ...state.mocksByDevice, [m.deviceId]: m.mocks },
       }
     case 'entries-cleared':
-      return { ...state, http: [], socketEvents: [], socketConns: [] }
+      return { ...state, http: [], socketEvents: [], socketConns: [], connLog: [] }
     case 'http-entries-cleared':
       return { ...state, http: [] }
     case 'socket-entries-cleared':
