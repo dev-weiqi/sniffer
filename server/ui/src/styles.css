@@ -44,7 +44,7 @@ body {
   overflow: hidden;
 }
 
-.mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 14px; }
+.mono { font-family: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace; font-size: 14px; }
 .dim { color: var(--text-dim); }
 .num { text-align: right; }
 .spacer { flex: 1; }
@@ -124,7 +124,7 @@ select::-ms-expand { display: none; }
 input:focus, select:focus, textarea:focus { border-color: var(--accent); }
 textarea { width: 100%; resize: vertical; }
 
-button { cursor: pointer; background: var(--bg-alt); white-space: nowrap; }
+button { cursor: pointer; background: var(--bg-alt); white-space: nowrap; transition: background 0.12s, border-color 0.12s; }
 button:hover { background: var(--hover); border-color: var(--text-dim); }
 button:active { transform: scale(.98); }
 button:disabled { opacity: .45; cursor: default; }
@@ -138,6 +138,7 @@ button.danger:hover { color: var(--err); border-color: color-mix(in srgb, var(--
   background: var(--bg-alt); border-radius: 8px; padding: 2px;
 }
 .tabs button { border: none; background: transparent; padding: 4px 12px; border-radius: 6px; color: var(--text-dim); }
+.tabs button:not([data-active]):hover { background: var(--hover); color: var(--text); }
 .tabs button[data-active] {
   background: var(--bg-panel); color: var(--text); font-weight: 600;
   box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
@@ -169,7 +170,7 @@ button.danger:hover { color: var(--err); border-color: color-mix(in srgb, var(--
   width: 5px; flex-shrink: 0; cursor: col-resize;
   background: transparent; transition: background 0.15s;
 }
-.pane-resizer:hover { background: var(--accent); }
+.pane-resizer:hover, .pane-resizer:active { background: var(--border); }
 .detail-pane {
   width: var(--detail-w, 420px); min-width: 320px; max-width: 60vw;
   overflow: auto;
@@ -196,9 +197,9 @@ table.grid td {
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
-table.grid tbody tr { cursor: default; }
+table.grid tbody tr { cursor: default; transition: background 0.12s; }
 table.grid tbody tr:hover { background: var(--hover); }
-table.grid tbody tr[data-selected] { background: var(--accent-soft); }
+table.grid tbody tr[data-selected] { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
 
 .url-cell { overflow: hidden; text-overflow: ellipsis; max-width: 0; width: 99%; }
 .method { font-weight: 600; }
@@ -248,7 +249,7 @@ table.grid tbody tr[data-selected] { background: var(--accent-soft); }
 .body-pre {
   margin: 4px 10px; padding: 8px 10px;
   background: var(--bg-alt); border-radius: 6px;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
   font-size: 14px; line-height: 1.5;
   white-space: pre-wrap; overflow-wrap: anywhere;
   max-height: 40vh; overflow: auto;
@@ -344,7 +345,7 @@ button.add { margin-top: 2px; }
 .placeholder-list { display: flex; flex-direction: column; gap: 6px; }
 .placeholder-item { display: flex; align-items: center; gap: 10px; }
 .placeholder-token {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
   font-size: 13px;
   color: var(--text);
   background: var(--bg-alt);
