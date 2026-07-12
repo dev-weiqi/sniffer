@@ -12,6 +12,7 @@ import dev.weiqi.sniffer.core.now
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Protocol
+import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okio.Buffer
@@ -43,6 +44,41 @@ internal class SnifferInterceptor : Interceptor {
         val id = newId()
         val start = System.nanoTime()
 
+        // Golden rule: a Sniffer bug must never break the host app's traffic. Everything
+        // except the real chain.proceed runs fenced — on any SDK failure the request and
+        // response pass through untouched.
+        try {
+            reportRequest(id, request)
+            mockResponse(id, request)?.let { return it }
+        } catch (t: Throwable) {
+            // restore the flag so host cancellation semantics survive the fence
+            if (t is InterruptedException) Thread.currentThread().interrupt()
+            // fall through to the real request
+        }
+
+        val response = try {
+            chain.proceed(request)
+        } catch (e: IOException) {
+            runCatching {
+                Sniffer.report(
+                    HttpResponseMsg(
+                        id = id, status = 0, headers = emptyMap(), body = null,
+                        bodySize = 0, bodyTruncated = false,
+                        durationMs = (System.nanoTime() - start) / 1_000_000,
+                        mocked = false, error = e.toString(), timestamp = now(),
+                    )
+                )
+            }
+            throw e
+        }
+        return try {
+            reportResponse(id, start, response)
+        } catch (t: Throwable) {
+            response
+        }
+    }
+
+    private fun reportRequest(id: String, request: Request) {
         val reqBodyRaw = request.body?.let { body ->
             if (body.isOneShot() || body.isDuplex() || !isTextual(body.contentType()?.toString())) null
             else runCatching { Buffer().also(body::writeTo).readUtf8() }.getOrNull()
@@ -58,50 +94,43 @@ internal class SnifferInterceptor : Interceptor {
                 library = "okhttp", timestamp = now(),
             )
         )
+    }
 
-        MockRegistry.matchHttp(request.method, request.url.toString())?.let { rule ->
-            if (rule.delayMs > 0) Thread.sleep(rule.delayMs)
-            if (rule.delayOnly) return@let  // delay applied; fall through to the real request
-            val body = expandMockPlaceholders(rule.body)
-            val contentType = rule.headers.entries
-                .firstOrNull { it.key.equals("content-type", true) }?.value ?: "application/json"
-            val response = Response.Builder()
-                .request(request)
-                .protocol(Protocol.HTTP_1_1)
-                .code(rule.status)
-                .message("Sniffer Mock")
-                .apply { rule.headers.forEach { (k, v) -> addHeader(k, v) } }
-                .body(body.toResponseBody(contentType.toMediaTypeOrNull()))
-                .build()
-            Sniffer.report(
-                HttpResponseMsg(
-                    id = id, status = rule.status, headers = rule.headers,
-                    body = body, bodySize = body.length.toLong(), bodyTruncated = false,
-                    durationMs = rule.delayMs, mocked = true, error = null, timestamp = now(),
-                )
+    private fun mockResponse(id: String, request: Request): Response? {
+        val rule = MockRegistry.matchHttp(request.method, request.url.toString()) ?: return null
+        if (rule.delayMs > 0) Thread.sleep(rule.delayMs)
+        if (rule.delayOnly) return null // delay applied; fall through to the real request
+        val body = expandMockPlaceholders(rule.body)
+        val contentType = rule.headers.entries
+            .firstOrNull { it.key.equals("content-type", true) }?.value ?: "application/json"
+        val response = Response.Builder()
+            .request(request)
+            .protocol(Protocol.HTTP_1_1)
+            .code(rule.status)
+            .message("Sniffer Mock")
+            .apply { rule.headers.forEach { (k, v) -> addHeader(k, v) } }
+            .body(body.toResponseBody(contentType.toMediaTypeOrNull()))
+            .build()
+        Sniffer.report(
+            HttpResponseMsg(
+                id = id, status = rule.status, headers = rule.headers,
+                body = body, bodySize = body.length.toLong(), bodyTruncated = false,
+                durationMs = rule.delayMs, mocked = true, error = null, timestamp = now(),
             )
-            return response
-        }
+        )
+        return response
+    }
 
-        val response = try {
-            chain.proceed(request)
-        } catch (e: IOException) {
-            Sniffer.report(
-                HttpResponseMsg(
-                    id = id, status = 0, headers = emptyMap(), body = null,
-                    bodySize = 0, bodyTruncated = false,
-                    durationMs = (System.nanoTime() - start) / 1_000_000,
-                    mocked = false, error = e.toString(), timestamp = now(),
-                )
-            )
-            throw e
-        }
+    private fun reportResponse(id: String, start: Long, response: Response): Response {
         val durationMs = (System.nanoTime() - start) / 1_000_000
 
         val respCt = response.header("content-type")
         // images: capture the raw bytes (<= 1MB) as base64 so the UI can render a preview
         if (isImage(respCt)) {
-            val bytes = runCatching { response.peekBody((MAX_BODY_CHARS + 1).toLong()).bytes() }.getOrNull()
+            // peekBody blocks until byteCount bytes or EOF: only safe when the length is known
+            val bytes = if (response.body.contentLength() >= 0)
+                runCatching { response.peekBody((MAX_BODY_CHARS + 1).toLong()).bytes() }.getOrNull()
+            else null
             val fits = bytes != null && bytes.size <= MAX_BODY_CHARS
             Sniffer.report(
                 HttpResponseMsg(
@@ -117,7 +146,9 @@ internal class SnifferInterceptor : Interceptor {
         }
         // streaming responses (SSE) must not be peeked: peekBody blocks until the stream ends.
         // Instead, tee the body as the app consumes it and report updates with the same id.
-        if (respCt?.contains("event-stream", ignoreCase = true) == true) {
+        if (respCt?.contains("event-stream", ignoreCase = true) == true ||
+            (isTextual(respCt) && response.body.contentLength() < 0)
+        ) {
             Sniffer.report(
                 HttpResponseMsg(
                     id = id, status = response.code, headers = response.headers.toMap(),
@@ -166,24 +197,32 @@ private class TeeResponseBody(
     override fun contentType() = delegate.contentType()
     override fun contentLength() = delegate.contentLength()
 
-    override fun source(): okio.BufferedSource =
+    // memoized: ResponseBody.close() calls source() again -- a fresh wrapper per call would
+    // stack tees over the same delegate
+    private val teedSource by lazy {
         object : okio.ForwardingSource(delegate.source()) {
             override fun read(sink: Buffer, byteCount: Long): Long {
                 val read = super.read(sink, byteCount)
-                if (read > 0 && captured.size() < MAX_BODY_CHARS) {
-                    sink.copyTo(captured, sink.size - read, read)
-                    maybeReport(final = false)
-                } else if (read == -1L) {
-                    maybeReport(final = true)
+                // monitoring must never throw into the host's stream read loop
+                runCatching {
+                    if (read > 0 && captured.size() < MAX_BODY_CHARS) {
+                        sink.copyTo(captured, sink.size - read, read)
+                        maybeReport(final = false)
+                    } else if (read == -1L) {
+                        maybeReport(final = true)
+                    }
                 }
                 return read
             }
 
             override fun close() {
-                maybeReport(final = true)
+                runCatching { maybeReport(final = true) }
                 super.close()
             }
         }.okioBuffer()
+    }
+
+    override fun source(): okio.BufferedSource = teedSource
 
     private fun maybeReport(final: Boolean) {
         if (finished) return

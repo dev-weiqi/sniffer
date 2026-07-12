@@ -130,7 +130,12 @@ function applyDeviceMessage(state: State, deviceId: string, m: Msg): State {
         connectionId: m.connectionId, deviceId, transport: m.transport,
         url: m.url, status: m.status,
       }
-      const rest = state.socketConns.filter(c => c.connectionId !== m.connectionId)
+      // one connection per endpoint: a fresh connect kills its predecessors, so apps
+      // that recreate sockets per reconnect don't pile up zombie connections
+      const rest = state.socketConns.filter(c =>
+        c.connectionId !== m.connectionId &&
+        !(m.status === 'connected' && c.deviceId === deviceId &&
+          c.transport === m.transport && c.url === m.url))
       return { ...state, socketConns: [...rest, conn] }
     }
     case 'socket-event': {

@@ -1,7 +1,7 @@
 <h1 align="center">Sniffer</h1>
 
 <p align="center">
-  <a href="https://github.com/dev-weiqi/sniffer/releases"><img src="https://img.shields.io/badge/version-0.1.0-blue" alt="Version"></a>
+  <a href="https://github.com/dev-weiqi/sniffer/releases"><img src="https://img.shields.io/badge/version-0.1.2-blue" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
   <a href="https://www.npmjs.com/package/@dev-weiqi/sniffer"><img src="https://img.shields.io/npm/v/%40dev-weiqi%2Fsniffer?label=npm" alt="npm"></a>
   <a href="https://central.sonatype.com/namespace/io.github.dev-weiqi.sniffer"><img src="https://img.shields.io/maven-central/v/io.github.dev-weiqi.sniffer/core?label=maven" alt="Maven Central"></a>
@@ -68,7 +68,7 @@ Supported client integrations:
 | Ktor WebSocket | `io.github.dev-weiqi.sniffer:ktor-ws` |
 
 ```kotlin
-val snifferVersion = "0.1.0"
+val snifferVersion = "0.1.2"
 
 dependencies {
     debugImplementation("io.github.dev-weiqi.sniffer:core:$snifferVersion")
@@ -187,8 +187,8 @@ device.
 
 Rules are sent to the selected device and run inside the SDK. HTTP mocks
 short-circuit matched requests before the network. Socket ack rules answer the
-client locally. Mock bodies support placeholders such as `${id}`,
-`${randomString(length)}`, and `${randomNumber(min~max)}`.
+client locally. Mock bodies support placeholders such as `${id}` and
+`${randomString(length)}`.
 
 ## Modules
 

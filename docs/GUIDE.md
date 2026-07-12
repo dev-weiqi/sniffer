@@ -184,9 +184,8 @@ they then run **on the device**, so they keep working offline.
   network — the interceptor short-circuits locally. The body editor has
   pretty-print / minify JSON helpers.
 - Mock bodies and socket payloads support placeholders expanded on the device
-  each time a rule matches: `${id}`, `${randomString(length)}`, and
-  `${randomNumber(min~max)}`. Replace `length`, `min`, and `max` with the
-  numbers you want for that rule.
+  each time a rule matches: `${id}` and `${randomString(length)}`. Replace
+  `length` with the number you want for that rule.
 - **Socket rules** come in two flavors. **sio ack**: matches the emitted
   socket.io event name; matched emits are **not sent to the server** and the SDK
   calls the ack callback locally with your payload (JSON array = multiple ack

@@ -49,6 +49,8 @@ on-device UI wiring, adb reverse, platform glue). It's slow — don't gate every
 - **`delayOnly` rule** = let the real request run, only inject latency; do not fake the response. The interceptor's timer starts before the injected delay so the reported duration includes it.
 - **Runtime host/port override** (no rebuild): Android `adb shell setprop debug.sniffer.port <n>` / `debug.sniffer.host <ip>`; iOS `SNIFFER_HOST` / `SNIFFER_PORT` env; JVM `-Dsniffer.port`. Precedence: override > `Sniffer.start(...)` args > default.
 - **KMP `commonMain` has no reflection and no `Date.now()` / `Math.random()`-style host APIs** — go through `expect`/`actual` (see `Platform.kt`).
+- **Android's ICU regex is stricter than the JVM's** — a bare `}` in a pattern compiles on JVM but throws `PatternSyntaxException` on Android, at class-init (`ExceptionInInitializerError` in the host). jvmTest cannot catch this; escape every literal brace and keep regexes out of hot init paths.
+- **Clearing traffic must survive SDK buffer replay**: a disconnected SDK buffers ≤1000 messages and dumps them on reconnect, resurrecting "cleared" entries. The daemon keeps per-kind clear watermarks (`clearedAt` in `server.ts`) and drops incoming messages timestamped before the last clear (5s clock-skew tolerance).
 - The web UI version is injected at build time from `server/daemon/package.json` (`__APP_VERSION__` in `vite.config.ts`) — don't hardcode it in the UI.
 
 ## Releasing

@@ -8,7 +8,6 @@ type PushPrefill = { connectionId: string; event: string; payload: string }
 const PlaceholderTokens = [
   { key: 'id', syntax: '${id}', label: 'unique id' },
   { key: 'randomString', syntax: '${randomString(length)}', label: 'lorem string with the length you enter' },
-  { key: 'randomNumber', syntax: '${randomNumber(min~max)}', label: 'number in the inclusive range you enter' },
 ]
 
 export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRule, pushPrefill, onPendingConsumed }: {
@@ -57,16 +56,23 @@ export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRu
     setDirty(true)
   }
 
-  const save = async () => {
-    if (!deviceId) return
-    await api.saveMocks(deviceId, draft)
-    setDirty(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 1200)
-  }
+  // auto-save: edits sync to the daemon after a short pause -- no explicit save step
+  useEffect(() => {
+    if (!dirty || !deviceId) return
+    const t = setTimeout(() => {
+      api.saveMocks(deviceId, draft)
+        .then(() => {
+          setDirty(false)
+          setSaved(true)
+          setTimeout(() => setSaved(false), 1200)
+        })
+        .catch(() => { /* daemon unreachable: stay dirty, next edit retries */ })
+    }, 600)
+    return () => clearTimeout(t)
+  }, [draft, dirty, deviceId])
 
   if (!deviceId) {
-    return <div className="empty">Select a device to edit mocks</div>
+    return <div className="empty">Connect a device to manage mocks</div>
   }
 
   return (
@@ -76,7 +82,7 @@ export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRu
           {showPlaceholders ? 'Hide placeholders' : 'Placeholders'}
         </button>
         <span className="spacer" />
-        <button disabled={!dirty} onClick={save}>{saved ? 'Saved ✓' : dirty ? 'Save changes' : 'Synced'}</button>
+        <span className="dim">{dirty ? 'Saving…' : saved ? 'Saved ✓' : 'Synced'}</span>
       </div>
       {showPlaceholders && <PlaceholderGuide />}
 
@@ -423,10 +429,6 @@ function buildPlaceholderToken(key: string): string | null {
   if (key === 'randomString') {
     const length = promptWholeNumber('Random string length')
     return length === null ? null : `\${randomString(${length})}`
-  }
-  if (key === 'randomNumber') {
-    const range = promptRange()
-    return range ? `\${randomNumber(${range.min}~${range.max})}` : null
   }
   return null
 }

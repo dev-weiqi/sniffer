@@ -41,7 +41,8 @@ export default function App() {
     [state.devices],
   )
   const selectedDevice = devices.find(d => d.deviceId === deviceId) ?? null
-  const selectedMocks = state.mocksByDevice[deviceId] ?? emptyMocks
+  // a stale localStorage deviceId must not surface mocks when its device is gone
+  const selectedMocks = selectedDevice ? state.mocksByDevice[deviceId] ?? emptyMocks : emptyMocks
   const activeMockCount =
     selectedMocks.http.filter(r => r.enabled).length + selectedMocks.socket.filter(r => r.enabled).length
   const canDeleteDevices = Boolean(selectedDevice && !selectedDevice.connected)
@@ -195,7 +196,7 @@ export default function App() {
             onClear={() => { if (confirm('Clear socket events?')) api.clearSocketEntries() }} />
         )}
         {tab === 'mocks' && (
-          <MocksView deviceId={deviceId || null}
+          <MocksView deviceId={selectedDevice ? deviceId : null}
             mocks={selectedMocks}
             conns={state.socketConns}
             pendingRule={pendingRule}

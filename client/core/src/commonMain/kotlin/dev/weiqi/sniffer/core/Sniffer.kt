@@ -47,6 +47,8 @@ object Sniffer {
     @Volatile
     private var pushHandlers: Map<String, (event: String, payload: String) -> Unit> = emptyMap()
 
+    // ponytail: Volatile narrows but does not eliminate the double-start race; atomics if it ever matters
+    @Volatile
     private var scope: CoroutineScope? = null
 
     /**
@@ -136,11 +138,12 @@ object Sniffer {
         when (msg) {
             is MockRules -> MockRegistry.update(msg)
             is PushEvent -> {
-                // expand ${id}/${randomString}/${randomNumber} just like mock payloads
-                val payload = expandMockPlaceholders(msg.payload)
+                // expand ${id}/${randomString} just like mock payloads
+                val payload = runCatching { expandMockPlaceholders(msg.payload) }.getOrDefault(msg.payload)
                 val targets = if (msg.connectionId == null) pushHandlers.values
                 else listOfNotNull(pushHandlers[msg.connectionId])
-                targets.forEach { it(msg.event, payload) }
+                // a throwing handler must not kill the daemon connection loop
+                targets.forEach { h -> runCatching { h(msg.event, payload) } }
             }
         }
     }

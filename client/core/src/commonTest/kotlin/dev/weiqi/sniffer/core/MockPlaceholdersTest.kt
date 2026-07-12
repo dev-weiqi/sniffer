@@ -26,13 +26,11 @@ class MockPlaceholdersTest {
     }
 
     @Test
-    fun expands_random_number_in_inclusive_range() {
-        repeat(20) {
-            val expanded = expandMockPlaceholders("""{"n":${'$'}{randomNumber(3~5)}}""")
-            val value = expanded.substringAfter(""""n":""").substringBefore("}").toLong()
+    fun random_string_length_is_capped() {
+        // a huge requested length must not OOM the host
+        val expanded = expandMockPlaceholders("${'$'}{randomString(2000000000)}")
 
-            assertTrue(value in 3..5)
-        }
+        assertEquals(MAX_BODY_CHARS, expanded.length)
     }
 
     @Test

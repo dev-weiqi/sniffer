@@ -4,6 +4,7 @@ import dev.weiqi.sniffer.core.MockRegistry
 import dev.weiqi.sniffer.core.Sniffer
 import dev.weiqi.sniffer.core.SocketEventMsg
 import dev.weiqi.sniffer.core.SocketStatusMsg
+import dev.weiqi.sniffer.core.capBody
 import dev.weiqi.sniffer.core.expandMockPlaceholders
 import dev.weiqi.sniffer.core.newId
 import dev.weiqi.sniffer.core.now
@@ -15,9 +16,12 @@ import io.ktor.websocket.DefaultWebSocketSession
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.SendChannel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Opens a monitored WebSocket. Drop-in replacement for client.webSocketSession(...):
@@ -38,7 +42,9 @@ private class SnifferFrameInterceptor(
 ) : DefaultWebSocketSession by delegate {
 
     private val connectionId = newId()
-    private val interceptedIncoming = Channel<Frame>(Channel.UNLIMITED)
+
+    // bounded: real frames are forwarded with suspending send (backpressure), injected mocks use trySend
+    private val interceptedIncoming = Channel<Frame>(1000)
     private val interceptedOutgoing = Channel<Frame>(Channel.BUFFERED)
 
     override val incoming: ReceiveChannel<Frame> get() = interceptedIncoming
@@ -61,15 +67,19 @@ private class SnifferFrameInterceptor(
         delegate.launch {
             try {
                 for (frame in delegate.incoming) {
-                    if (frame is Frame.Text) {
-                        Sniffer.report(
-                            SocketEventMsg(
-                                newId(), connectionId, "ktor-ws", "in", "message",
-                                frame.readText(), mocked = false, timestamp = now(),
-                            )
-                        )
-                    }
+                    // forward first: monitoring must never gate real traffic
                     interceptedIncoming.send(frame)
+                    // readText() throws on fragmented frames, so only report final text frames
+                    if (frame is Frame.Text && frame.fin) {
+                        runCatching {
+                            Sniffer.report(
+                                SocketEventMsg(
+                                    newId(), connectionId, "ktor-ws", "in", "message",
+                                    capBody(frame.readText()).body.orEmpty(), mocked = false, timestamp = now(),
+                                )
+                            )
+                        }
+                    }
                 }
             } finally {
                 interceptedIncoming.close()
@@ -79,30 +89,53 @@ private class SnifferFrameInterceptor(
         }
         delegate.launch {
             for (frame in interceptedOutgoing) {
-                if (frame is Frame.Text) {
-                    val text = frame.readText()
-                    val rule = MockRegistry.matchWsSend(text)
-                    Sniffer.report(
-                        SocketEventMsg(
-                            newId(), connectionId, "ktor-ws", "out", "message",
-                            text, mocked = rule != null, timestamp = now(),
-                        )
-                    )
-                    if (rule != null) {
-                        // reply mock: swallow the send, inject a fake server reply instead
-                        if (rule.delayMs > 0) kotlinx.coroutines.delay(rule.delayMs)
-                        val reply = expandMockPlaceholders(rule.ackPayload)
-                        interceptedIncoming.trySend(Frame.Text(reply))
+                var consumed = false
+                try {
+                    if (frame is Frame.Text && frame.fin) {
+                        val text = frame.readText()
+                        val rule = MockRegistry.matchWsSend(text)
                         Sniffer.report(
                             SocketEventMsg(
-                                newId(), connectionId, "ktor-ws", "in", "message",
-                                reply, mocked = true, timestamp = now(),
+                                newId(), connectionId, "ktor-ws", "out", "message",
+                                capBody(text).body.orEmpty(), mocked = rule != null, timestamp = now(),
                             )
                         )
-                        continue
+                        if (rule != null) {
+                            // reply mock: swallow the send, inject a fake server reply instead.
+                            // Launched so the mock delay doesn't stall unrelated frames in this serial pump.
+                            launch {
+                                try {
+                                    if (rule.delayMs > 0) delay(rule.delayMs)
+                                    val reply = expandMockPlaceholders(rule.ackPayload)
+                                    interceptedIncoming.trySend(Frame.Text(reply))
+                                    Sniffer.report(
+                                        SocketEventMsg(
+                                            newId(), connectionId, "ktor-ws", "in", "message",
+                                            capBody(reply).body.orEmpty(), mocked = true, timestamp = now(),
+                                        )
+                                    )
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (_: Throwable) {
+                                    // injected reply is best-effort
+                                }
+                            }
+                            consumed = true
+                        }
                     }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Throwable) {
+                    // monitoring failed: fall through and send the raw frame
                 }
-                delegate.outgoing.send(frame)
+                if (consumed) continue
+                try {
+                    delegate.outgoing.send(frame)
+                } catch (e: ClosedSendChannelException) {
+                    // real session closed: fail host send() like a raw session instead of buffering forever
+                    interceptedOutgoing.close(e)
+                    return@launch
+                }
             }
         }
     }

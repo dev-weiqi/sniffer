@@ -88,7 +88,20 @@ function broadcastToUi(msg: unknown) {
   for (const ws of uiClients) if (ws.readyState === WebSocket.OPEN) ws.send(text)
 }
 
+// Clear watermarks: a disconnected SDK buffers up to 1000 messages and replays them on
+// reconnect, which would resurrect traffic the user already cleared. Anything timestamped
+// before the last clear stays cleared.
+// ponytail: 5s tolerance for device clock skew; switch to per-device watermarks if it ever matters
+const CLEAR_SKEW_MS = 5000
+const HTTP_ENTRY_TYPES = new Set(['http-request', 'http-response'])
+const SOCKET_ENTRY_TYPES = new Set(['socket-event', 'socket-ack'])
+const clearedAt = { http: 0, socket: 0 }
+
 function pushEntry(deviceId: string, message: Record<string, unknown>) {
+  const ts = typeof message.timestamp === 'number' ? message.timestamp : Infinity
+  const watermark = HTTP_ENTRY_TYPES.has(message.type as string) ? clearedAt.http
+    : SOCKET_ENTRY_TYPES.has(message.type as string) ? clearedAt.socket : 0
+  if (ts < watermark - CLEAR_SKEW_MS) return // buffered replay of already-cleared traffic
   entries.push({ deviceId, message })
   if (entries.length > MAX_STORED_MESSAGES) entries.splice(0, entries.length - MAX_STORED_MESSAGES)
   broadcastToUi({ type: 'event', deviceId, message })
@@ -202,16 +215,20 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
   }
   if (req.method === 'DELETE' && url.pathname === '/api/entries') {
     entries.length = 0
+    clearedAt.http = Date.now()
+    clearedAt.socket = Date.now()
     broadcastToUi({ type: 'entries-cleared' })
     return json(res, 200, { ok: true })
   }
   if (req.method === 'DELETE' && url.pathname === '/api/entries/http') {
-    clearEntriesByMessageType(new Set(['http-request', 'http-response']))
+    clearEntriesByMessageType(HTTP_ENTRY_TYPES)
+    clearedAt.http = Date.now()
     broadcastToUi({ type: 'http-entries-cleared' })
     return json(res, 200, { ok: true })
   }
   if (req.method === 'DELETE' && url.pathname === '/api/entries/socket') {
-    clearEntriesByMessageType(new Set(['socket-event', 'socket-ack']))
+    clearEntriesByMessageType(SOCKET_ENTRY_TYPES)
+    clearedAt.socket = Date.now()
     broadcastToUi({ type: 'socket-entries-cleared' })
     return json(res, 200, { ok: true })
   }

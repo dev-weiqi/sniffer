@@ -63,7 +63,7 @@ content (`body: null`). Bodies over **1 MB** are truncated and flagged
                 "ackPayload": "[{\"ok\":true}]", "delayMs": 0 } ] }
 // http rule: method null = any; urlPattern is a substring match
 // body and ackPayload support placeholders expanded on the device at match time:
-//   ${id}, ${randomString(length)}, ${randomNumber(min~max)}
+//   ${id}, ${randomString(length)}
 //   length/min/max are user-provided numbers in each rule
 // socket rule, transport "socketio": matched emits are not sent; a fake ack (JSON array of args)
 //   is returned locally. transport "ktor-ws": [event] is a substring matched against outgoing

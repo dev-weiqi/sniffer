@@ -13,6 +13,10 @@ class SnifferSocket internal constructor(val delegate: Socket) : Emitter() {
     override fun once(event: String, fn: Listener): Emitter = delegate.once(event, fn)
     override fun off(): Emitter = delegate.off()
     override fun off(event: String): Emitter = delegate.off(event)
+    // on() registers on the delegate, so removal/introspection must hit the delegate too
+    override fun off(event: String, fn: Listener): Emitter = delegate.off(event, fn)
+    override fun listeners(event: String): MutableList<Listener> = delegate.listeners(event)
+    override fun hasListeners(event: String): Boolean = delegate.hasListeners(event)
     override fun emit(event: String, vararg args: Any?): Emitter = delegate.emit(event, *args)
     fun connect(): SnifferSocket = apply { delegate.connect() }
     fun disconnect(): SnifferSocket = apply { delegate.disconnect() }
