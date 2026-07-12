@@ -201,11 +201,11 @@ function ImagePreview({ contentType, base64 }: { contentType: string; base64: st
     return <WebpPlayer src={src} base64={base64} info={webpInfo} />
   }
   return (
-    <>
+    <div className="image-preview">
       <img className="body-image" alt="response" src={src}
         onLoad={e => setDims(`${e.currentTarget.naturalWidth} × ${e.currentTarget.naturalHeight}`)} />
-      {dims && <div className="dim hint">{contentType} · {dims}</div>}
-    </>
+      {dims && <div className="dim hint">{dims}</div>}
+    </div>
   )
 }
 
@@ -295,7 +295,9 @@ function WebpPlayer({ src, base64, info }: { src: string; base64: string; info: 
   }
 
   const size = info.canvasWidth && info.canvasHeight ? ` · ${info.canvasWidth} × ${info.canvasHeight}` : ''
-  const summary = `${info.frames} frames · ${fmtDuration(info.durationMs)} · ${info.loopCount === 0 ? 'infinite loop' : `${info.loopCount} loops`}${size}`
+  // infinite looping is the norm — only a finite loop count is worth calling out
+  const loops = info.loopCount > 0 ? ` · plays ${info.loopCount}×` : ''
+  const summary = `${info.frames} frames · ${fmtDuration(info.durationMs)}${loops}${size}`
 
   return (
     <div className="webp-player">
