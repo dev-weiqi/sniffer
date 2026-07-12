@@ -10,6 +10,26 @@ type PushPrefill = { connectionId: string; event: string; payload: string }
 declare const __APP_VERSION__: string
 const APP_VERSION = __APP_VERSION__
 
+
+function MoonIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  )
+}
+
+function SunIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+    </svg>
+  )
+}
+
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState)
   const [tab, setTab] = useState<Tab>(() => (localStorage.getItem('sniffer-tab') as Tab) || 'http')
@@ -150,7 +170,7 @@ export default function App() {
           {devices.length === 0 && <option value="">No devices connected</option>}
           {devices.map(d => (
             <option key={d.deviceId} value={d.deviceId}>
-              {d.connected ? '🟢' : '⚪'} {d.deviceName} · {d.appId}
+              {d.connected ? '🟢' : '🔴'} {d.deviceName} · {d.appId}
             </option>
           ))}
         </select>
@@ -184,7 +204,7 @@ export default function App() {
         <span className="spacer" />
 
         <button className="ghost icon-btn" title="Toggle light/dark theme" onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}>
-          {theme === 'light' ? '🌙' : '☀️'}
+          {theme === 'light' ? <MoonIcon /> : <SunIcon />}
         </button>
 
         <div className="settings">
