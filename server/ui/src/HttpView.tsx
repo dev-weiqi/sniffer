@@ -109,7 +109,8 @@ function HttpDetail({ row, onMock, onClose }: {
   const mockThis = () => onMock(
     {
       id: newRuleId(), enabled: true, method: row.method,
-      urlPattern: urlParts(row.url).path, status: row.status && row.status > 0 ? row.status : 200,
+      // full URL: contains-matching on a bare path would also hit other hosts / query variants
+      urlPattern: row.url, status: row.status && row.status > 0 ? row.status : 200,
       headers: { 'content-type': row.respHeaders?.['content-type'] ?? 'application/json' },
       body: row.respBody ?? '', delayMs: 0, delayOnly: false,
     },

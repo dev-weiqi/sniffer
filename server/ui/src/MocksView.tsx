@@ -37,7 +37,8 @@ export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRu
   // prefilled rules coming from the "Mock this request" / "Mock this event's ack" actions
   useEffect(() => {
     if (pendingRule && deviceId) {
-      setDraft(d => ({ ...d, http: [...d.http, pendingRule] }))
+      // click-to-prefill lands on top so it's immediately visible
+      setDraft(d => ({ ...d, http: [pendingRule, ...d.http] }))
       setDirty(true)
       onPendingConsumed()
     }
@@ -45,7 +46,7 @@ export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRu
 
   useEffect(() => {
     if (pendingSocketRule && deviceId) {
-      setDraft(d => ({ ...d, socket: [...d.socket, pendingSocketRule] }))
+      setDraft(d => ({ ...d, socket: [pendingSocketRule, ...d.socket] }))
       setDirty(true)
       onPendingConsumed()
     }
@@ -141,63 +142,91 @@ export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRu
   )
 }
 
+type PushRecord = { id: string; target: string; event: string; payload: string }
+
 function PushEventPanel({ conns, deviceId, prefill, onConsumed }: {
   conns: SocketConn[]
   deviceId: string
   prefill: PushPrefill | null
   onConsumed: () => void
 }) {
-  const [target, setTarget] = useState('')
-  const [event, setEvent] = useState('')
-  const [payload, setPayload] = useState('{}')
-  const [status, setStatus] = useState<'sent' | 'error' | null>(null)
+  // ponytail: push records are a UI convenience, persisted per-device in localStorage;
+  // move into the daemon mock store if cross-browser sharing ever matters
+  const storageKey = `sniffer-push-${deviceId}`
+  const [records, setRecords] = useState<PushRecord[]>(() => loadRecords(storageKey))
+
+  useEffect(() => { setRecords(loadRecords(storageKey)) }, [storageKey])
+  useEffect(() => { localStorage.setItem(storageKey, JSON.stringify(records)) }, [records, storageKey])
 
   useEffect(() => {
     if (prefill) {
-      setTarget(prefill.connectionId)
-      setEvent(prefill.event)
-      setPayload(prefill.payload)
-      setStatus(null)
+      setRecords(rs => [{ id: newRuleId(), target: prefill.connectionId, event: prefill.event, payload: prefill.payload }, ...rs])
       onConsumed()
     }
   }, [prefill, onConsumed])
+
+  return (
+    <>
+      {records.map(r => (
+        <PushRecordCard key={r.id} record={r} conns={conns} deviceId={deviceId}
+          onChange={next => setRecords(rs => rs.map(x => x.id === r.id ? next : x))}
+          onDelete={() => setRecords(rs => rs.filter(x => x.id !== r.id))}
+        />
+      ))}
+      <button className="ghost add" onClick={() =>
+        setRecords(rs => [...rs, { id: newRuleId(), target: '', event: '', payload: '{}' }])
+      }>+ Add push event</button>
+    </>
+  )
+}
+
+function loadRecords(key: string): PushRecord[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(key) ?? '[]')
+    return Array.isArray(v) ? v : []
+  } catch {
+    return []
+  }
+}
+
+function PushRecordCard({ record, conns, deviceId, onChange, onDelete }: {
+  record: PushRecord
+  conns: SocketConn[]
+  deviceId: string
+  onChange: (r: PushRecord) => void
+  onDelete: () => void
+}) {
+  const [status, setStatus] = useState<'sent' | 'error' | null>(null)
 
   const liveOptions = conns.filter(c => c.deviceId === deviceId && c.status === 'connected').map(c => ({
     key: c.connectionId,
     label: `${c.transport} · ${c.url || c.connectionId.slice(0, 8)}`,
     disabled: false,
   }))
-  const targetMissing = Boolean(target && !liveOptions.some(o => o.key === target))
+  const targetMissing = Boolean(record.target && !liveOptions.some(o => o.key === record.target))
   const options = [
     { key: '', label: 'All connections', disabled: false },
     ...liveOptions,
-    ...(targetMissing ? [{ key: target, label: 'Original connection is not active', disabled: true }] : []),
+    ...(targetMissing ? [{ key: record.target, label: 'Original connection is not active', disabled: true }] : []),
   ]
 
   const send = async () => {
-    if (!event || targetMissing) return
-    const res = await api.pushEvent(deviceId, target || null, event, payload)
+    if (!record.event || targetMissing) return
+    const res = await api.pushEvent(deviceId, record.target || null, record.event, record.payload)
     setStatus(res.ok ? 'sent' : 'error')
     setTimeout(() => setStatus(null), 1600)
-  }
-
-  const clear = () => {
-    setTarget('')
-    setEvent('')
-    setPayload('{}')
-    setStatus(null)
   }
 
   return (
     <div className="rule-card">
       <div className="rule-row">
-        <select value={target} onChange={e => setTarget(e.target.value)}>
+        <select value={record.target} onChange={e => onChange({ ...record, target: e.target.value })}>
           {options.map(o => <option key={o.key} value={o.key} disabled={o.disabled}>{o.label}</option>)}
         </select>
-        <input className="grow mono" placeholder="event name (e.g. chat:new)" value={event}
-          onChange={e => setEvent(e.target.value)} />
-        <button className="ghost" onClick={clear}>Clear</button>
-        <button disabled={!event || targetMissing} onClick={send}>
+        <input className="grow mono" placeholder="event name (e.g. chat:new)" value={record.event}
+          onChange={e => onChange({ ...record, event: e.target.value })} />
+        <button className="ghost danger" onClick={onDelete}>Delete</button>
+        <button disabled={!record.event || targetMissing} onClick={send}>
           {status === 'sent' ? 'Sent ✓' : status === 'error' ? 'Failed' : 'Send'}
         </button>
       </div>
@@ -207,11 +236,11 @@ function PushEventPanel({ conns, deviceId, prefill, onConsumed }: {
       {!targetMissing && liveOptions.length === 0 && (
         <div className="dim hint">No active socket connections for this device; All connections will send when the SDK has a live socket.</div>
       )}
-      <textarea className="mono" rows={3} placeholder="payload (JSON or plain text)" value={payload}
-        onChange={e => setPayload(e.target.value)} />
+      <textarea className="mono" rows={3} placeholder="payload (JSON or plain text)" value={record.payload}
+        onChange={e => onChange({ ...record, payload: e.target.value })} />
       <div className="rule-body-tools">
-        <JsonTool label="Pretty JSON" body={payload} transform={v => JSON.stringify(v, null, 2)} onResult={setPayload} />
-        <PlaceholderTools onInsert={token => setPayload(p => p + token)} />
+        <JsonTool label="Pretty JSON" body={record.payload} transform={v => JSON.stringify(v, null, 2)} onResult={p => onChange({ ...record, payload: p })} />
+        <PlaceholderTools onInsert={token => onChange({ ...record, payload: record.payload + token })} />
       </div>
     </div>
   )
