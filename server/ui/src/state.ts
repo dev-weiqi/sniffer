@@ -181,7 +181,12 @@ export function reducer(state: State, action: Action): State {
       const devices = existing
         ? state.devices.map(d => d.deviceId === m.deviceId ? { ...d, ...(m.info ?? {}), connected: m.connected } : d)
         : [...state.devices, { ...(m.info ?? {}), deviceId: m.deviceId, connected: m.connected }]
-      return { ...state, devices }
+      // a dead device cannot have live sockets: without this, an app killed mid-connection
+      // leaves zombie "connected" chips that nothing will ever clear
+      const socketConns = m.connected
+        ? state.socketConns
+        : state.socketConns.map(c => c.deviceId === m.deviceId ? { ...c, status: 'disconnected' } : c)
+      return { ...state, devices, socketConns }
     }
     case 'mocks-changed':
       return {

@@ -101,17 +101,12 @@ class SnifferSocket internal constructor(
         return super.once(event, fn)
     }
 
-    override fun off(): Emitter {
-        bridged.clear()
-        delegate.off()
-        return super.off()
-    }
+    // App listeners live on this wrapper's own emitter (super); the delegate carries only the
+    // SDK's bridge listeners. off() therefore must never touch the delegate — clearing it would
+    // kill the connect/disconnect status bridge and leave zombie "connected" chips in the UI.
+    override fun off(): Emitter = super.off()
 
-    override fun off(event: String): Emitter {
-        bridged.remove(event)
-        delegate.off(event)
-        return super.off(event)
-    }
+    override fun off(event: String): Emitter = super.off(event)
 
     override fun emit(event: String, vararg args: Any?): Emitter {
         var toSend: Array<out Any?> = args

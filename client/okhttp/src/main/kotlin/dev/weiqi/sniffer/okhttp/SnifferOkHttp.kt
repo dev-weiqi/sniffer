@@ -22,8 +22,13 @@ import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
 object SnifferOkHttp {
-    /** Attach via OkHttpClient.Builder().addInterceptor(...). */
-    fun interceptor(): Interceptor = SnifferInterceptor()
+    /**
+     * Attach via OkHttpClient.Builder().addInterceptor(...).
+     * Requests to a host in [ignoredHosts] pass through unreported and unmocked
+     * (e.g. noisy CDN/static-asset domains).
+     */
+    fun interceptor(ignoredHosts: Set<String> = emptySet()): Interceptor =
+        SnifferInterceptor(ignoredHosts)
 }
 
 private val TEXTUAL = listOf("json", "text", "xml", "x-www-form-urlencoded", "javascript")
@@ -34,13 +39,16 @@ private fun isTextual(contentType: String?): Boolean =
 private fun isImage(contentType: String?): Boolean =
     contentType?.trim()?.startsWith("image/", ignoreCase = true) == true
 
-internal class SnifferInterceptor : Interceptor {
+internal class SnifferInterceptor(
+    private val ignoredHosts: Set<String> = emptySet(),
+) : Interceptor {
     init {
         Sniffer.registerCapability("http")
     }
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
+        if (request.url.host in ignoredHosts) return chain.proceed(request)
         val id = newId()
         val start = System.nanoTime()
 

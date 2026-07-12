@@ -5,9 +5,11 @@ import dev.weiqi.sniffer.core.MockRegistry
 import dev.weiqi.sniffer.core.MockRules
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.net.UnknownHostException
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class SnifferInterceptorTest {
     @AfterTest
@@ -33,5 +35,28 @@ class SnifferInterceptorTest {
         assertEquals(418, response.code)
         assertEquals("1", response.header("x-mock"))
         assertEquals("""{"mocked":true}""", response.body.string())
+    }
+
+    @Test
+    fun ignored_host_bypasses_mocks_and_reporting() {
+        MockRegistry.update(
+            MockRules(
+                http = listOf(
+                    HttpMockRule(
+                        id = "r1", urlPattern = "/api/", status = 418,
+                        headers = emptyMap(), body = "mocked",
+                    )
+                )
+            )
+        )
+        val client = OkHttpClient.Builder()
+            .addInterceptor(SnifferOkHttp.interceptor(ignoredHosts = setOf("sniffer-test.invalid")))
+            .build()
+        // the mock would normally short-circuit; an ignored host must hit the real network instead
+        assertFailsWith<UnknownHostException> {
+            client.newCall(
+                Request.Builder().url("http://sniffer-test.invalid/api/characters/18").build()
+            ).execute()
+        }
     }
 }

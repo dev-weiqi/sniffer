@@ -55,6 +55,11 @@ on-device UI wiring, adb reverse, platform glue). It's slow — don't gate every
 
 ## Releasing
 
+**NEVER publish (Maven/npm) or bump a version on your own.** Publishing is irreversible
+(Maven Central is immutable) and version numbering belongs to the maintainer. Even when a
+task seems to require a release, stop, explain why, and wait for an explicit go-ahead
+naming the version.
+
 Two channels; credentials never live in the repo.
 
 **SDK → Maven Central** (`io.github.dev-weiqi.sniffer:*`, vanniktech maven-publish plugin):
@@ -74,7 +79,8 @@ public key published to keys.openpgp.org). POM metadata lives in `client/gradle.
 
 **Daemon → npm** (`@dev-weiqi/sniffer`, from `server/daemon`):
 
-1. Bump `version` in `server/daemon/package.json` (match the SDK version).
+1. Bump `version` in `server/daemon/package.json`. Daemon and SDK version independently —
+   sync is not required or implied.
 2. `cd server/daemon && npm publish --access public` — `prepack` compiles TS to `dist/`
    and bundles the built web UI into `ui-dist/` automatically.
 3. Verify: `npm view @dev-weiqi/sniffer version`, then install the tarball in a temp dir and
