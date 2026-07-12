@@ -88,7 +88,11 @@ internal class SnifferInterceptor(
 
     private fun reportRequest(id: String, request: Request) {
         val reqBodyRaw = request.body?.let { body ->
+            val len = runCatching { body.contentLength() }.getOrDefault(-1L)
             if (body.isOneShot() || body.isDuplex() || !isTextual(body.contentType()?.toString())) null
+            // capBody would drop the excess anyway: never pay a full copy+decode of an
+            // oversized/unknown-length body on the host's request thread
+            else if (len < 0 || len > MAX_BODY_CHARS) null
             else runCatching { Buffer().also(body::writeTo).readUtf8() }.getOrNull()
         }
         val reqBody = capBody(reqBodyRaw)

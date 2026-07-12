@@ -124,7 +124,9 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
                 is TextContent -> body.text
                 is ByteArrayContent ->
                     if (isTextual(body.contentType)) runCatching {
-                        body.bytes().decodeToString()
+                        // same rule as okhttp: don't decode more than capBody will keep
+                        val bytes = body.bytes()
+                        if (bytes.size > MAX_BODY_CHARS) null else bytes.decodeToString()
                     }.getOrNull() else null
 
                 else -> null
