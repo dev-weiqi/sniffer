@@ -86,7 +86,7 @@ body {
 }
 .brand-status[data-on] { background: var(--ok); }
 
-.device-select { min-width: 220px; max-width: 300px; line-height: 1.5; padding-top: 6px; padding-bottom: 6px; }
+.device-select { min-width: 320px; max-width: 480px; line-height: 1.5; padding-top: 6px; padding-bottom: 6px; }
 .topbar-notice {
   max-width: 260px;
   overflow: hidden;
@@ -243,9 +243,13 @@ table.grid tbody tr[data-selected] { background: var(--accent-soft); box-shadow:
 .chev { display: inline-block; transition: transform .12s; color: var(--text-dim); }
 .chev[data-open] { transform: rotate(90deg); }
 
-.kv { display: flex; gap: 10px; padding: 2px 12px; }
-.kv-k { width: 130px; flex-shrink: 0; color: var(--text-dim); overflow-wrap: anywhere; }
-.kv-v { overflow-wrap: anywhere; white-space: pre-wrap; }
+.kv {
+  display: flex; gap: 10px; padding: 5px 12px;
+  line-height: 1.45;
+}
+.kv:nth-child(even) { background: var(--hover); }
+.kv-k { width: 140px; flex-shrink: 0; color: var(--text-dim); font-size: 13px; overflow-wrap: anywhere; }
+.kv-v { overflow-wrap: anywhere; white-space: pre-wrap; font-size: 13px; flex: 1; }
 
 .body-pre {
   margin: 4px 10px; padding: 8px 10px;
