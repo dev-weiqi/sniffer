@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useState } from 'react'
+import { useEffect, useMemo, useReducer, useState, useDeferredValue } from 'react'
 import { connectStream, initialState, reducer, api, emptyMocks, type HttpMockRule, type SocketMockRule } from './state'
 import { HttpView } from './HttpView'
 import { SocketView } from './SocketView'
@@ -50,20 +50,28 @@ export default function App() {
     ? 'No device selected'
     : selectedDevice.connected ? 'Connected devices cannot be deleted' : 'Delete offline device'
 
+  // deferred so typing stays snappy even when the query scans large stored bodies
+  const deferredSearch = useDeferredValue(search)
   const filteredHttp = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = deferredSearch.trim().toLowerCase()
+    // bodies join the search from 2+ chars — a single char would match nearly everything
+    const searchBodies = q.length >= 2
     return state.http.filter(r =>
       r.deviceId === deviceId &&
       (!q || r.url.toLowerCase().includes(q) || r.method.toLowerCase().includes(q) ||
-        String(r.status ?? '').includes(q)))
-  }, [state.http, deviceId, search])
+        String(r.status ?? '').includes(q) ||
+        (searchBodies && (
+          (r.reqBody?.toLowerCase().includes(q) ?? false) ||
+          (!r.respBase64 && (r.respBody?.toLowerCase().includes(q) ?? false))
+        ))))
+  }, [state.http, deviceId, deferredSearch])
 
   const filteredSocketEvents = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = deferredSearch.trim().toLowerCase()
     return state.socketEvents.filter(r =>
       r.deviceId === deviceId &&
       (!q || r.event.toLowerCase().includes(q) || r.payload.toLowerCase().includes(q)))
-  }, [state.socketEvents, deviceId, search])
+  }, [state.socketEvents, deviceId, deferredSearch])
 
   const mockFromRequest = (rule: HttpMockRule, targetDeviceId: string) => {
     setDeviceId(targetDeviceId)
