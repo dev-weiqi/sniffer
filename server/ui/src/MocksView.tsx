@@ -72,6 +72,36 @@ export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRu
     return () => clearTimeout(t)
   }, [draft, dirty, deviceId])
 
+  const importRef = useRef<HTMLInputElement>(null)
+
+  const exportRules = () => {
+    const blob = new Blob(
+      [JSON.stringify({ http: draft.http, socket: draft.socket }, null, 2)],
+      { type: 'application/json' },
+    )
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `sniffer-mocks-${deviceId}-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  // appends (with fresh ids) instead of replacing, so an import can never destroy rules;
+  // Clear all first for replace semantics
+  const importRules = (file: File) => {
+    file.text().then(text => {
+      const v = JSON.parse(text) as Partial<Mocks>
+      const http = Array.isArray(v.http) ? v.http : []
+      const socket = Array.isArray(v.socket) ? v.socket : []
+      if (http.length + socket.length === 0) return
+      update({
+        ...draft,
+        http: [...draft.http, ...http.map(r => ({ ...r, id: newRuleId() }))],
+        socket: [...draft.socket, ...socket.map(r => ({ ...r, id: newRuleId() }))],
+      })
+    }).catch(() => alert('Not a valid mock rules JSON file'))
+  }
+
   if (!deviceId) {
     return <div className="empty">Connect a device to manage mocks</div>
   }
@@ -82,6 +112,15 @@ export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRu
         <button className="pill-btn" onClick={() => setShowPlaceholders(v => !v)}>
           {showPlaceholders ? 'Hide placeholders' : 'Placeholders'}
         </button>
+        <button className="pill-btn" disabled={draft.http.length + draft.socket.length === 0}
+          onClick={exportRules}>Export</button>
+        <button className="pill-btn" onClick={() => importRef.current?.click()}>Import</button>
+        <input ref={importRef} type="file" accept="application/json,.json" style={{ display: 'none' }}
+          onChange={e => {
+            const f = e.target.files?.[0]
+            if (f) importRules(f)
+            e.target.value = ''
+          }} />
         <span className="spacer" />
         <span className="dim">{dirty ? 'Saving…' : saved ? 'Saved ✓' : 'Synced'}</span>
       </div>
