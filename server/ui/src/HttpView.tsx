@@ -9,8 +9,22 @@ function isSse(row: HttpRow): boolean {
 }
 
 function imageContentType(row: HttpRow): string | null {
-  const ct = row.respHeaders?.['content-type'] ?? ''
-  return ct.trim().toLowerCase().startsWith('image/') ? ct.split(';')[0].trim() : null
+  // the SDK base64-encodes bodies only for image captures, so respBase64 alone means "image";
+  // the header is just a hint (servers send Content-Type casing variants or even image/*)
+  if (!row.respBase64) return null
+  const key = Object.keys(row.respHeaders ?? {}).find(k => k.toLowerCase() === 'content-type')
+  const ct = (key ? row.respHeaders![key] : '').split(';')[0].trim().toLowerCase()
+  if (ct.startsWith('image/') && !ct.includes('*')) return ct
+  return sniffImageMime(row.respBody ?? '')
+}
+
+/** Magic-byte sniffing for when the Content-Type header is unusable. */
+function sniffImageMime(base64: string): string {
+  if (base64.startsWith('iVBOR')) return 'image/png'
+  if (base64.startsWith('/9j/')) return 'image/jpeg'
+  if (base64.startsWith('R0lGOD')) return 'image/gif'
+  if (base64.startsWith('UklGR')) return 'image/webp'
+  return 'image/png'
 }
 
 export function HttpView({ rows, onMock, onClear }: {
