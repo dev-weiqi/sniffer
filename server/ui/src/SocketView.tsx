@@ -91,9 +91,8 @@ export function SocketView({ events, conns, connUrls, deviceId, onMockAck, onPus
       </div>
 
       {selected && <div className="pane-resizer" onMouseDown={startDetailDrag} />}
+      {selected && (
       <aside className="detail-pane">
-        {selected ? (
-          <>
             <div className="detail-toolbar">
               {selected.direction === 'out' && selected.transport === 'socketio' && (
                 <button onClick={() => onMockAck(
@@ -122,6 +121,8 @@ export function SocketView({ events, conns, connUrls, deviceId, onMockAck, onPus
                   Prefill push form
                 </button>
               )}
+              <span className="spacer" />
+              <button className="ghost" onClick={() => setSelectedId(null)}>✕</button>
             </div>
             <Section title="Event">
               <KV k="Event" v={selected.event} />
@@ -138,11 +139,8 @@ export function SocketView({ events, conns, connUrls, deviceId, onMockAck, onPus
                 <JsonView text={selected.ackPayload} />
               </Section>
             )}
-          </>
-        ) : (
-          <div className="empty">Select an event to inspect</div>
-        )}
       </aside>
+      )}
     </div>
   )
 }
