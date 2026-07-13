@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 // Collapsible JSON tree; falls back to raw text when the body isn't JSON.
 export function JsonView({ text }: { text: string | null | undefined }) {
-  const [raw, setRaw] = useState(true)
+  const [raw, setRaw] = useState(false)
   if (!text) return null
   let data: unknown
   try {
@@ -25,8 +25,24 @@ export function JsonView({ text }: { text: string | null | undefined }) {
 }
 
 function Node({ name, value, depth }: { name: string | number | null; value: unknown; depth: number }) {
-  const isArray = Array.isArray(value)
-  const isObject = !isArray && value !== null && typeof value === 'object'
+  // socket.io / double-encoded APIs often nest JSON inside string values —
+  // parse those for display (Raw view keeps the literal truth)
+  let display = value
+  let fromString = false
+  if (typeof value === 'string') {
+    const t = value.trim()
+    if ((t.startsWith('{') && t.endsWith('}')) || (t.startsWith('[') && t.endsWith(']'))) {
+      try {
+        const inner = JSON.parse(t)
+        if (inner !== null && typeof inner === 'object') {
+          display = inner
+          fromString = true
+        }
+      } catch { /* not JSON after all — show as plain string */ }
+    }
+  }
+  const isArray = Array.isArray(display)
+  const isObject = !isArray && display !== null && typeof display === 'object'
   const [open, setOpen] = useState(depth < 2)
 
   const key = name !== null ? <span className="jn-key">{name}</span> : null
@@ -34,15 +50,17 @@ function Node({ name, value, depth }: { name: string | number | null; value: unk
 
   if (isArray || isObject) {
     const entries: [string | number, unknown][] = isArray
-      ? (value as unknown[]).map((v, i) => [i, v])
-      : Object.entries(value as Record<string, unknown>)
+      ? (display as unknown[]).map((v, i) => [i, v])
+      : Object.entries(display as Record<string, unknown>)
     const openB = isArray ? '[' : '{'
     const closeB = isArray ? ']' : '}'
     return (
       <div className="jn-node">
-        <div className="jn-head" onClick={() => setOpen(o => !o)}>
+        <div className="jn-head" onClick={() => setOpen(o => !o)}
+          title={fromString ? 'String value containing JSON — parsed for display' : undefined}>
           <span className="jn-chev" data-open={open || undefined}>▸</span>
           {key}{sep}
+          {fromString && <span className="jn-str-mark">"</span>}
           <span className="jn-punc">{openB}</span>
           {!open && (
             <>

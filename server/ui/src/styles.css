@@ -489,3 +489,5 @@ button.add { margin-top: 2px; }
   padding: 0;
 }
 .rule-name::placeholder { font-weight: 400; color: var(--text-dim); opacity: .55; }
+
+.jn-str-mark { color: var(--text-dim); opacity: .6; margin-right: 1px; }
