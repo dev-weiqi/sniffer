@@ -236,7 +236,7 @@ export default function App() {
             onClear={() => { if (confirm('Clear API traffic?')) api.clearHttpEntries() }} />
         )}
         {tab === 'socket' && (
-          <SocketView events={filteredSocketEvents} conns={state.socketConns} connUrls={state.connUrls} connLog={state.connLog} deviceId={deviceId}
+          <SocketView events={filteredSocketEvents} conns={state.socketConns} connUrls={state.connUrls} deviceId={deviceId}
             onMockAck={mockFromSocketEvent} onPushPrefill={pushFromEvent}
             onClear={() => { if (confirm('Clear socket events?')) api.clearSocketEntries() }} />
         )}

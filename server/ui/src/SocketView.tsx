@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ConnLogEntry, SocketConn, SocketMockRule, SocketRow } from './state'
+import type { SocketConn, SocketMockRule, SocketRow } from './state'
 import { fmtTime, newRuleId, useDetailWidth, useListKeys } from './util'
 import { JsonView } from './JsonView'
 import { CopyButton, KV, Section } from './HttpView'
 
-export function SocketView({ events, conns, connUrls, connLog, deviceId, onMockAck, onPushPrefill, onClear }: {
+export function SocketView({ events, conns, connUrls, deviceId, onMockAck, onPushPrefill, onClear }: {
   events: SocketRow[]
   conns: SocketConn[]
   connUrls: Record<string, string>
-  connLog: ConnLogEntry[]
   deviceId: string
   onMockAck: (rule: SocketMockRule, deviceId: string) => void
   onPushPrefill: (prefill: { connectionId: string; event: string; payload: string }) => void
@@ -16,11 +15,8 @@ export function SocketView({ events, conns, connUrls, connLog, deviceId, onMockA
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [sortDesc, setSortDesc] = useState(false)
-  const [showConns, setShowConns] = useState(false)
-  const [connFilter, setConnFilter] = useState<string | null>(null)
-  const filtered = connFilter ? events.filter(e => e.connectionId === connFilter) : events
-  const selected = filtered.find(e => e.id === selectedId) ?? null
-  const sorted = sortDesc ? [...filtered].reverse() : filtered
+  const selected = events.find(e => e.id === selectedId) ?? null
+  const sorted = sortDesc ? [...events].reverse() : events
   const liveConns = conns.filter(c => c.deviceId === deviceId && c.status === 'connected')
   const ids = useMemo(() => sorted.map(e => e.id), [sorted])
   useListKeys(ids, selectedId, setSelectedId)
@@ -38,20 +34,9 @@ export function SocketView({ events, conns, connUrls, connLog, deviceId, onMockA
       <div className="list-pane">
         <div className="panel-toolbar">
           <span className="dim">Socket events</span>
-          <button className="pill-btn" data-active={showConns || undefined}
-            onClick={() => setShowConns(v => !v)}>Connections</button>
-          {connFilter && (
-            <button className="pill-btn" onClick={() => setConnFilter(null)}>
-              {(connUrls[connFilter] || connFilter.slice(0, 8))} ✕
-            </button>
-          )}
           <span className="spacer" />
           <button className="clear-btn" disabled={events.length === 0} onClick={onClear}>Clear Socket</button>
         </div>
-        {showConns && (
-          <ConnTimeline connLog={connLog.filter(c => c.deviceId === deviceId)} events={events}
-            active={connFilter} onPick={id => setConnFilter(f => f === id ? null : id)} />
-        )}
         <div
           className="list-scroll"
           ref={listRef}
@@ -159,78 +144,4 @@ export function SocketView({ events, conns, connUrls, connLog, deviceId, onMockA
       )}
     </div>
   )
-}
-
-interface ConnSpan {
-  connectionId: string
-  transport: string
-  url: string
-  firstTs: number
-  lastTs: number
-  live: boolean
-  eventCount: number
-}
-
-function ConnTimeline({ connLog, events, active, onPick }: {
-  connLog: ConnLogEntry[]
-  events: SocketRow[]
-  active: string | null
-  onPick: (id: string) => void
-}) {
-  // fold the status history into one span per connection, grouped by endpoint
-  const spans = new Map<string, ConnSpan>()
-  for (const c of connLog) {
-    const cur = spans.get(c.connectionId)
-    if (!cur) {
-      spans.set(c.connectionId, {
-        connectionId: c.connectionId, transport: c.transport, url: c.url,
-        firstTs: c.ts, lastTs: c.ts, live: c.status === 'connected', eventCount: 0,
-      })
-    } else {
-      cur.lastTs = c.ts
-      cur.live = c.status === 'connected'
-    }
-  }
-  for (const e of events) {
-    const span = spans.get(e.connectionId)
-    if (span) span.eventCount++
-  }
-  const byEndpoint = new Map<string, ConnSpan[]>()
-  for (const span of spans.values()) {
-    const key = `${span.transport} · ${span.url || '(unknown url)'}`
-    byEndpoint.set(key, [...(byEndpoint.get(key) ?? []), span])
-  }
-  if (byEndpoint.size === 0) {
-    return <div className="conn-timeline"><span className="dim">No connection history yet</span></div>
-  }
-  return (
-    <div className="conn-timeline">
-      {[...byEndpoint.entries()].map(([endpoint, list]) => (
-        <div key={endpoint} className="conn-group">
-          <div className="dim mono conn-endpoint">{endpoint}</div>
-          {list.map(c => (
-            <button key={c.connectionId} className="conn-span" data-active={c.connectionId === active || undefined}
-              onClick={() => onPick(c.connectionId)}>
-              <span className={c.live ? 'conn-dot on' : 'conn-dot'} />
-              <span className="mono">{c.connectionId.slice(0, 8)}</span>
-              <span className="mono dim">{fmtTime(c.firstTs)}</span>
-              <span className="dim">→</span>
-              {c.live
-                ? <span className="conn-live">LIVE</span>
-                : <span className="mono dim">{fmtTime(c.lastTs)}</span>}
-              <span className="dim">· {fmtSpan(c.lastTs - c.firstTs, c.live)}</span>
-              <span className="dim">· {c.eventCount} events</span>
-            </button>
-          ))}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function fmtSpan(ms: number, live: boolean): string {
-  if (live) return 'still up'
-  if (ms < 1000) return `${ms} ms`
-  if (ms < 60_000) return `${Math.round(ms / 1000)} s`
-  return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`
 }

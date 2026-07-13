@@ -456,28 +456,6 @@ button.add { margin-top: 2px; }
 .icon-btn.danger:hover { border-color: var(--err); color: var(--err); }
 .dup-warning { color: var(--warn); padding: 0 12px; }
 
-/* ---------- socket connection timeline ---------- */
-
-.conn-timeline {
-  padding: 6px 10px 10px;
-  border-bottom: 1px solid var(--border);
-  display: flex; flex-direction: column; gap: 8px;
-  background: var(--bg-panel);
-}
-.conn-endpoint { font-size: 12px; margin-bottom: 2px; }
-.conn-group { display: flex; flex-direction: column; gap: 2px; }
-.conn-span {
-  display: flex; align-items: center; gap: 8px;
-  border: none; background: transparent; text-align: left;
-  padding: 3px 6px; border-radius: 6px; font-size: 13px;
-  transition: background 0.12s;
-}
-.conn-span:hover { background: var(--hover); border-color: transparent; }
-.conn-span[data-active] { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
-.conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); flex-shrink: 0; }
-.conn-dot.on { background: var(--ok); }
-.conn-live { color: var(--ok); font-weight: 600; font-size: 12px; }
-
 .rule-name-row {
   display: flex; align-items: center; gap: 7px;
   margin: 8px 12px 0; color: var(--text-dim);
