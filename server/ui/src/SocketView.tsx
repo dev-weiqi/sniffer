@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ConnLogEntry, SocketConn, SocketMockRule, SocketRow } from './state'
 import { fmtTime, newRuleId, useDetailWidth, useListKeys } from './util'
 import { JsonView } from './JsonView'
-import { KV, Section } from './HttpView'
+import { CopyButton, KV, Section } from './HttpView'
 
 export function SocketView({ events, conns, connUrls, connLog, deviceId, onMockAck, onPushPrefill, onClear }: {
   events: SocketRow[]
@@ -146,11 +146,12 @@ export function SocketView({ events, conns, connUrls, connLog, deviceId, onMockA
               <KV k="Connection" v={connUrls[selected.connectionId] || selected.connectionId.slice(0, 8)} />
               {selected.mocked && <KV k="Mocked" v="yes" />}
             </Section>
-            <Section title="Payload">
+            <Section title="Payload" action={selected.payload ? <CopyButton text={selected.payload} /> : undefined}>
               <JsonView text={selected.payload} />
             </Section>
             {selected.ackPayload !== undefined && (
-              <Section title={selected.ackMocked ? 'Ack (mock)' : 'Ack'}>
+              <Section title={selected.ackMocked ? 'Ack (mock)' : 'Ack'}
+                action={selected.ackPayload ? <CopyButton text={selected.ackPayload} /> : undefined}>
                 <JsonView text={selected.ackPayload} />
               </Section>
             )}

@@ -405,13 +405,18 @@ export function Section({ title, action, children }: {
   )
 }
 
+/** JSON bodies copy pretty-printed; anything else copies verbatim. */
+function prettyIfJson(t: string): string {
+  try { return JSON.stringify(JSON.parse(t), null, 2) } catch { return t }
+}
+
 export function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
   return (
     <button
       className="ghost copy-btn"
       onClick={() => {
-        copyText(text)
+        copyText(prettyIfJson(text))
         setCopied(true)
         setTimeout(() => setCopied(false), 1200)
       }}
