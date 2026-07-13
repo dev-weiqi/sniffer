@@ -5,6 +5,7 @@ import dev.weiqi.sniffer.ktor.SnifferKtor
 import dev.weiqi.sniffer.ktorws.snifferWebSocketSession
 import io.ktor.client.call.body
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.sse.sse
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import io.ktor.client.plugins.websocket.WebSockets
@@ -50,6 +51,7 @@ class DemoController {
     private val ktor by lazy {
         HttpClient(CIO) {
             install(SnifferKtor)
+            install(io.ktor.client.plugins.sse.SSE)
             install(WebSockets)
         }
     }
@@ -84,14 +86,11 @@ class DemoController {
                 log("WEBP → ${resp.status.value} ${bytes.size} bytes", resp.status.value.kind())
             },
             DemoAction("SSE") {
-                ktor.prepareGet("$BASE/test/sse").execute { resp ->
-                    log("SSE ← ${resp.status.value} streaming…", resp.status.value.kind())
-                    val ch = resp.bodyAsChannel()
-                    while (true) {
-                        val line = ch.readUTF8Line() ?: break
-                        if (line.startsWith("data:")) log("SSE $line", LogKind.EVENT)
+                // exercises ktor's engine-level SSE session (the path real apps use)
+                ktor.sse("$BASE/test/sse") {
+                    incoming.collect { ev ->
+                        log("SSE data: ${ev.data}", LogKind.EVENT)
                     }
-                    log("SSE done", LogKind.OK)
                 }
             },
         )),
