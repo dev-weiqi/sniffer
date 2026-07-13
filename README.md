@@ -1,7 +1,7 @@
 <h1 align="center">Sniffer</h1>
 
 <p align="center">
-  <a href="https://github.com/dev-weiqi/sniffer/releases"><img src="https://img.shields.io/badge/version-0.1.6-blue" alt="Version"></a>
+  <a href="https://github.com/dev-weiqi/sniffer/releases"><img src="https://img.shields.io/badge/version-0.1.7-blue" alt="Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
   <a href="https://www.npmjs.com/package/@dev-weiqi/sniffer"><img src="https://img.shields.io/npm/v/%40dev-weiqi%2Fsniffer?label=npm" alt="npm"></a>
   <a href="https://central.sonatype.com/namespace/io.github.dev-weiqi.sniffer"><img src="https://img.shields.io/maven-central/v/io.github.dev-weiqi.sniffer/core?label=maven" alt="Maven Central"></a>
@@ -30,7 +30,7 @@ rules, and keeps `adb reverse` alive for Android devices.
 **Prerequisites**
 
 - [Node.js](https://nodejs.org) 20+ — npm ships with it
-- `adb` (Android platform-tools) on your PATH — only for Android devices; iOS needs nothing extraㄕ
+- `adb` (Android platform-tools) on your PATH — only for Android devices; iOS needs nothing extra
 
 ```bash
 npm install -g @dev-weiqi/sniffer
@@ -69,7 +69,7 @@ Supported client integrations:
 | Ktor WebSocket | `io.github.dev-weiqi.sniffer:ktor-ws` |
 
 ```kotlin
-val snifferVersion = "0.1.6"
+val snifferVersion = "0.1.7"
 
 dependencies {
     debugImplementation("io.github.dev-weiqi.sniffer:core:$snifferVersion")
