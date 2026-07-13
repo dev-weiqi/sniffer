@@ -2,7 +2,8 @@ package dev.weiqi.sniffer.samplecmp
 
 import androidx.compose.runtime.mutableStateListOf
 import dev.weiqi.sniffer.ktor.SnifferKtor
-import dev.weiqi.sniffer.ktorws.snifferWebSocketSession
+import dev.weiqi.sniffer.ktorws.SnifferKtorWs
+import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.client.call.body
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.sse.sse
@@ -51,6 +52,7 @@ class DemoController {
     private val ktor by lazy {
         HttpClient(CIO) {
             install(SnifferKtor)
+        install(SnifferKtorWs)
             install(io.ktor.client.plugins.sse.SSE)
             install(WebSockets)
         }
@@ -97,7 +99,7 @@ class DemoController {
         DemoSection("ktor WebSocket", listOf(
             DemoAction("connect") {
                 if (ws != null) return@DemoAction log("already connected", LogKind.INFO)
-                val session = ktor.snifferWebSocketSession("ws://localhost:9091/test/ws")
+                val session = ktor.webSocketSession("ws://localhost:9091/test/ws")
                 ws = session
                 log("ws connected", LogKind.OK)
                 scope.launch(handler) {

@@ -140,8 +140,8 @@ socket.on("chat:new") { args -> /* ... */ }
 socket.connect()
 socket.emit("chat:send", arrayOf("hello"), Ack { args -> /* ... */ })
 
-// ktor WebSocket: snifferWebSocketSession instead of webSocketSession
-val session = ktor.snifferWebSocketSession("wss://your-server/ws")
+// ktor WebSocket: install(SnifferKtorWs) once, then use the client normally
+val session = ktor.webSocketSession("wss://your-server/ws")
 session.send("ping")
 for (frame in session.incoming) { /* ... */ }
 ```

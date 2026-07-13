@@ -8,10 +8,12 @@ import dev.weiqi.sniffer.core.capBody
 import dev.weiqi.sniffer.core.expandMockPlaceholders
 import dev.weiqi.sniffer.core.newId
 import dev.weiqi.sniffer.core.now
-import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
+import io.ktor.client.plugins.api.createClientPlugin
+import io.ktor.client.plugins.api.ClientPlugin
 import io.ktor.client.plugins.websocket.webSocketSession
-import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.statement.HttpResponsePipeline
+import io.ktor.client.statement.HttpResponseContainer
 import io.ktor.websocket.DefaultWebSocketSession
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
@@ -24,18 +26,25 @@ import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * Opens a monitored WebSocket. Drop-in replacement for client.webSocketSession(...):
- * every in/out frame is reported to the daemon, and server→client messages can be injected from the UI.
+ * install(SnifferKtorWs) next to install(WebSockets): every plain client.webSocket /
+ * webSocketSession is then monitored automatically — frames reported to the daemon,
+ * reply mocks applied, and server→client messages injectable from the UI.
  */
-suspend fun HttpClient.snifferWebSocketSession(
-    urlString: String,
-    block: HttpRequestBuilder.() -> Unit = {},
-): DefaultClientWebSocketSession {
-    Sniffer.registerCapability("ktor-ws")
-    val delegate = webSocketSession(urlString, block)
-    return DefaultClientWebSocketSession(delegate.call, SnifferFrameInterceptor(delegate, urlString))
+val SnifferKtorWs: ClientPlugin<Unit> = createClientPlugin("SnifferKtorWs") {
+    client.responsePipeline.intercept(HttpResponsePipeline.State) { (info, session) ->
+        // positive recognition only: wrap the exact type the WebSockets plugin produces,
+        // hand anything else through untouched
+        if (session !is DefaultClientWebSocketSession) return@intercept
+        val wrapped = runCatching {
+            Sniffer.registerCapability("ktor-ws")
+            DefaultClientWebSocketSession(
+                session.call,
+                SnifferFrameInterceptor(session, context.request.url.toString()),
+            )
+        }.getOrNull() ?: return@intercept
+        proceedWith(HttpResponseContainer(info, wrapped))
+    }
 }
-
 private class SnifferFrameInterceptor(
     private val delegate: DefaultClientWebSocketSession,
     url: String,

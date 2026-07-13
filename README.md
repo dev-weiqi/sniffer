@@ -165,12 +165,17 @@ socket.connect()
 socket.emit("cart:update", mapOf("sku" to "pro"))
 ```
 
-Ktor WebSocket:
+Ktor WebSocket — install the plugin once, plain `webSocket` calls are monitored:
 
 ```kotlin
-import dev.weiqi.sniffer.ktorws.snifferWebSocketSession
+import dev.weiqi.sniffer.ktorws.SnifferKtorWs
 
-val session = ktor.snifferWebSocketSession("wss://api.example.com/realtime")
+val ktor = HttpClient(CIO) {
+    install(SnifferKtorWs)
+    install(WebSockets)
+}
+
+val session = ktor.webSocketSession("wss://api.example.com/realtime")
 session.send("ping")
 ```
 

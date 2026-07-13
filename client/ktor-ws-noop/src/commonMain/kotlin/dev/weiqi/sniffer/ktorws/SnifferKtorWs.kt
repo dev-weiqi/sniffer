@@ -1,12 +1,7 @@
 package dev.weiqi.sniffer.ktorws
 
-import io.ktor.client.HttpClient
-import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
-import io.ktor.client.plugins.websocket.webSocketSession
-import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.plugins.api.ClientPlugin
+import io.ktor.client.plugins.api.createClientPlugin
 
-/** Release-build stand-in: returns the raw session, no monitoring. */
-suspend fun HttpClient.snifferWebSocketSession(
-    urlString: String,
-    block: HttpRequestBuilder.() -> Unit = {},
-): DefaultClientWebSocketSession = webSocketSession(urlString, block)
+/** Release-build stand-in: installs nothing, sessions stay raw. */
+val SnifferKtorWs: ClientPlugin<Unit> = createClientPlugin("SnifferKtorWs") {}
