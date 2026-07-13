@@ -25,8 +25,12 @@ Sniffer keeps the network debugging pieces in a small stack we can maintain.
 ## Install the monitor
 
 The daemon runs on your dev machine: it serves the browser UI, stores mock
-rules, and keeps `adb reverse` alive for Android devices. All it needs is
-[Node.js](https://nodejs.org) 20+.
+rules, and keeps `adb reverse` alive for Android devices.
+
+**Prerequisites**
+
+- [Node.js](https://nodejs.org) 20+ — npm ships with it
+- `adb` (Android platform-tools) on your PATH — only for Android devices; iOS needs nothing extra
 
 ```bash
 npm install -g @dev-weiqi/sniffer
