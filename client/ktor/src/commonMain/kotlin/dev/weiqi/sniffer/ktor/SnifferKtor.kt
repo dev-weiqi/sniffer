@@ -25,7 +25,10 @@ import io.ktor.utils.io.readAvailable
 import io.ktor.utils.io.writeFully
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.onCompletion
 import io.ktor.client.plugins.isSaved
+import io.ktor.client.plugins.sse.SSESession
 import io.ktor.http.HttpProtocolVersion
 import io.ktor.util.date.GMTDate
 import io.ktor.utils.io.ByteReadChannel
@@ -36,12 +39,16 @@ import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.request
 import io.ktor.client.request.takeFrom
 import io.ktor.client.statement.bodyAsText
+import io.ktor.client.statement.HttpResponsePipeline
+import io.ktor.client.statement.HttpResponseContainer
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.charset
 import io.ktor.http.content.ByteArrayContent
+import io.ktor.http.content.OutgoingContent
 import io.ktor.http.content.TextContent
 import io.ktor.http.contentType
+import io.ktor.sse.ServerSentEvent
 import io.ktor.util.AttributeKey
 import io.ktor.util.flattenEntries
 import io.ktor.utils.io.charsets.Charsets
@@ -56,6 +63,7 @@ private val MockRuleKey = AttributeKey<HttpMockRule>("SnifferMockRule")
 private class ResponseStatusHolder(var status: Int? = null, var headers: Map<String, String> = emptyMap())
 
 private val StatusHolderKey = AttributeKey<ResponseStatusHolder>("SnifferStatusHolder")
+private val SnifferSseIdKey = AttributeKey<String>("SnifferSseId")
 
 // when a mock rule matches, fabricate the HttpClientCall on the HOST's client -- not an
 // internal one -- so its response pipeline (ContentNegotiation, ...) still applies when the
@@ -93,6 +101,24 @@ private suspend fun mockHttpCall(
     return HttpClientCall(client, requestData, responseData)
 }
 
+
+// plugins may wrap the user's body (e.g. the SSE plugin's SSEClientContent);
+// ContentWrapper.delegate() is the public way back to the real content
+private fun requestBodyText(body: Any): String? {
+    var b = body
+    while (b is OutgoingContent.ContentWrapper) b = b.delegate()
+    return when (b) {
+        is TextContent -> b.text
+        is ByteArrayContent ->
+            if (isTextual(b.contentType)) runCatching {
+                // same rule as okhttp: don't decode more than capBody will keep
+                val bytes = b.bytes()
+                if (bytes.size > MAX_BODY_CHARS) null else bytes.decodeToString()
+            }.getOrNull() else null
+        else -> null
+    }
+}
+
 private fun isTextual(contentType: ContentType?): Boolean =
     contentType == null ||
             contentType.match(ContentType.Text.Any) ||
@@ -112,26 +138,94 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
         }
     }
 
+    // SSE plugin sessions: observe events by swapping the pipeline subject for a delegating
+    // wrapper — same SSESession type, so the SSE plugin's own Transform still accepts it.
+    // Any failure falls back to the original, untouched session.
+    client.responsePipeline.intercept(HttpResponsePipeline.Parse) { (info, body) ->
+        val id = context.request.attributes.getOrNull(SnifferSseIdKey) ?: return@intercept
+        if (body !is SSESession) return@intercept
+        val wrapped = runCatching {
+            val headersMap = context.response.headers.flattenEntries().toMap()
+            val status = context.response.status.value
+            val captured = StringBuilder()
+            var lastReport = 0L
+            fun report(final: Boolean) {
+                val nowMs = now()
+                if (!final && nowMs - lastReport < 1000) return
+                lastReport = nowMs
+                val capped = capBody(captured.toString())
+                Sniffer.report(
+                    HttpResponseMsg(
+                        id = id, status = status, headers = headersMap,
+                        body = capped.body, bodySize = capped.size, bodyTruncated = capped.truncated,
+                        durationMs = 0, mocked = false, error = null, timestamp = nowMs,
+                    )
+                )
+            }
+            object : SSESession {
+                override val coroutineContext get() = body.coroutineContext
+                override val incoming = body.incoming
+                    .onEach { ev ->
+                        runCatching {
+                            ev.event?.let { captured.append("event: ").append(it).append('\n') }
+                            ev.data?.let { captured.append("data: ").append(it).append('\n') }
+                            captured.append('\n')
+                            report(final = false)
+                        }
+                    }
+                    .onCompletion { runCatching { report(final = true) } }
+            }
+        }.getOrNull() ?: return@intercept
+        proceedWith(HttpResponseContainer(info, wrapped))
+    }
+
     on(Send) { request ->
         val id = newId()
         val start = now()
+
+        // ktor's SSE plugin (client.sse { … }) produces an engine-level SSESession body;
+        // rebuilding or teeing that call destroys the session and every SSE request fails
+        // with "Expected SSESession content but was ByteChannel". Report what we can and
+        // hand the call through completely untouched.
+        // Default-safe policy: any request wired to an engine-level response adapter (SSE
+        // today, anything similar tomorrow) gets reported but never transformed or mocked.
+        val handsOff = request.attributes.allKeys.any {
+            it.name == "SSERequestFlag" || it.name == "ResponseAdapterAttributeKey"
+        }
+        if (handsOff) {
+            runCatching {
+                val reqBody = capBody(requestBodyText(request.body))
+                Sniffer.report(
+                    HttpRequestMsg(
+                        id = id, method = request.method.value, url = request.url.buildString(),
+                        headers = request.headers.build().flattenEntries().toMap(),
+                        body = reqBody.body, bodySize = reqBody.size, bodyTruncated = reqBody.truncated,
+                        library = "ktor", timestamp = now(),
+                    )
+                )
+            }
+            request.attributes.put(SnifferSseIdKey, id)
+            val sseCall = proceed(request)
+            runCatching {
+                Sniffer.report(
+                    HttpResponseMsg(
+                        id = id, status = sseCall.response.status.value,
+                        headers = sseCall.response.headers.flattenEntries().toMap(),
+                        body = null, bodySize = 0, bodyTruncated = false,
+                        durationMs = now() - start, mocked = false, error = null, timestamp = now(),
+                    )
+                )
+            }
+            return@on sseCall
+        }
+
         val statusHolder = ResponseStatusHolder()
         request.attributes.put(StatusHolderKey, statusHolder)
         // Golden rule: a Sniffer bug must never break the host app's traffic. The
         // report/mock section runs fenced; on any SDK failure the request proceeds untouched.
         var injectedDelayMs = 0L
         try {
-            val reqBodyRaw = when (val body = request.body) {
-                is TextContent -> body.text
-                is ByteArrayContent ->
-                    if (isTextual(body.contentType)) runCatching {
-                        // same rule as okhttp: don't decode more than capBody will keep
-                        val bytes = body.bytes()
-                        if (bytes.size > MAX_BODY_CHARS) null else bytes.decodeToString()
-                    }.getOrNull() else null
-
-                else -> null
-            }
+            val reqBodyRaw = requestBodyText(request.body)
             val reqBody = capBody(reqBodyRaw)
             val url = request.url.buildString()
             Sniffer.report(

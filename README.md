@@ -30,7 +30,7 @@ rules, and keeps `adb reverse` alive for Android devices.
 **Prerequisites**
 
 - [Node.js](https://nodejs.org) 20+ — npm ships with it
-- `adb` (Android platform-tools) on your PATH — only for Android devices; iOS needs nothing extra
+- `adb` (Android platform-tools) on your PATH — only for Android devices; iOS needs nothing extraㄕ
 
 ```bash
 npm install -g @dev-weiqi/sniffer
