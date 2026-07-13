@@ -49,6 +49,15 @@ drives the real SDK against the daemon, assert, then delete it.
 Only start the emulator/simulator when a change genuinely can't be verified another way (new
 on-device UI wiring, adb reverse, platform glue). It's slow — don't gate every change on it.
 
+**Transformation points are the compatibility risk.** Fences only stop the SDK from
+*crashing* the host; code that *transforms* traffic (ktor tee / mock call rebuild, okhttp
+tee / mock response, the ws and socketio wrappers) can be semantically wrong for consumers
+we don't know about, and no try/catch will catch that. Default-safe policy: transform only
+when the situation is positively recognized; anything carrying an unknown marker (e.g. an
+engine-level response adapter) passes through untouched. Before an SDK release, exercise
+the integration matrix — the sample buttons cover both SSE styles; add a button whenever a
+new consumption style appears in a real app.
+
 ## Gotchas (already paid for — don't relearn)
 
 - **adb reverse** is how a device/emulator reaches `localhost:9091`. The daemon re-runs it every 5s; a freshly booted emulator needs ~6s before it connects.
