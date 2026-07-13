@@ -141,6 +141,19 @@ internal class SnifferInterceptor(
         val durationMs = (System.nanoTime() - start) / 1_000_000
 
         val respCt = response.header("content-type")
+        // a 101 upgrade body is a live connection: never peek or tee it (it usually has no
+        // content-type, so the unknown-length-textual tee below would otherwise grab it)
+        if (response.code == 101) {
+            Sniffer.report(
+                HttpResponseMsg(
+                    id = id, status = response.code, headers = response.headers.toMap(),
+                    body = null, bodySize = 0, bodyTruncated = false,
+                    durationMs = durationMs, mocked = false, error = null,
+                    timestamp = now(), delayedMs = delayedMs,
+                )
+            )
+            return response
+        }
         // images: capture the raw bytes (<= 1MB) as base64 so the UI can render a preview
         if (isImage(respCt)) {
             // peekBody blocks until byteCount bytes or EOF: only safe when the length is known
