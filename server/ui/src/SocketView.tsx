@@ -15,9 +15,17 @@ export function SocketView({ events, conns, connUrls, deviceId, onMockAck, onPus
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [sortDesc, setSortDesc] = useState(false)
+  const [connFilter, setConnFilter] = useState<string | null>(null)
   const selected = events.find(e => e.id === selectedId) ?? null
-  const sorted = sortDesc ? [...events].reverse() : events
   const liveConns = conns.filter(c => c.deviceId === deviceId && c.status === 'connected')
+  const filtered = connFilter ? events.filter(e => e.connectionId === connFilter) : events
+  const sorted = sortDesc ? [...filtered].reverse() : filtered
+
+  // the filtered connection can die (or the device can change) — don't stay stuck on an invisible filter
+  useEffect(() => {
+    if (connFilter && !liveConns.some(c => c.connectionId === connFilter)) setConnFilter(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conns, deviceId, connFilter])
   const ids = useMemo(() => sorted.map(e => e.id), [sorted])
   useListKeys(ids, selectedId, setSelectedId)
   const [detailWidth, startDetailDrag] = useDetailWidth()
@@ -47,10 +55,17 @@ export function SocketView({ events, conns, connUrls, deviceId, onMockAck, onPus
         >
         {liveConns.length > 0 && (
           <div className="conn-bar">
+            <button className="conn-chip all" data-active={connFilter === null || undefined}
+              title="Show events from all connections" onClick={() => setConnFilter(null)}>
+              All
+            </button>
             {liveConns.map(c => (
-              <span key={c.connectionId} className="conn-chip" data-on>
+              <button key={c.connectionId} className="conn-chip" data-on
+                data-active={c.connectionId === connFilter || undefined}
+                title="Show only this connection"
+                onClick={() => setConnFilter(c.connectionId)}>
                 {c.transport} · {c.url || '(unknown url)'}
-              </span>
+              </button>
             ))}
           </div>
         )}
@@ -86,7 +101,9 @@ export function SocketView({ events, conns, connUrls, deviceId, onMockAck, onPus
             ))}
           </tbody>
         </table>
-        {events.length === 0 && <div className="empty">No socket events yet</div>}
+        {sorted.length === 0 && (
+          <div className="empty">{connFilter ? 'No events for this connection yet' : 'No socket events yet'}</div>
+        )}
         </div>
       </div>
 
