@@ -84,8 +84,7 @@ Two channels; credentials never live in the repo.
 **SDK → Maven Central** (`io.github.dev-weiqi.sniffer:*`, vanniktech maven-publish plugin):
 
 1. Bump `VERSION_NAME` in `client/gradle.properties` — the only version to touch
-   (root `build.gradle.kts` reads it; also update `snifferVersion` + the version
-   badge in README).
+   (root `build.gradle.kts` reads it; also update `snifferVersion` in README).
 2. `cd client && ./gradlew publishAndReleaseToMavenCentral` — builds, signs, uploads,
    and releases all 8 library modules (samples excluded).
 3. Verify (Central validation takes ~5–10 min):
