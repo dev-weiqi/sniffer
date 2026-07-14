@@ -626,14 +626,16 @@ function PushRecordCard({ record, conns, deviceId, canStar, onChange, onDelete, 
   }))
   const targetMissing = Boolean(record.target && !liveOptions.some(o => o.key === record.target))
   const options = [
-    { key: '', label: 'All connections', disabled: false },
+    { key: '', label: 'Select a connection…', disabled: true },
     ...liveOptions,
     ...(targetMissing ? [{ key: record.target, label: 'Original connection is not active', disabled: true }] : []),
   ]
+  // a push must target a specific live connection — no broadcast to all
+  const canSend = Boolean(record.event) && record.target !== '' && !targetMissing
 
   const send = async () => {
-    if (!record.event || targetMissing) return
-    const res = await api.pushEvent(deviceId, record.target || null, record.event, record.payload)
+    if (!canSend) return
+    const res = await api.pushEvent(deviceId, record.target, record.event, record.payload)
     setStatus(res.ok ? 'sent' : 'error')
     setTimeout(() => setStatus(null), 1600)
   }
@@ -655,15 +657,15 @@ function PushRecordCard({ record, conns, deviceId, canStar, onChange, onDelete, 
         <button className="ghost icon-btn" title="Duplicate" onClick={onDuplicate}><CopyIcon /></button>
         <button className="ghost icon-btn danger" title="Delete"
           onClick={async () => { if (await confirm(record.starred ? 'Delete this shared push event? It disappears for every device of this app.' : 'Delete this push event?', 'Delete')) onDelete() }}><TrashIcon /></button>
-        <button disabled={!record.event || targetMissing} onClick={send}>
+        <button disabled={!canSend} onClick={send}>
           {status === 'sent' ? 'Sent ✓' : status === 'error' ? 'Failed' : 'Send'}
         </button>
       </div>
       {targetMissing && (
-        <div className="dim hint">The original connection is no longer active. Clear the target or choose All connections.</div>
+        <div className="dim hint">The original connection is no longer active. Choose a live connection.</div>
       )}
       {!targetMissing && liveOptions.length === 0 && (
-        <div className="dim hint">No active socket connections for this device; All connections will send when the SDK has a live socket.</div>
+        <div className="dim hint">No active socket connections for this device. Connect one to send a push.</div>
       )}
       <textarea ref={payloadRef} className="mono" rows={3} placeholder="payload (JSON or plain text)" value={record.payload}
         onChange={e => onChange({ ...record, payload: e.target.value })} />
