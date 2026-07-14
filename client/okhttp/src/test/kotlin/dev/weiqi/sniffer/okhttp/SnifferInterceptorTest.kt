@@ -21,7 +21,7 @@ class SnifferInterceptorTest {
             MockRules(
                 http = listOf(
                     HttpMockRule(
-                        id = "r1", urlPattern = "/api/characters/", status = 418,
+                        id = "r1", urlPattern = "/api/characters/18", status = 418,
                         headers = mapOf("x-mock" to "1"), body = """{"mocked":true}""",
                     )
                 )
@@ -43,7 +43,7 @@ class SnifferInterceptorTest {
             MockRules(
                 http = listOf(
                     HttpMockRule(
-                        id = "r1", urlPattern = "/api/", status = 418,
+                        id = "r1", urlPattern = "/api/characters/18", status = 418,
                         headers = emptyMap(), body = "mocked",
                     )
                 )
