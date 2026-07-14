@@ -15,6 +15,12 @@ Self-hosted Flipper alternative: monitor and mock an app's HTTP/Socket traffic.
 ## Golden rules
 
 1. **Protocol change ⇒ update `PROTOCOL.md` in the same change.** A new message field must land in three places together: `PROTOCOL.md`, the Kotlin data class in `client/core/.../Protocol.kt`, and the TS types in `server/ui/src/state.ts`. The daemon forwards rules/messages opaquely (`normalizeMocks` passes rule objects through) — don't assume it validates new fields.
+   **A mock-rule field travels further than the wire — walk every surface before shipping:**
+   the daemon store (`normalizeMocks`, starred split, `~/.sniffer/mocks.json`), the device sync
+   (does the daemon strip it, like `starred`, or does the SDK see it?), the UI editors, duplicate
+   detection (`httpSig`/`socketSig`) and `orderForSync`, and **export/import** (fields ride along
+   the JSON and re-enter through the PUT path). A field that is correct on the wire can still be
+   wrong on one of these.
 2. **Non-trivial logic ships with a test.** Pure logic (mock matching, placeholder expansion, protocol (de)serialization) → `client/core/src/commonTest`. Keep the existing `MockRegistryTest` / `MockPlaceholdersTest` style.
 3. **The SDK must never affect the host app.** Swallow errors, reconnect silently, cap buffers (1000 msgs offline). A monitoring bug must not surface in production traffic.
 4. **Keep `sample` and `sample-cmp` in parity** — same layout, headers, and action labels. The only allowed difference: CMP is ktor-only (no okhttp / socketio).
