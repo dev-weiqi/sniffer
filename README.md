@@ -64,7 +64,7 @@ Supported client integrations:
 | --- | --- |
 | OkHttp | `io.github.dev-weiqi.sniffer:okhttp` |
 | Ktor Client | `io.github.dev-weiqi.sniffer:ktor` |
-| Socket.IO Java client | `io.github.dev-weiqi.sniffer:socketio` |
+| Socket.IO | `io.github.dev-weiqi.sniffer:socketio` |
 | Ktor WebSocket | `io.github.dev-weiqi.sniffer:ktor-ws` |
 
 ```kotlin
