@@ -28,8 +28,8 @@ rules, and keeps `adb reverse` alive for Android devices.
 
 **Prerequisites**
 
-- [Node.js](https://nodejs.org) 20+ — npm ships with it
-- `adb` (Android platform-tools) on your PATH — only for Android devices; iOS needs nothing extra
+- [Node.js](https://nodejs.org) 20+ (npm ships with it)
+- `adb` (Android platform-tools) on your PATH, for Android devices only; iOS needs nothing extra
 
 ```bash
 npm install -g @dev-weiqi/sniffer
@@ -46,10 +46,23 @@ Or skip the install and run it straight:
 npx @dev-weiqi/sniffer start
 ```
 
-Port 9091 taken? Sniffer offers to free it for you, or pick another port:
+If port 9091 is taken, Sniffer offers to free it for you. You can also pick
+another port:
 
 ```bash
 PORT=9092 sniffer start
+```
+
+To update an existing install to the latest version:
+
+```bash
+npm install -g @dev-weiqi/sniffer@latest
+```
+
+Or pin a specific version:
+
+```bash
+npm install -g @dev-weiqi/sniffer@0.1.7
 ```
 
 ## Add the SDK
@@ -164,7 +177,7 @@ socket.connect()
 socket.emit("cart:update", mapOf("sku" to "pro"))
 ```
 
-Ktor WebSocket — install the plugin once, plain `webSocket` calls are monitored:
+Ktor WebSocket: install the plugin once and plain `webSocket` calls are monitored:
 
 ```kotlin
 import dev.weiqi.sniffer.ktorws.SnifferKtorWs
