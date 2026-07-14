@@ -8,8 +8,9 @@ import { buildExportRules, countSelectedRules, createFullExportSelection, type E
 type PushPrefill = { connectionId: string; event: string; payload: string }
 
 const PlaceholderTokens = [
-  { key: 'id', syntax: '${id}', label: 'unique id' },
-  { key: 'randomString', syntax: '${randomString(length)}', label: 'lorem string with the length you enter' },
+  { key: 'randomId', syntax: '${randomId}', label: 'unique random id' },
+  { key: 'now', syntax: '${now}', label: 'current time, ISO-8601 UTC' },
+  { key: 'randomString', syntax: '${randomString(min~max)}', label: 'lorem string, random length in the range you enter' },
 ]
 
 
@@ -930,31 +931,21 @@ function PlaceholderTools({ value, onValue, taRef }: {
 }
 
 function buildPlaceholderToken(key: string): string | null {
-  if (key === 'id') return '${id}'
+  if (key === 'randomId') return '${randomId}'
+  if (key === 'now') return '${now}'
   if (key === 'randomString') {
-    const length = promptWholeNumber('Random string length')
-    return length === null ? null : `\${randomString(${length})}`
+    const range = promptRange()
+    return range === null ? null : `\${randomString(${range.min}~${range.max})}`
   }
   return null
 }
 
-function promptWholeNumber(label: string): number | null {
-  const value = prompt(label)
-  if (value === null) return null
-  const n = Number(value.trim())
-  if (!Number.isInteger(n) || n < 0) {
-    alert('Enter a whole number.')
-    return null
-  }
-  return n
-}
-
 function promptRange(): { min: number; max: number } | null {
-  const value = prompt('Random number range (min~max)')
+  const value = prompt('Random string length range (min~max)')
   if (value === null) return null
-  const match = value.trim().match(/^(-?\d+)\s*~\s*(-?\d+)$/)
+  const match = value.trim().match(/^(\d+)\s*~\s*(\d+)$/)
   if (!match) {
-    alert('Enter a range like min~max.')
+    alert('Enter a range of whole numbers like min~max.')
     return null
   }
   const min = Number(match[1])

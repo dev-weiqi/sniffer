@@ -4,6 +4,9 @@ internal expect fun platformName(): String
 internal expect fun defaultDeviceName(): String
 internal expect fun epochMillis(): Long
 
+/** Current time as an ISO-8601 UTC string, for the ${now} mock placeholder. */
+internal expect fun nowIso(): String
+
 /**
  * Runtime connection override, so ports can be changed without rebuilding the app:
  * Android — `adb shell setprop debug.sniffer.host/.port` (debug.* needs no root);

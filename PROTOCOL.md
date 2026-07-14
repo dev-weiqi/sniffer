@@ -65,8 +65,8 @@ content (`body: null`). Bodies over **1 MB** are truncated and flagged
 // http rule: method null = any; urlPattern is an exact match against the request path
 //   (scheme, host, query and fragment stripped). Empty pattern matches nothing.
 // body and ackPayload support placeholders expanded on the device at match time:
-//   ${id}, ${randomString(length)}
-//   length/min/max are user-provided numbers in each rule
+//   ${randomId}, ${now} (ISO-8601 UTC), ${randomString(min~max)}
+//   min/max are user-provided whole numbers; the string length is random within [min, max]
 // socket rule, transport "socketio": matched emits are not sent; a fake ack (JSON array of args)
 //   is returned locally. transport "ktor-ws": [event] is a substring matched against outgoing
 //   text frames; matched frames are not sent and [ackPayload] is injected as a fake incoming frame

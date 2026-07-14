@@ -33,6 +33,14 @@ private fun androidUserDeviceName(): String? = runCatching {
 
 internal actual fun epochMillis(): Long = System.currentTimeMillis()
 
+// SimpleDateFormat, not java.time.Instant: java.time is API 26+ and this jvm target also runs
+// on older Android. A fresh instance per call keeps it thread-safe (SimpleDateFormat is not).
+internal actual fun nowIso(): String {
+    val fmt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
+    fmt.timeZone = java.util.TimeZone.getTimeZone("UTC")
+    return fmt.format(java.util.Date(epochMillis()))
+}
+
 internal actual fun configOverride(key: String): String? {
     // Android: debug.* system properties are settable via adb without root
     val fromProp = runCatching {

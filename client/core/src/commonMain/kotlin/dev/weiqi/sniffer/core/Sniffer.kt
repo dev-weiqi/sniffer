@@ -138,7 +138,7 @@ object Sniffer {
         when (msg) {
             is MockRules -> MockRegistry.update(msg)
             is PushEvent -> {
-                // expand ${id}/${randomString} just like mock payloads
+                // expand ${randomId}/${now}/${randomString} just like mock payloads
                 val payload = runCatching { expandMockPlaceholders(msg.payload) }.getOrDefault(msg.payload)
                 val targets = if (msg.connectionId == null) pushHandlers.values
                 else listOfNotNull(pushHandlers[msg.connectionId])
