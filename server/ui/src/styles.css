@@ -461,6 +461,32 @@ button.add { margin-top: 2px; }
 
 .icon-btn { padding: 4px 7px; line-height: 0; display: inline-flex; align-items: center; }
 .icon-btn.danger:hover { border-color: var(--err); color: var(--err); }
+
+/* ---------- confirm modal ---------- */
+
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgb(0 0 0 / 0.35);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 7vh;
+}
+.modal {
+  background: var(--bg-panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 18px; width: min(380px, calc(100vw - 40px));
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.25);
+  font-size: 14px; line-height: 1.5;
+}
+.modal-actions {
+  display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;
+}
+button.modal-danger {
+  background: var(--err); border-color: var(--err); color: #fff;
+}
+button.modal-danger:hover {
+  background: var(--err); border-color: var(--err); color: #fff;
+  filter: brightness(1.1);
+}
 .dup-warning { color: var(--warn); padding: 0 12px; }
 
 .rule-name-row {

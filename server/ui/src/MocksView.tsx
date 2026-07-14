@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { HttpMockRule, Mocks, SocketConn, SocketMockRule } from './state'
 import { api } from './state'
 import { newRuleId } from './util'
+import { useConfirm } from './Confirm'
 
 type PushPrefill = { connectionId: string; event: string; payload: string }
 
@@ -90,6 +91,7 @@ export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRu
   pushPrefill: PushPrefill | null
   onPendingConsumed: () => void
 }) {
+  const confirm = useConfirm()
   const [draft, setDraft] = useState<Mocks>(mocks)
   const [dirty, setDirty] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -206,7 +208,7 @@ export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRu
             <h2>HTTP rules</h2>
             {draft.http.length > 0 && (
               <button className="ghost danger"
-                onClick={() => { if (confirm('Clear all HTTP mock rules?')) update({ ...draft, http: [] }) }}>Clear all</button>
+                onClick={async () => { if (await confirm('Clear all HTTP mock rules?', 'Clear all')) update({ ...draft, http: [] }) }}>Clear all</button>
             )}
           </div>
           {draft.http.map((r, i) => (
@@ -234,7 +236,7 @@ export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRu
             <h2>Socket ack rules</h2>
             {draft.socket.length > 0 && (
               <button className="ghost danger"
-                onClick={() => { if (confirm('Clear all socket mock rules?')) update({ ...draft, socket: [] }) }}>Clear all</button>
+                onClick={async () => { if (await confirm('Clear all socket mock rules?', 'Clear all')) update({ ...draft, socket: [] }) }}>Clear all</button>
             )}
           </div>
           {draft.socket.map((r, i) => (
@@ -272,6 +274,7 @@ function PushEventPanel({ conns, deviceId, prefill, onConsumed }: {
 }) {
   // ponytail: push records are a UI convenience, persisted per-device in localStorage;
   // move into the daemon mock store if cross-browser sharing ever matters
+  const confirm = useConfirm()
   const storageKey = `sniffer-push-${deviceId}`
   const [records, setRecords] = useState<PushRecord[]>(() => loadRecords(storageKey))
 
@@ -291,7 +294,7 @@ function PushEventPanel({ conns, deviceId, prefill, onConsumed }: {
         <h2>Push Server → Client event</h2>
         {records.length > 0 && (
           <button className="ghost danger"
-            onClick={() => { if (confirm('Clear all push events?')) setRecords([]) }}>Clear all</button>
+            onClick={async () => { if (await confirm('Clear all push events?', 'Clear all')) setRecords([]) }}>Clear all</button>
         )}
       </div>
       {records.map(r => (
@@ -328,6 +331,7 @@ function PushRecordCard({ record, conns, deviceId, onChange, onDelete, onDuplica
   onDelete: () => void
   onDuplicate: () => void
 }) {
+  const confirm = useConfirm()
   const [status, setStatus] = useState<'sent' | 'error' | null>(null)
   const payloadRef = useRef<HTMLTextAreaElement>(null)
 
@@ -365,7 +369,7 @@ function PushRecordCard({ record, conns, deviceId, onChange, onDelete, onDuplica
           onChange={e => onChange({ ...record, event: e.target.value })} />
         <button className="ghost icon-btn" title="Duplicate" onClick={onDuplicate}><CopyIcon /></button>
         <button className="ghost icon-btn danger" title="Delete"
-          onClick={() => { if (confirm('Delete this push event?')) onDelete() }}><TrashIcon /></button>
+          onClick={async () => { if (await confirm('Delete this push event?', 'Delete')) onDelete() }}><TrashIcon /></button>
         <button disabled={!record.event || targetMissing} onClick={send}>
           {status === 'sent' ? 'Sent ✓' : status === 'error' ? 'Failed' : 'Send'}
         </button>
@@ -393,6 +397,7 @@ function HttpRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
   onDelete: () => void
   onDuplicate: () => void
 }) {
+  const confirm = useConfirm()
   const [sub, setSub] = useState<'body' | 'headers'>('body')
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const headerCount = Object.keys(rule.headers).length
@@ -415,7 +420,7 @@ function HttpRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
           onChange={e => onChange({ ...rule, urlPattern: e.target.value })} />
         <button className="ghost icon-btn" title="Duplicate rule" onClick={onDuplicate}><CopyIcon /></button>
         <button className="ghost icon-btn danger" title="Delete rule"
-          onClick={() => { if (confirm('Delete this rule?')) onDelete() }}><TrashIcon /></button>
+          onClick={async () => { if (await confirm('Delete this rule?', 'Delete')) onDelete() }}><TrashIcon /></button>
       </div>
       {dup && <div className="hint dup-warning">⚠ Another enabled rule has the same matcher — the newest one takes effect.</div>}
       <div className="rule-tabs">
@@ -545,6 +550,7 @@ function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
   onDelete: () => void
   onDuplicate: () => void
 }) {
+  const confirm = useConfirm()
   const ackRef = useRef<HTMLTextAreaElement>(null)
   return (
     <div className="rule-card" data-disabled={!rule.enabled || undefined}>
@@ -569,7 +575,7 @@ function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
         </label>
         <button className="ghost icon-btn" title="Duplicate rule" onClick={onDuplicate}><CopyIcon /></button>
         <button className="ghost icon-btn danger" title="Delete rule"
-          onClick={() => { if (confirm('Delete this rule?')) onDelete() }}><TrashIcon /></button>
+          onClick={async () => { if (await confirm('Delete this rule?', 'Delete')) onDelete() }}><TrashIcon /></button>
       </div>
       {dup && <div className="hint dup-warning">⚠ Another enabled rule has the same matcher — the newest one takes effect.</div>}
       <div className="rule-tabs">

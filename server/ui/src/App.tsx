@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useReducer, useState, useDeferredValue } from 'react'
 import { connectStream, initialState, reducer, api, emptyMocks, type HttpMockRule, type SocketMockRule } from './state'
+import { useConfirm } from './Confirm'
 import { HttpView } from './HttpView'
 import { SocketView } from './SocketView'
 import { MocksView } from './MocksView'
@@ -32,6 +33,7 @@ function SunIcon() {
 
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState)
+  const confirm = useConfirm()
   const [tab, setTab] = useState<Tab>(() => (localStorage.getItem('sniffer-tab') as Tab) || 'http')
   const [deviceId, setDeviceId] = useState<string>(() => localStorage.getItem('sniffer-device') ?? '')
   const [search, setSearch] = useState('')
@@ -139,7 +141,7 @@ export default function App() {
   const deleteDevices = async () => {
     if (!selectedDevice) return
     const kind = selectedDevice.connected ? 'connected device' : 'offline device'
-    if (!confirm(`Delete ${kind} "${selectedDevice.deviceName}" with all its traffic and mocks?`)) return
+    if (!await confirm(`Delete ${kind} "${selectedDevice.deviceName}" with all its traffic and mocks?`, 'Delete')) return
 
     setDeletingDevices(true)
     setDeviceNotice(null)
@@ -236,12 +238,12 @@ export default function App() {
       <main className="content">
         {tab === 'http' && (
           <HttpView rows={filteredHttp} onMock={mockFromRequest}
-            onClear={() => { if (confirm('Clear API traffic?')) api.clearHttpEntries() }} />
+            onClear={async () => { if (await confirm('Clear API traffic?', 'Clear')) api.clearHttpEntries() }} />
         )}
         {tab === 'socket' && (
           <SocketView events={filteredSocketEvents} conns={state.socketConns} connUrls={state.connUrls} deviceId={deviceId}
             onMockAck={mockFromSocketEvent} onPushPrefill={pushFromEvent}
-            onClear={() => { if (confirm('Clear socket events?')) api.clearSocketEntries() }} />
+            onClear={async () => { if (await confirm('Clear socket events?', 'Clear')) api.clearSocketEntries() }} />
         )}
         {tab === 'mocks' && (
           <MocksView deviceId={selectedDevice ? deviceId : null}
