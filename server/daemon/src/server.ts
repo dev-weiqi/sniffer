@@ -251,9 +251,11 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
     const deviceId = decodeURIComponent(url.pathname.slice('/api/devices/'.length))
     if (!deviceId) return json(res, 400, { error: 'deviceId required' })
     const device = devices.get(deviceId)
-    if (device?.connected) return json(res, 409, { error: 'device is connected' })
     const result = removeDeviceRecord(deviceId)
     if (result.mocksChanged) persistMocks()
+    // kick after the record is gone so the close handler is a no-op; the SDK
+    // reconnects on its own and re-registers as a fresh device
+    if (device?.connected) device.ws.close()
     return json(res, 200, { ok: true })
   }
   if (req.method === 'GET' && url.pathname === '/api/state') {

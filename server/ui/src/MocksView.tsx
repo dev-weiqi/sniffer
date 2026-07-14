@@ -364,7 +364,8 @@ function PushRecordCard({ record, conns, deviceId, onChange, onDelete, onDuplica
         <input className="grow mono" placeholder="event name (e.g. chat:new)" value={record.event}
           onChange={e => onChange({ ...record, event: e.target.value })} />
         <button className="ghost icon-btn" title="Duplicate" onClick={onDuplicate}><CopyIcon /></button>
-        <button className="ghost icon-btn danger" title="Delete" onClick={onDelete}><TrashIcon /></button>
+        <button className="ghost icon-btn danger" title="Delete"
+          onClick={() => { if (confirm('Delete this push event?')) onDelete() }}><TrashIcon /></button>
         <button disabled={!record.event || targetMissing} onClick={send}>
           {status === 'sent' ? 'Sent ✓' : status === 'error' ? 'Failed' : 'Send'}
         </button>

@@ -82,10 +82,11 @@ export default function App() {
   const selectedMocks = selectedDevice ? state.mocksByDevice[deviceId] ?? emptyMocks : emptyMocks
   const activeMockCount =
     selectedMocks.http.filter(r => r.enabled).length + selectedMocks.socket.filter(r => r.enabled).length
-  const canDeleteDevices = Boolean(selectedDevice && !selectedDevice.connected)
-  const deleteButtonTitle = !selectedDevice
-    ? 'No device selected'
-    : selectedDevice.connected ? 'Connected devices cannot be deleted' : 'Delete offline device'
+  const canDeleteDevices = Boolean(selectedDevice)
+  const deleteButtonLabel = selectedDevice?.connected ? 'Delete connected device' : 'Delete offline device'
+  const deleteButtonTitle = selectedDevice?.connected
+    ? 'Delete this device and its traffic — a running app reconnects as a fresh device'
+    : 'Delete offline device'
 
   // deferred so typing stays snappy even when the query scans large stored bodies
   const deferredSearch = useDeferredValue(search)
@@ -136,7 +137,9 @@ export default function App() {
   }, [deviceId, devices])
 
   const deleteDevices = async () => {
-    if (!selectedDevice || selectedDevice.connected) return
+    if (!selectedDevice) return
+    const kind = selectedDevice.connected ? 'connected device' : 'offline device'
+    if (!confirm(`Delete ${kind} "${selectedDevice.deviceName}" with all its traffic and mocks?`)) return
 
     setDeletingDevices(true)
     setDeviceNotice(null)
@@ -177,7 +180,7 @@ export default function App() {
         {canDeleteDevices && (
           <button className="ghost danger" disabled={deletingDevices}
             title={deleteButtonTitle} onClick={deleteDevices}>
-            {deletingDevices ? 'Deleting…' : 'Delete offline device'}
+            {deletingDevices ? 'Deleting…' : deleteButtonLabel}
           </button>
         )}
         {deviceNotice && <span className="topbar-notice">{deviceNotice}</span>}
