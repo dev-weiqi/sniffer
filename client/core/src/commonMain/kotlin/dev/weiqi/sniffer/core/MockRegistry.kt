@@ -11,12 +11,22 @@ object MockRegistry {
         rules = newRules
     }
 
-    fun matchHttp(method: String, url: String): HttpMockRule? =
-        rules.http.firstOrNull {
+    // Exact-path match: [urlPattern] must equal the request's path (scheme, host, query and
+    // fragment stripped). "/api/" no longer catches "/api/systems/v1/app-version". An empty
+    // pattern matches nothing (a bare path always starts with "/").
+    fun matchHttp(method: String, url: String): HttpMockRule? {
+        val path = pathOf(url)
+        return rules.http.firstOrNull {
             it.enabled &&
                 (it.method == null || it.method.equals(method, ignoreCase = true)) &&
-                url.contains(it.urlPattern)
+                path == it.urlPattern
         }
+    }
+
+    private fun pathOf(url: String): String {
+        val path = if (url.contains("://")) "/" + url.substringAfter("://").substringAfter('/', "") else url
+        return path.substringBefore('?').substringBefore('#')
+    }
 
     fun matchSocketAck(event: String): SocketMockRule? =
         rules.socket.firstOrNull { it.enabled && it.transport == "socketio" && it.event == event }

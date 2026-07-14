@@ -58,11 +58,12 @@ content (`body: null`). Bodies over **1 MB** are truncated and flagged
 // full replacement of this device's mock rules (sent on connect and on every change for this device)
 { "type": "mock-rules",
   "http": [ { "id": "r1", "enabled": true, "method": "GET",
-              "urlPattern": "/api/characters/",
+              "urlPattern": "/api/characters/3",
               "status": 200, "headers": {}, "body": "{...}", "delayMs": 0 } ],
   "socket": [ { "id": "s1", "enabled": true, "transport": "socketio", "event": "chat:send",
                 "ackPayload": "[{\"ok\":true}]", "delayMs": 0 } ] }
-// http rule: method null = any; urlPattern is a substring match
+// http rule: method null = any; urlPattern is an exact match against the request path
+//   (scheme, host, query and fragment stripped). Empty pattern matches nothing.
 // body and ackPayload support placeholders expanded on the device at match time:
 //   ${id}, ${randomString(length)}
 //   length/min/max are user-provided numbers in each rule

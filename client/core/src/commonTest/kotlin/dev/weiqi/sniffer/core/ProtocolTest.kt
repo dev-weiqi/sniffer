@@ -33,19 +33,24 @@ class ProtocolTest {
     }
 
     @Test
-    fun mockRegistry_matches_method_and_url_substring() {
+    fun mockRegistry_matches_method_and_exact_path() {
         MockRegistry.update(
             MockRules(
                 http = listOf(
-                    HttpMockRule(id = "r1", method = "GET", urlPattern = "/api/users/", status = 200),
-                    HttpMockRule(id = "r2", enabled = false, urlPattern = "/off/", status = 200),
+                    HttpMockRule(id = "r1", method = "GET", urlPattern = "/api/users/3", status = 200),
+                    HttpMockRule(id = "r2", enabled = false, urlPattern = "/off/x", status = 200),
+                    HttpMockRule(id = "r3", urlPattern = "/api/", status = 200),
                 ),
                 socket = listOf(SocketMockRule(id = "s1", event = "chat:send")),
             )
         )
-        assertEquals("r1", MockRegistry.matchHttp("get", "http://h/api/users/3")?.id)
+        // exact path, case-insensitive method, host + query stripped
+        assertEquals("r1", MockRegistry.matchHttp("get", "https://h/api/users/3?x=1")?.id)
         assertNull(MockRegistry.matchHttp("POST", "http://h/api/users/3"))
-        assertNull(MockRegistry.matchHttp("GET", "http://h/off/x"))
+        assertNull(MockRegistry.matchHttp("GET", "http://h/off/x")) // disabled
+        // "/api/" must NOT catch a deeper path (the reported bug)
+        assertNull(MockRegistry.matchHttp("GET", "http://MOCKapi.test/api/systems/v1/app-version"))
+        assertEquals("r3", MockRegistry.matchHttp("GET", "http://h/api/")?.id)
         assertEquals("s1", MockRegistry.matchSocketAck("chat:send")?.id)
         assertNull(MockRegistry.matchSocketAck("other"))
         MockRegistry.update(MockRules())
