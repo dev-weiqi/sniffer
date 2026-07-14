@@ -39,14 +39,14 @@ npm install -g @dev-weiqi/sniffer
 sniffer start
 ```
 
-The UI is now at [http://localhost:9091](http://localhost:9091). Or skip the
-install and run it straight:
+The UI opens in your browser at [http://localhost:9091](http://localhost:9091).
+Or skip the install and run it straight:
 
 ```bash
 npx @dev-weiqi/sniffer start
 ```
 
-Port 9091 taken?
+Port 9091 taken? Sniffer offers to free it for you, or pick another port:
 
 ```bash
 PORT=9092 sniffer start

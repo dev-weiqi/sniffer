@@ -3,10 +3,11 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
-import { execFile } from 'node:child_process'
+import { execFile, execSync } from 'node:child_process'
 import { deflateSync, crc32 } from 'node:zlib'
 import { extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createInterface } from 'node:readline'
 import { WebSocketServer, WebSocket } from 'ws'
 import { Server as SocketIOServer } from 'socket.io'
 
@@ -432,13 +433,35 @@ adbReverse()
 server.on('error', (e: NodeJS.ErrnoException) => {
   if (e.code === 'EADDRINUSE') {
     console.error(`Port ${PORT} is already in use.`)
-    console.error(`Free it (lsof -ti tcp:${PORT} | xargs kill) or pick another port:`)
-    console.error(`  PORT=9092 npm start   — and in the app: Sniffer.start(appId, port = 9092)`)
-    process.exit(1)
+    if (!process.stdin.isTTY) {
+      console.error(`Free it (lsof -ti tcp:${PORT} | xargs kill) or pick another port:`)
+      console.error(`  PORT=9092 npm start   — and in the app: Sniffer.start(appId, port = 9092)`)
+      process.exit(1)
+    }
+    const rl = createInterface({ input: process.stdin, output: process.stdout })
+    rl.question(`Kill the process using port ${PORT} and start here instead? [y/N] `, answer => {
+      rl.close()
+      if (answer.trim().toLowerCase() !== 'y') {
+        console.error(`Pick another port: PORT=9092 npm start — and in the app: Sniffer.start(appId, port = 9092)`)
+        process.exit(1)
+      }
+      try { execSync(`lsof -ti tcp:${PORT} | xargs kill`, { stdio: 'ignore' }) } catch { /* already gone */ }
+      // SIGTERM needs a moment to release the port; if it's still held, this handler asks again
+      setTimeout(() => server.listen(PORT), 700)
+    })
+  } else {
+    throw e
   }
-  throw e
 })
+
+function openBrowser(url: string) {
+  // best-effort; a headless machine just skips it
+  if (process.platform === 'win32') execFile('cmd', ['/c', 'start', '', url], () => {})
+  else execFile(process.platform === 'darwin' ? 'open' : 'xdg-open', [url], () => {})
+}
 
 server.listen(PORT, () => {
   console.log(`Sniffer daemon: http://localhost:${PORT}`)
+  // SNIFFER_NO_OPEN=1 opts out (set by `npm run dev` so watch restarts don't spam tabs)
+  if (process.stdin.isTTY && process.env.SNIFFER_NO_OPEN !== '1') openBrowser(`http://localhost:${PORT}`)
 })
