@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "test:unit": "tsc -p tsconfig.test.json && node build/test/exportMocks.test.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

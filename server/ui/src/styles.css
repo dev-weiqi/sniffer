@@ -509,6 +509,77 @@ button.modal-danger:hover {
   background: var(--err); border-color: var(--err); color: #fff;
   filter: brightness(1.1);
 }
+button.modal-primary {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+button.modal-primary:hover {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+  filter: brightness(1.08);
+}
+.export-modal {
+  width: min(820px, calc(100vw - 40px));
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+}
+.export-modal-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.export-modal-head h2 {
+  font-size: 16px;
+}
+.export-table-actions {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 10px;
+}
+.export-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.export-grid th,
+.export-grid td {
+  vertical-align: top;
+}
+.export-grid th:first-child,
+.export-grid td:first-child {
+  width: 42px;
+  text-align: center;
+}
+.export-grid input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+.export-rule-cell {
+  min-width: 260px;
+  white-space: normal;
+}
+.export-rule-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.export-category-row td {
+  background: var(--bg-alt);
+  font-weight: 650;
+  text-align: left;
+}
+table.grid tbody tr.export-category-row:hover td {
+  background: var(--hover);
+}
+table.grid tbody tr.export-category-row[data-selected] td {
+  background: var(--accent-soft);
+}
+.export-category-row .dim {
+  margin-left: 10px;
+  font-weight: 400;
+}
+.export-category-row {
+  cursor: pointer;
+}
+.export-empty-row td {
+  background: color-mix(in srgb, var(--bg-alt) 34%, var(--bg-panel));
+}
 .dup-warning { color: var(--warn); padding: 0 12px; }
 
 .rule-name-row {

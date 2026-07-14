@@ -3,6 +3,7 @@ import type { HttpMockRule, Mocks, SocketConn, SocketMockRule } from './state'
 import { api } from './state'
 import { newRuleId } from './util'
 import { useConfirm } from './Confirm'
+import { buildExportRules, countSelectedRules, createFullExportSelection, type ExportRuleSelection, type ExportRulesSource, type PushEventRule } from './exportMocks'
 
 type PushPrefill = { connectionId: string; event: string; payload: string }
 
@@ -116,6 +117,8 @@ export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingS
   const [dirty, setDirty] = useState(false)
   const [saved, setSaved] = useState(false)
   const [showPlaceholders, setShowPlaceholders] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
+  const [exportPushRecords, setExportPushRecords] = useState<PushRecord[]>([])
 
   // refs so the flush below sees the latest values without re-running the effect
   const draftRef = useRef(draft); draftRef.current = draft
@@ -177,9 +180,12 @@ export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingS
 
   const importRef = useRef<HTMLInputElement>(null)
 
-  const exportRules = () => {
+  const exportSource: ExportRulesSource = { ...draft, push: exportPushRecords }
+
+  const exportRules = (selection: ExportRuleSelection) => {
+    const selected = buildExportRules(exportSource, selection)
     const blob = new Blob(
-      [JSON.stringify({ http: draft.http, socket: draft.socket }, null, 2)],
+      [JSON.stringify(selected, null, 2)],
       { type: 'application/json' },
     )
     const a = document.createElement('a')
@@ -187,6 +193,7 @@ export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingS
     a.download = `sniffer-mocks-${deviceId}-${new Date().toISOString().slice(0, 10)}.json`
     a.click()
     URL.revokeObjectURL(a.href)
+    setExportOpen(false)
   }
 
   // appends (with fresh ids) instead of replacing, so an import can never destroy rules;
@@ -218,8 +225,7 @@ export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingS
         <button className="pill-btn" onClick={() => setShowPlaceholders(v => !v)}>
           {showPlaceholders ? 'Hide placeholders' : 'Placeholders'}
         </button>
-        <button className="pill-btn" disabled={draft.http.length + draft.socket.length === 0}
-          onClick={exportRules}>Export</button>
+        <button className="pill-btn" onClick={() => setExportOpen(true)}>Export</button>
         <button className="pill-btn" onClick={() => importRef.current?.click()}>Import</button>
         <input ref={importRef} type="file" accept="application/json,.json" style={{ display: 'none' }}
           onChange={e => {
@@ -230,6 +236,13 @@ export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingS
         <span className="spacer" />
         <span className="dim">{dirty ? 'Saving…' : saved ? 'Saved ✓' : 'Synced'}</span>
       </div>
+      {exportOpen && (
+        <ExportRulesModal
+          source={exportSource}
+          onCancel={() => setExportOpen(false)}
+          onExport={exportRules}
+        />
+      )}
       {showPlaceholders && <PlaceholderGuide />}
 
       <div className="mocks-columns">
@@ -287,21 +300,189 @@ export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingS
         </section>
 
         <section className="mocks-column push-column">
-          <PushEventPanel conns={conns} deviceId={deviceId} appId={appId} prefill={pushPrefill} onConsumed={onPendingConsumed} />
+          <PushEventPanel
+            conns={conns}
+            deviceId={deviceId}
+            appId={appId}
+            prefill={pushPrefill}
+            onConsumed={onPendingConsumed}
+            onRecordsSnapshot={setExportPushRecords}
+          />
         </section>
       </div>
     </div>
   )
 }
 
-type PushRecord = { id: string; target: string; event: string; payload: string; name?: string; starred?: boolean }
+type ExportCategory = {
+  key: 'http' | 'socket' | 'push'
+  title: string
+  count: number
+}
 
-function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed }: {
+function exportCategories(source: ExportRulesSource): ExportCategory[] {
+  return [
+    {
+      key: 'http',
+      title: 'HTTP rules',
+      count: source.http.length,
+    },
+    {
+      key: 'socket',
+      title: 'Socket ack rules',
+      count: source.socket.length,
+    },
+    {
+      key: 'push',
+      title: 'Push Server → Client event',
+      count: source.push.length,
+    },
+  ]
+}
+
+type MutableExportRuleSelection = {
+  http: boolean
+  socket: boolean
+  push: boolean
+}
+
+function toMutableSelection(selection: ExportRuleSelection): MutableExportRuleSelection {
+  return { ...selection }
+}
+
+function emptyExportSelection(): MutableExportRuleSelection {
+  return { http: false, socket: false, push: false }
+}
+
+function selectionHas(selection: MutableExportRuleSelection, category: ExportCategory): boolean {
+  return selection[category.key]
+}
+
+function SelectAllCheckbox({ checked, indeterminate, onChange }: {
+  checked: boolean
+  indeterminate: boolean
+  onChange: (checked: boolean) => void
+}) {
+  const ref = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate
+  }, [indeterminate])
+
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={checked}
+      onChange={e => onChange(e.target.checked)}
+      aria-label="Select all rules"
+    />
+  )
+}
+
+function ExportRulesModal({ source, onCancel, onExport }: {
+  source: ExportRulesSource
+  onCancel: () => void
+  onExport: (selection: ExportRuleSelection) => void
+}) {
+  const [selection, setSelection] = useState<MutableExportRuleSelection>(() =>
+    toMutableSelection(createFullExportSelection(source)))
+  const categories = exportCategories(source)
+  const selectedCount = countSelectedRules(selection)
+  const allSelected = selectedCount === categories.length
+  const partiallySelected = selectedCount > 0 && selectedCount < categories.length
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onCancel()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onCancel])
+
+  const setAll = (checked: boolean) => {
+    setSelection(checked ? toMutableSelection(createFullExportSelection(source)) : emptyExportSelection())
+  }
+
+  const setCategory = (category: ExportCategory, checked: boolean) => {
+    setSelection(current => {
+      const next = toMutableSelection(current)
+      next[category.key] = checked
+      return next
+    })
+  }
+
+  const toggleCategory = (category: ExportCategory) => setCategory(category, !selectionHas(selection, category))
+  const countLabel = (count: number) => `${count} ${count === 1 ? 'rule' : 'rules'}`
+
+  return (
+    <div className="modal-backdrop" onMouseDown={onCancel}>
+      <div className="modal export-modal" role="dialog" aria-modal="true" aria-labelledby="export-rules-title"
+        onMouseDown={e => e.stopPropagation()}>
+        <div className="export-modal-head">
+          <h2 id="export-rules-title">Export rules</h2>
+        </div>
+
+        <div className="export-table-actions">
+          <label className="field checkbox-field">
+            <SelectAllCheckbox checked={allSelected} indeterminate={partiallySelected} onChange={setAll} />
+            All
+          </label>
+        </div>
+
+        <div className="export-table-wrap">
+          <table className="grid export-grid">
+            <thead>
+              <tr>
+                <th></th>
+                <th>Rule</th>
+              </tr>
+            </thead>
+            <tbody>
+              {categories.map(category => (
+                <tr key={category.key} className="export-category-row"
+                  data-selected={selectionHas(selection, category) || undefined}
+                  onClick={() => toggleCategory(category)}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selectionHas(selection, category)}
+                      onClick={e => e.stopPropagation()}
+                      onChange={e => setCategory(category, e.target.checked)}
+                      aria-label={`Export ${category.title}`}
+                    />
+                  </td>
+                  <td className="export-rule-cell">
+                    <span className="export-rule-name">{category.title}</span>
+                    <span className="dim">{countLabel(category.count)}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="modal-actions">
+          <button className="ghost" onClick={onCancel}>Cancel</button>
+          <button className="modal-primary" disabled={selectedCount === 0} autoFocus onClick={() => onExport(selection)}>Export</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+type PushRecord = PushEventRule
+
+function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed, onRecordsSnapshot }: {
   conns: SocketConn[]
   deviceId: string
   appId: string | null
   prefill: PushPrefill | null
   onConsumed: () => void
+  onRecordsSnapshot: (records: PushRecord[]) => void
 }) {
   // ponytail: push records are a UI convenience, persisted in localStorage; starred ones
   // live in a per-appId bucket so every device of the app (current and future) sees them
@@ -324,6 +505,8 @@ function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed }: {
   }, [prefill, onConsumed])
 
   const all = [...sharedRecords, ...records]
+
+  useEffect(() => { onRecordsSnapshot(all) }, [records, sharedRecords, onRecordsSnapshot])
 
   // a starred record moves to the shared bucket (and back); other edits stay in place
   const changeRecord = (next: PushRecord) => {
