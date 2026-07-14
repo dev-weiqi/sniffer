@@ -53,6 +53,20 @@ another port:
 PORT=9092 sniffer start
 ```
 
+By default the daemon binds to `127.0.0.1` only, so it is not exposed to your
+network. Android (via `adb reverse`) and the iOS simulator reach it over
+`localhost`, so they are unaffected. A **physical iOS/Android device connecting
+over Wi-Fi** to your machine's LAN address needs the daemon opened up:
+
+```bash
+SNIFFER_BIND=0.0.0.0 sniffer start
+```
+
+`SNIFFER_BIND` (daemon: which interface to listen on) is the server-side twin of
+the client-side `host` you pass in the app (`Sniffer.start(host = ...)`, which
+tells the device where to find the daemon). For Wi-Fi you set both: open the
+daemon with `SNIFFER_BIND=0.0.0.0`, and point the app at your machine's LAN IP.
+
 To update an existing install to the latest version:
 
 ```bash

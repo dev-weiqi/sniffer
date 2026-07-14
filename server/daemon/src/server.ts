@@ -12,6 +12,10 @@ import { WebSocketServer, WebSocket } from 'ws'
 import { Server as SocketIOServer } from 'socket.io'
 
 const PORT = Number(process.env.PORT ?? 9091)
+// Which interface the daemon listens on. Loopback-only by default (no network exposure):
+// Android/adb reverse and the iOS simulator reach it via localhost; a real iOS device on
+// wifi (hitting the host's LAN IP) needs SNIFFER_BIND=0.0.0.0.
+const BIND_HOST = process.env.SNIFFER_BIND ?? '127.0.0.1'
 const MAX_STORED_MESSAGES = 2000
 // UI location differs by layout: `ui-dist/` sits next to `dist/` in the published npm package;
 // `../ui/dist` is the repo checkout (running from src/ via tsx).
@@ -522,7 +526,7 @@ server.on('error', (e: NodeJS.ErrnoException) => {
       }
       try { execSync(`lsof -ti tcp:${PORT} | xargs kill`, { stdio: 'ignore' }) } catch { /* already gone */ }
       // SIGTERM needs a moment to release the port; if it's still held, this handler asks again
-      setTimeout(() => server.listen(PORT), 700)
+      setTimeout(() => server.listen(PORT, BIND_HOST), 700)
     })
   } else {
     throw e
@@ -535,7 +539,7 @@ function openBrowser(url: string) {
   else execFile(process.platform === 'darwin' ? 'open' : 'xdg-open', [url], () => {})
 }
 
-server.listen(PORT, () => {
+server.listen(PORT, BIND_HOST, () => {
   console.log(`Sniffer daemon: http://localhost:${PORT}`)
   // SNIFFER_NO_OPEN=1 opts out (set by `npm run dev` so watch restarts don't spam tabs)
   if (process.stdin.isTTY && process.env.SNIFFER_NO_OPEN !== '1') openBrowser(`http://localhost:${PORT}`)
