@@ -3,6 +3,7 @@ import type { SocketConn, SocketMockRule, SocketRow } from './state'
 import { fmtTime, newRuleId, useDetailWidth, useListKeys } from './util'
 import { JsonView } from './JsonView'
 import { CopyButton, KV, Section } from './HttpView'
+import { decodeEngineIoFrame, frameLabel } from './engineio'
 
 export function SocketView({ events, conns, connUrls, deviceId, onMockAck, onPushPrefill, onClear }: {
   events: SocketRow[]
@@ -17,6 +18,8 @@ export function SocketView({ events, conns, connUrls, deviceId, onMockAck, onPus
   const [sortDesc, setSortDesc] = useState(false)
   const [connFilter, setConnFilter] = useState<string | null>(null)
   const selected = events.find(e => e.id === selectedId) ?? null
+  // ktor-ws frames are raw Engine.IO/Socket.IO text (e.g. `42/chat,[...]`); decode for display
+  const selectedFrame = selected && selected.transport === 'ktor-ws' ? decodeEngineIoFrame(selected.payload) : null
   const liveConns = conns.filter(c => c.deviceId === deviceId && c.status === 'connected')
   const filtered = connFilter ? events.filter(e => e.connectionId === connFilter) : events
   const sorted = sortDesc ? [...filtered].reverse() : filtered
@@ -82,7 +85,9 @@ export function SocketView({ events, conns, connUrls, deviceId, onMockAck, onPus
             </tr>
           </thead>
           <tbody>
-            {sorted.map(e => (
+            {sorted.map(e => {
+              const f = e.transport === 'ktor-ws' ? decodeEngineIoFrame(e.payload) : null
+              return (
               <tr key={e.id} data-selected={e.id === selectedId || undefined}
                 onClick={() => setSelectedId(e.id === selectedId ? null : e.id)}>
                 <td className="mono dim">{fmtTime(e.ts)}</td>
@@ -91,14 +96,15 @@ export function SocketView({ events, conns, connUrls, deviceId, onMockAck, onPus
                 </td>
                 <td className="mono">
                   {e.mocked && <span className="badge mock">MOCK</span>}
-                  {e.event}
+                  {f ? (f.eventName ?? f.socketLabel ?? f.engineLabel) : e.event}
                 </td>
-                <td className="mono dim ellipsis">{e.payload}</td>
+                <td className="mono dim ellipsis">{f ? (f.data ?? frameLabel(f)) : e.payload}</td>
                 <td className="mono dim">
                   {e.ackPayload !== undefined ? (e.ackMocked ? 'mock ✓' : '✓') : ''}
                 </td>
               </tr>
-            ))}
+              )
+            })}
           </tbody>
         </table>
         {sorted.length === 0 && (
@@ -142,14 +148,17 @@ export function SocketView({ events, conns, connUrls, deviceId, onMockAck, onPus
               <button className="ghost" onClick={() => setSelectedId(null)}>✕</button>
             </div>
             <Section title="Event">
-              <KV k="Event" v={selected.event} />
+              <KV k="Event" v={selectedFrame ? (selectedFrame.eventName ?? frameLabel(selectedFrame)) : selected.event} />
+              {selectedFrame && <KV k="Frame" v={frameLabel(selectedFrame)} />}
               <KV k="Direction" v={selected.direction === 'out' ? 'client → server' : 'server → client'} />
               <KV k="Transport" v={selected.transport} />
               <KV k="Connection" v={connUrls[selected.connectionId] || selected.connectionId.slice(0, 8)} />
               {selected.mocked && <KV k="Mocked" v="yes" />}
             </Section>
             <Section title="Payload" action={selected.payload ? <CopyButton text={selected.payload} /> : undefined}>
-              <JsonView text={selected.payload} />
+              {selectedFrame
+                ? (selectedFrame.data ? <JsonView text={selectedFrame.data} /> : <span className="dim">(no payload)</span>)
+                : <JsonView text={selected.payload} />}
             </Section>
             {selected.ackPayload !== undefined && (
               <Section title={selected.ackMocked ? 'Ack (mock)' : 'Ack'}
