@@ -8,7 +8,7 @@ Self-hosted Flipper alternative: monitor and mock an app's HTTP/Socket traffic.
 | Path | What |
 |------|------|
 | `client/` | KMP SDK. Plugin modules: `core` (required) + `okhttp` / `ktor` / `ktor-ws` / `socketio`, each with a `-noop` release twin. Also `sample` (Android, all plugins) and `sample-cmp` (Compose Multiplatform, **ktor-only**, Android + iOS). |
-| `server/daemon` | Node/TS. WebSocket hub, per-device mock store, `adb reverse`, test endpoints. |
+| `server/daemon` | Node/TS. WebSocket hub, per-device mock store, `adb reverse`, test endpoints. Also the MCP server (`sniffer mcp`, `src/mcp.ts`): a thin stdio wrapper over the daemon REST for AI tools; docs in `MCP.md`. |
 | `server/ui` | React/TS. API / Socket / Mocks tabs. |
 | `PROTOCOL.md` | Wire protocol — the source of truth for both sides. |
 
@@ -18,9 +18,12 @@ Self-hosted Flipper alternative: monitor and mock an app's HTTP/Socket traffic.
    **A mock-rule field travels further than the wire — walk every surface before shipping:**
    the daemon store (`normalizeMocks`, starred split, `~/.sniffer/mocks.json`), the device sync
    (does the daemon strip it, like `starred`, or does the SDK see it?), the UI editors, duplicate
-   detection (`httpSig`/`socketSig`) and `orderForSync`, and **export/import** (fields ride along
-   the JSON and re-enter through the PUT path). A field that is correct on the wire can still be
-   wrong on one of these.
+   detection (`httpSig`/`socketSig`) and `orderForSync`, **export/import** (fields ride along
+   the JSON and re-enter through the PUT path), and the **MCP wrapper** (`create_mock`/`update_mock`
+   in `src/mcp.ts` build rule objects by hand, so a new field is silently dropped there, and `MCP.md`
+   goes stale). A field that is correct on the wire can still be wrong on one of these.
+   **The MCP server wraps the daemon REST**, so a REST endpoint or query-param change means checking
+   `src/mcp.ts` + `MCP.md` too, not just the UI.
 2. **Non-trivial logic ships with a test.** Pure logic (mock matching, placeholder expansion, protocol (de)serialization) → `client/core/src/commonTest`. Keep the existing `MockRegistryTest` / `MockPlaceholdersTest` style.
 3. **The SDK must never affect the host app.** Swallow errors, reconnect silently, cap buffers (1000 msgs offline). A monitoring bug must not surface in production traffic.
 4. **Keep `sample` and `sample-cmp` in parity** — same layout, headers, and action labels. The only allowed difference: CMP is ktor-only (no okhttp / socketio).

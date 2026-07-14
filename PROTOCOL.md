@@ -139,5 +139,11 @@ PUT    /api/breakpoints         body: { "deviceId": "...", "rules": [...] }   fu
 POST   /api/breakpoints/resolve body: { "deviceId": "...", "id": "<hit uuid>", "action": "resume"|"abort",
                                          "status"?, "headers"?, "body"? }
 DELETE /api/entries            clear recorded traffic
+GET    /api/entries            read-only traffic snapshot: { "entries": [...] }
+                               query (all optional, applied then last N): ?deviceId=  ?type=http|socket
+                               ?method=GET  ?status=500  ?urlContains=/api/  ?bodyContains=point  ?limit=N
+                               secrets masked by default for AI/CLI readers: sensitive headers
+                               (Authorization, Cookie, …), body JWT/Bearer/PEM values, and body fields
+                               (access_token, password, …); ?redact=0 returns raw. /ui WS is never redacted.
 GET    /api/state              debug snapshot: devices, entry count, mocks
 ```
