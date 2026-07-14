@@ -81,7 +81,7 @@ Supported client integrations:
 | Ktor WebSocket | `io.github.dev-weiqi.sniffer:ktor-ws` |
 
 ```kotlin
-val snifferVersion = "0.1.8"
+val snifferVersion = "0.2.0"
 
 dependencies {
     debugImplementation("io.github.dev-weiqi.sniffer:core:$snifferVersion")
