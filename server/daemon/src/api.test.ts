@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { handleApi } from './api.js'
+import type { Entry } from './entryStore.js'
 import type { MockStore, Mocks } from './mockStore.js'
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -41,6 +42,36 @@ function bodyOf(res: ReturnType<typeof fakeRes>) {
 
 function makeDeps() {
   let mockStore: MockStore = { devices: {}, shared: {} }
+  const entrySnapshot: Entry[] = [
+    {
+      deviceId: 'd1',
+      message: {
+        type: 'http-response',
+        id: 'flow-1',
+        method: 'GET',
+        status: 200,
+        url: '/api/users/1',
+        headers: { Authorization: 'Bearer top-secret', Accept: 'application/json' },
+        body: JSON.stringify({ accessToken: 'token-1', nested: { password: 'pw-1' }, data: 'needle' }),
+      },
+    },
+    {
+      deviceId: 'd2',
+      message: {
+        type: 'socket-event',
+        id: 'socket-1',
+        body: { data: 'objectNeedle' },
+      },
+    },
+    {
+      deviceId: 'd1',
+      message: {
+        type: 'http-response',
+        id: 'flow-2',
+        body: 'plain Bearer secret-value',
+      },
+    },
+  ]
   const sends: Array<{ deviceId: string; text: string }> = []
   const closes: string[] = []
   const broadcasts: unknown[] = []
@@ -72,7 +103,7 @@ function makeDeps() {
       clearAll: () => entryCalls.push('all'),
       clearHttp: () => entryCalls.push('http'),
       clearSocket: () => entryCalls.push('socket'),
-      snapshot: () => [{ id: 'entry' }],
+      snapshot: () => entrySnapshot,
     },
     broadcastToUi: (msg: unknown) => broadcasts.push(msg),
     sendMocksToDevice: (deviceId: string) => sentMocks.push(deviceId),
@@ -164,8 +195,26 @@ assertEqual(ctx.persisted, 1, 'delete device persists when mocks changed')
 res = fakeRes()
 await handleApi(fakeReq('GET'), res as unknown as ServerResponse, new URL('http://localhost/api/state'), ctx.deps)
 assertEqual(bodyOf(res).devices.length, 1, 'state devices')
-assertEqual(bodyOf(res).entryCount, 1, 'state entry count')
+assertEqual(bodyOf(res).entryCount, 3, 'state entry count')
 assertEqual(bodyOf(res).mocksByDevice.d1.http[0].id, 'h-d1', 'state mocks')
+
+res = fakeRes()
+await handleApi(fakeReq('GET'), res as unknown as ServerResponse, new URL('http://localhost/api/entries?deviceId=d1&type=http&method=get&status=200&urlContains=users&bodyContains=needle&limit=1'), ctx.deps)
+assertEqual(bodyOf(res).entries.length, 1, 'entries filtered result')
+assertEqual(bodyOf(res).entries[0].deviceId, 'd1', 'entries filtered device')
+assertEqual(bodyOf(res).entries[0].message.headers.Authorization, '‹redacted›', 'entries redact header')
+assert(String(bodyOf(res).entries[0].message.body).includes('‹redacted›'), 'entries redact body fields')
+assert(!String(bodyOf(res).entries[0].message.body).includes('token-1'), 'entries hide token body')
+
+res = fakeRes()
+await handleApi(fakeReq('GET'), res as unknown as ServerResponse, new URL('http://localhost/api/entries?type=socket&bodyContains=objectNeedle&redact=0'), ctx.deps)
+assertEqual(bodyOf(res).entries.length, 1, 'entries socket object body filter')
+assertEqual(bodyOf(res).entries[0].message.id, 'socket-1', 'entries redact opt out keeps entry')
+
+res = fakeRes()
+await handleApi(fakeReq('GET'), res as unknown as ServerResponse, new URL('http://localhost/api/entries?deviceId=d1&bodyContains=Bearer'), ctx.deps)
+assertEqual(bodyOf(res).entries.length, 1, 'entries non-json secret body filter')
+assertEqual(bodyOf(res).entries[0].message.body, 'plain ‹redacted›', 'entries redact non-json secret')
 
 res = fakeRes()
 await handleApi(fakeReq('GET'), res as unknown as ServerResponse, new URL('http://localhost/api/missing'), ctx.deps)

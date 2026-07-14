@@ -102,5 +102,11 @@ PUT    /api/mocks        body: { "deviceId": "...", "http": [...], "socket": [..
                          device of that app, including ones that connect later
 POST   /api/push-event   body: { "deviceId": "...", "connectionId": null, "event": "...", "payload": "..." }
 DELETE /api/entries      clear recorded traffic
+GET    /api/entries      read-only traffic snapshot: { "entries": [...] }
+                         query (all optional, applied then last N): ?deviceId=  ?type=http|socket
+                         ?method=GET  ?status=500  ?urlContains=/api/  ?bodyContains=point  ?limit=N
+                         secrets masked by default for AI/CLI readers: sensitive headers
+                         (Authorization, Cookie, …), body JWT/Bearer/PEM values, and body fields
+                         (access_token, password, …); ?redact=0 returns raw. /ui WS is never redacted.
 GET    /api/state        debug snapshot: devices, entry count, mocks
 ```

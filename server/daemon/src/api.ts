@@ -1,6 +1,23 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { Entry } from './entryStore.js'
 import { json, readBody } from './http.js'
 import { isStarred, normalizeMocks, type MockStore, type Mocks } from './mockStore.js'
+
+const HTTP_ENTRY_TYPES = new Set(['http-request', 'http-response'])
+const SOCKET_ENTRY_TYPES = new Set(['socket-event', 'socket-ack'])
+const REDACTED = '‹redacted›'
+const REDACT_HEADERS = new Set([
+  'authorization', 'cookie', 'set-cookie', 'proxy-authorization',
+  'x-api-key', 'x-auth-token', 'x-access-token', 'api-key', 'x-csrf-token', 'x-xsrf-token',
+  ...(process.env.SNIFFER_REDACT_HEADERS ?? '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
+])
+const normKey = (k: string) => k.toLowerCase().replace(/[_-]/g, '')
+const REDACT_BODY_FIELDS = new Set([
+  'accesstoken', 'refreshtoken', 'idtoken', 'token', 'password', 'passwd', 'secret',
+  'apikey', 'authorization', 'credential', 'credentials', 'sessiontoken', 'clientsecret', 'privatekey',
+  ...(process.env.SNIFFER_REDACT_BODY_FIELDS ?? '').split(',').map(s => normKey(s.trim())).filter(Boolean),
+])
+const SECRET_VALUE = /eyJ[\w-]+\.[\w-]+\.[\w-]+|\b(?:Bearer|Basic)\s+[\w.~+/=-]+|-----BEGIN[\s\S]+?-----END[^-]*-----/g
 
 interface ApiDevice {
   info: {
@@ -23,7 +40,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, url: 
     clearAll(): void
     clearHttp(): void
     clearSocket(): void
-    snapshot(): unknown[]
+    snapshot(): Entry[]
   }
   broadcastToUi(msg: unknown): void
   sendMocksToDevice(deviceId: string): void
@@ -114,5 +131,76 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, url: 
       entryCount: deps.entryStore.snapshot().length, mocksByDevice: deps.mergedMocksByDevice(),
     })
   }
+  if (req.method === 'GET' && url.pathname === '/api/entries') {
+    return json(res, 200, { entries: queryEntries(deps.entryStore.snapshot(), url.searchParams) })
+  }
   json(res, 404, { error: 'not found' })
+}
+
+function redactBody(body: string): string {
+  let text = body
+  try {
+    const walk = (value: unknown): unknown => {
+      if (Array.isArray(value)) return value.map(walk)
+      if (value && typeof value === 'object') {
+        const out: Record<string, unknown> = {}
+        for (const [key, child] of Object.entries(value)) {
+          out[key] = REDACT_BODY_FIELDS.has(normKey(key)) ? REDACTED : walk(child)
+        }
+        return out
+      }
+      return value
+    }
+    text = JSON.stringify(walk(JSON.parse(body)))
+  } catch {
+    // Non-JSON bodies still get value-shape redaction below.
+  }
+  return text.replace(SECRET_VALUE, REDACTED)
+}
+
+function redactEntry(entry: Entry): Entry {
+  let message = entry.message
+  const headers = message.headers
+  if (headers && typeof headers === 'object') {
+    let changed = false
+    const clean: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(headers as Record<string, unknown>)) {
+      if (REDACT_HEADERS.has(key.toLowerCase())) {
+        clean[key] = REDACTED
+        changed = true
+      } else {
+        clean[key] = value
+      }
+    }
+    if (changed) message = { ...message, headers: clean }
+  }
+  if (typeof message.body === 'string' && message.body) {
+    const body = redactBody(message.body)
+    if (body !== message.body) message = { ...message, body }
+  }
+  return message === entry.message ? entry : { ...entry, message }
+}
+
+function queryEntries(entries: Entry[], params: URLSearchParams): Entry[] {
+  const deviceId = params.get('deviceId')
+  const type = params.get('type')
+  const kind = type === 'http' ? HTTP_ENTRY_TYPES : type === 'socket' ? SOCKET_ENTRY_TYPES : null
+  const method = params.get('method')?.toUpperCase()
+  const rawStatus = params.get('status')
+  const status = rawStatus === null ? null : Number(rawStatus)
+  const urlContains = params.get('urlContains')
+  const bodyContains = params.get('bodyContains')
+  let out = entries
+  if (deviceId) out = out.filter(entry => entry.deviceId === deviceId)
+  if (kind) out = out.filter(entry => kind.has(entry.message.type as string))
+  if (method) out = out.filter(entry => (entry.message.method as string | undefined)?.toUpperCase() === method)
+  if (status !== null && Number.isFinite(status)) out = out.filter(entry => entry.message.status === status)
+  if (urlContains) out = out.filter(entry => String(entry.message.url ?? '').includes(urlContains))
+  if (bodyContains) out = out.filter(entry => {
+    const body = entry.message.body
+    return (typeof body === 'string' ? body : body == null ? '' : JSON.stringify(body)).includes(bodyContains)
+  })
+  const limit = Number(params.get('limit'))
+  if (Number.isFinite(limit) && limit > 0 && out.length > limit) out = out.slice(-limit)
+  return params.get('redact') === '0' ? out : out.map(redactEntry)
 }
