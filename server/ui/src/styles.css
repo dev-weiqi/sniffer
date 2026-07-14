@@ -313,11 +313,12 @@ table.grid tbody tr[data-selected] { background: var(--accent-soft); box-shadow:
 }
 .mocks-column .rule-row {
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
 }
 .mocks-column .rule-row .grow {
-  flex: 1 1 210px;
-  min-width: min(100%, 180px);
+  /* shrink freely so the delay field + icons stay on the row; only wrap when genuinely cramped */
+  flex: 1 1 120px;
+  min-width: min(100%, 90px);
 }
 .mocks-column .rule-row select { max-width: 100%; }
 .http-column .rule-row select { width: 92px; }
@@ -400,7 +401,8 @@ button.add { margin-top: 2px; }
 .header-row > input:first-child { width: 200px; }
 
 .mocks-section-head { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 8px; }
-.mocks-section-head h2 { margin: 0; }
+.mocks-section-head h2 { margin: 0; display: inline-flex; align-items: center; gap: 7px; }
+.section-icon { color: var(--accent); flex-shrink: 0; }
 .rule-tabs { display: flex; align-items: center; gap: 2px; margin-bottom: 8px; }
 .rule-tabs .field { margin-left: 12px; }
 .rule-tabs button { border: none; background: transparent; color: var(--text-dim); padding: 3px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; }

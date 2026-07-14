@@ -102,6 +102,36 @@ function TrashIcon() {
   )
 }
 
+// Small section-title icons (match TrashIcon's 16px stroke style)
+function HttpIcon() {
+  return (
+    <svg className="section-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18" />
+      <path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18" />
+    </svg>
+  )
+}
+function SocketIcon() {
+  return (
+    <svg className="section-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 9h11l-3-3" />
+      <path d="M20 15H9l3 3" />
+    </svg>
+  )
+}
+function PushIcon() {
+  return (
+    <svg className="section-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M22 2 11 13" />
+      <path d="M22 2 15 22 11 13 2 9z" />
+    </svg>
+  )
+}
+
 export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingSocketRule, pushPrefill, onPendingConsumed }: {
   deviceId: string | null
   appId: string | null
@@ -248,7 +278,7 @@ export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingS
       <div className="mocks-columns">
         <section className="mocks-column http-column">
           <div className="mocks-section-head">
-            <h2>HTTP rules</h2>
+            <h2><HttpIcon />HTTP rules</h2>
             {draft.http.length > 0 && (
               <button className="ghost danger"
                 onClick={async () => { if (await confirm('Clear all HTTP mock rules?', 'Clear all')) update({ ...draft, http: [] }) }}>Clear all</button>
@@ -268,7 +298,7 @@ export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingS
           <button className="ghost add" onClick={() => update({
             ...draft,
             http: [...draft.http, {
-              id: newRuleId(), createdAt: Date.now(), enabled: true, method: null, urlPattern: '/api/',
+              id: newRuleId(), createdAt: Date.now(), enabled: true, method: null, urlPattern: '',
               status: 200, headers: { 'content-type': 'application/json' }, body: '{}', delayMs: 0, delayOnly: false,
             }],
           })}>+ Add HTTP rule</button>
@@ -276,7 +306,7 @@ export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingS
 
         <section className="mocks-column socket-column">
           <div className="mocks-section-head">
-            <h2>Socket ack rules</h2>
+            <h2><SocketIcon />Socket ack rules</h2>
             {draft.socket.length > 0 && (
               <button className="ghost danger"
                 onClick={async () => { if (await confirm('Clear all socket mock rules?', 'Clear all')) update({ ...draft, socket: [] }) }}>Clear all</button>
@@ -334,7 +364,7 @@ function exportCategories(source: ExportRulesSource): ExportCategory[] {
     },
     {
       key: 'push',
-      title: 'Push Server → Client event',
+      title: 'Server push events',
       count: source.push.length,
     },
   ]
@@ -538,7 +568,7 @@ function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed, onRecords
   return (
     <>
       <div className="mocks-section-head">
-        <h2>Push Server → Client event</h2>
+        <h2><PushIcon />Server push events</h2>
         {all.length > 0 && (
           <button className="ghost danger"
             onClick={async () => {
@@ -671,7 +701,7 @@ function HttpRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
           <option value="">ANY</option>
           {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map(m => <option key={m}>{m}</option>)}
         </select>
-        <input className="grow mono" placeholder="URL contains… (substring)" value={rule.urlPattern}
+        <input className="grow mono" placeholder="exact path, e.g. /api/users/3" value={rule.urlPattern}
           onChange={e => onChange({ ...rule, urlPattern: e.target.value })} />
         <button className="ghost icon-btn" title="Duplicate rule" onClick={onDuplicate}><CopyIcon /></button>
         <button className="ghost icon-btn danger" title="Delete rule"
@@ -825,10 +855,6 @@ function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
         </select>
         <input className="grow mono" placeholder={rule.transport === 'socketio' ? 'event name' : 'frame contains…'}
           value={rule.event} onChange={e => onChange({ ...rule, event: e.target.value })} />
-        <label className="field">delay ms
-          <NumberField className="mono w-delay" value={rule.delayMs} fallback={0}
-            onCommit={n => onChange({ ...rule, delayMs: n })} />
-        </label>
         <button className="ghost icon-btn" title="Duplicate rule" onClick={onDuplicate}><CopyIcon /></button>
         <button className="ghost icon-btn danger" title="Delete rule"
           onClick={async () => { if (await confirm(rule.starred ? 'Delete this shared rule? It disappears for every device of this app.' : 'Delete this rule?', 'Delete')) onDelete() }}><TrashIcon /></button>
@@ -838,6 +864,11 @@ function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
         <button type="button" data-active>
           {rule.transport === 'socketio' ? 'Ack payload' : 'Reply frame'}
         </button>
+        <span className="spacer" />
+        <label className="field">delay ms
+          <NumberField className="mono w-delay" value={rule.delayMs} fallback={0}
+            onCommit={n => onChange({ ...rule, delayMs: n })} />
+        </label>
       </div>
       <textarea ref={ackRef} className="mono" rows={5}
         placeholder={rule.transport === 'socketio' ? 'ack payload (JSON array = multiple args)' : 'fake reply frame (raw text)'}
