@@ -53,7 +53,7 @@ function orderForSync(mocks: Mocks): Mocks {
 
 function TagIcon() {
   return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24H4a1 1 0 0 0-1 1v5.59c0 .53.21 1.04.59 1.41l9.58 9.59a2 2 0 0 0 2.83 0l4.59-4.59a2 2 0 0 0 0-2.83z" />
       <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />
@@ -71,6 +71,25 @@ function CopyIcon() {
   )
 }
 
+function StarIcon({ filled }: { filled?: boolean }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z" />
+    </svg>
+  )
+}
+
+function StarButton({ starred, onToggle }: { starred?: boolean; onToggle: () => void }) {
+  return (
+    <button className="ghost icon-btn star-btn" data-on={starred || undefined}
+      data-tip={starred ? undefined : 'Share with all devices of this app'}
+      onClick={onToggle}>
+      <StarIcon filled={starred} />
+    </button>
+  )
+}
+
 function TrashIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -82,8 +101,9 @@ function TrashIcon() {
   )
 }
 
-export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRule, pushPrefill, onPendingConsumed }: {
+export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingSocketRule, pushPrefill, onPendingConsumed }: {
   deviceId: string | null
+  appId: string | null
   mocks: Mocks
   conns: SocketConn[]
   pendingRule: HttpMockRule | null
@@ -97,9 +117,19 @@ export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRu
   const [saved, setSaved] = useState(false)
   const [showPlaceholders, setShowPlaceholders] = useState(false)
 
+  // refs so the flush below sees the latest values without re-running the effect
+  const draftRef = useRef(draft); draftRef.current = draft
+  const dirtyRef = useRef(dirty); dirtyRef.current = dirty
+
   useEffect(() => {
     setDraft(mocks)
     setDirty(false)
+    const id = deviceId
+    return () => {
+      // switching device (or leaving the tab) inside the autosave debounce must not drop edits
+      if (id && dirtyRef.current) api.saveMocks(id, orderForSync(draftRef.current)).catch(() => {})
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deviceId])
 
   // sync from server when rules change and there are no unsaved local edits
@@ -257,29 +287,34 @@ export function MocksView({ deviceId, mocks, conns, pendingRule, pendingSocketRu
         </section>
 
         <section className="mocks-column push-column">
-          <PushEventPanel conns={conns} deviceId={deviceId} prefill={pushPrefill} onConsumed={onPendingConsumed} />
+          <PushEventPanel conns={conns} deviceId={deviceId} appId={appId} prefill={pushPrefill} onConsumed={onPendingConsumed} />
         </section>
       </div>
     </div>
   )
 }
 
-type PushRecord = { id: string; target: string; event: string; payload: string; name?: string }
+type PushRecord = { id: string; target: string; event: string; payload: string; name?: string; starred?: boolean }
 
-function PushEventPanel({ conns, deviceId, prefill, onConsumed }: {
+function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed }: {
   conns: SocketConn[]
   deviceId: string
+  appId: string | null
   prefill: PushPrefill | null
   onConsumed: () => void
 }) {
-  // ponytail: push records are a UI convenience, persisted per-device in localStorage;
-  // move into the daemon mock store if cross-browser sharing ever matters
+  // ponytail: push records are a UI convenience, persisted in localStorage; starred ones
+  // live in a per-appId bucket so every device of the app (current and future) sees them
   const confirm = useConfirm()
   const storageKey = `sniffer-push-${deviceId}`
+  const sharedKey = appId ? `sniffer-push-shared-${appId}` : null
   const [records, setRecords] = useState<PushRecord[]>(() => loadRecords(storageKey))
+  const [sharedRecords, setSharedRecords] = useState<PushRecord[]>(() => loadShared(sharedKey))
 
   useEffect(() => { setRecords(loadRecords(storageKey)) }, [storageKey])
   useEffect(() => { localStorage.setItem(storageKey, JSON.stringify(records)) }, [records, storageKey])
+  useEffect(() => { setSharedRecords(loadShared(sharedKey)) }, [sharedKey])
+  useEffect(() => { if (sharedKey) localStorage.setItem(sharedKey, JSON.stringify(sharedRecords)) }, [sharedRecords, sharedKey])
 
   useEffect(() => {
     if (prefill) {
@@ -288,23 +323,52 @@ function PushEventPanel({ conns, deviceId, prefill, onConsumed }: {
     }
   }, [prefill, onConsumed])
 
+  const all = [...sharedRecords, ...records]
+
+  // a starred record moves to the shared bucket (and back); other edits stay in place
+  const changeRecord = (next: PushRecord) => {
+    const wasShared = sharedRecords.some(x => x.id === next.id)
+    const nowShared = Boolean(next.starred && sharedKey)
+    if (nowShared === wasShared) {
+      const set = nowShared ? setSharedRecords : setRecords
+      set(rs => rs.map(x => x.id === next.id ? next : x))
+    } else if (nowShared) {
+      setRecords(rs => rs.filter(x => x.id !== next.id))
+      setSharedRecords(rs => [next, ...rs])
+    } else {
+      setSharedRecords(rs => rs.filter(x => x.id !== next.id))
+      setRecords(rs => [{ ...next, starred: undefined }, ...rs])
+    }
+  }
+  const deleteRecord = (id: string) => {
+    setRecords(rs => rs.filter(x => x.id !== id))
+    setSharedRecords(rs => rs.filter(x => x.id !== id))
+  }
+  const duplicateRecord = (r: PushRecord) => {
+    const set = sharedRecords.some(x => x.id === r.id) ? setSharedRecords : setRecords
+    set(rs => {
+      const i = rs.findIndex(x => x.id === r.id)
+      return [...rs.slice(0, i + 1), { ...r, id: newRuleId() }, ...rs.slice(i + 1)]
+    })
+  }
+
   return (
     <>
       <div className="mocks-section-head">
         <h2>Push Server → Client event</h2>
-        {records.length > 0 && (
+        {all.length > 0 && (
           <button className="ghost danger"
-            onClick={async () => { if (await confirm('Clear all push events?', 'Clear all')) setRecords([]) }}>Clear all</button>
+            onClick={async () => {
+              const note = sharedRecords.length > 0 ? ' Starred ones disappear for every device of this app.' : ''
+              if (await confirm(`Clear all push events?${note}`, 'Clear all')) { setRecords([]); setSharedRecords([]) }
+            }}>Clear all</button>
         )}
       </div>
-      {records.map(r => (
-        <PushRecordCard key={r.id} record={r} conns={conns} deviceId={deviceId}
-          onChange={next => setRecords(rs => rs.map(x => x.id === r.id ? next : x))}
-          onDelete={() => setRecords(rs => rs.filter(x => x.id !== r.id))}
-          onDuplicate={() => setRecords(rs => {
-            const i = rs.findIndex(x => x.id === r.id)
-            return [...rs.slice(0, i + 1), { ...r, id: newRuleId() }, ...rs.slice(i + 1)]
-          })}
+      {all.map(r => (
+        <PushRecordCard key={r.id} record={r} conns={conns} deviceId={deviceId} canStar={sharedKey !== null}
+          onChange={changeRecord}
+          onDelete={() => deleteRecord(r.id)}
+          onDuplicate={() => duplicateRecord(r)}
         />
       ))}
       <button className="ghost add" onClick={() =>
@@ -312,6 +376,11 @@ function PushEventPanel({ conns, deviceId, prefill, onConsumed }: {
       }>+ Add push event</button>
     </>
   )
+}
+
+function loadShared(key: string | null): PushRecord[] {
+  if (!key) return []
+  return loadRecords(key).map(r => ({ ...r, starred: true }))
 }
 
 function loadRecords(key: string): PushRecord[] {
@@ -323,10 +392,11 @@ function loadRecords(key: string): PushRecord[] {
   }
 }
 
-function PushRecordCard({ record, conns, deviceId, onChange, onDelete, onDuplicate }: {
+function PushRecordCard({ record, conns, deviceId, canStar, onChange, onDelete, onDuplicate }: {
   record: PushRecord
   conns: SocketConn[]
   deviceId: string
+  canStar: boolean
   onChange: (r: PushRecord) => void
   onDelete: () => void
   onDuplicate: () => void
@@ -360,6 +430,7 @@ function PushRecordCard({ record, conns, deviceId, onChange, onDelete, onDuplica
         <TagIcon />
         <input className="rule-name" placeholder="name this push… (optional)" value={record.name ?? ''}
           onChange={e => onChange({ ...record, name: e.target.value || undefined })} />
+        {canStar && <StarButton starred={record.starred} onToggle={() => onChange({ ...record, starred: !record.starred || undefined })} />}
       </div>
       <div className="rule-row">
         <select value={record.target} onChange={e => onChange({ ...record, target: e.target.value })}>
@@ -369,7 +440,7 @@ function PushRecordCard({ record, conns, deviceId, onChange, onDelete, onDuplica
           onChange={e => onChange({ ...record, event: e.target.value })} />
         <button className="ghost icon-btn" title="Duplicate" onClick={onDuplicate}><CopyIcon /></button>
         <button className="ghost icon-btn danger" title="Delete"
-          onClick={async () => { if (await confirm('Delete this push event?', 'Delete')) onDelete() }}><TrashIcon /></button>
+          onClick={async () => { if (await confirm(record.starred ? 'Delete this shared push event? It disappears for every device of this app.' : 'Delete this push event?', 'Delete')) onDelete() }}><TrashIcon /></button>
         <button disabled={!record.event || targetMissing} onClick={send}>
           {status === 'sent' ? 'Sent ✓' : status === 'error' ? 'Failed' : 'Send'}
         </button>
@@ -407,6 +478,7 @@ function HttpRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
         <TagIcon />
         <input className="rule-name" placeholder="name this rule… (optional)" value={rule.name ?? ''}
           onChange={e => onChange({ ...rule, name: e.target.value || undefined })} />
+        <StarButton starred={rule.starred} onToggle={() => onChange({ ...rule, starred: !rule.starred || undefined })} />
       </div>
       <div className="rule-row">
         <label className="toggle">
@@ -420,7 +492,7 @@ function HttpRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
           onChange={e => onChange({ ...rule, urlPattern: e.target.value })} />
         <button className="ghost icon-btn" title="Duplicate rule" onClick={onDuplicate}><CopyIcon /></button>
         <button className="ghost icon-btn danger" title="Delete rule"
-          onClick={async () => { if (await confirm('Delete this rule?', 'Delete')) onDelete() }}><TrashIcon /></button>
+          onClick={async () => { if (await confirm(rule.starred ? 'Delete this shared rule? It disappears for every device of this app.' : 'Delete this rule?', 'Delete')) onDelete() }}><TrashIcon /></button>
       </div>
       {dup && <div className="hint dup-warning">⚠ Another enabled rule has the same matcher — the newest one takes effect.</div>}
       <div className="rule-tabs">
@@ -558,6 +630,7 @@ function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
         <TagIcon />
         <input className="rule-name" placeholder="name this rule… (optional)" value={rule.name ?? ''}
           onChange={e => onChange({ ...rule, name: e.target.value || undefined })} />
+        <StarButton starred={rule.starred} onToggle={() => onChange({ ...rule, starred: !rule.starred || undefined })} />
       </div>
       <div className="rule-row">
         <label className="toggle">
@@ -575,7 +648,7 @@ function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
         </label>
         <button className="ghost icon-btn" title="Duplicate rule" onClick={onDuplicate}><CopyIcon /></button>
         <button className="ghost icon-btn danger" title="Delete rule"
-          onClick={async () => { if (await confirm('Delete this rule?', 'Delete')) onDelete() }}><TrashIcon /></button>
+          onClick={async () => { if (await confirm(rule.starred ? 'Delete this shared rule? It disappears for every device of this app.' : 'Delete this rule?', 'Delete')) onDelete() }}><TrashIcon /></button>
       </div>
       {dup && <div className="hint dup-warning">⚠ Another enabled rule has the same matcher — the newest one takes effect.</div>}
       <div className="rule-tabs">

@@ -39,6 +39,8 @@ interface Mocks {
 
 interface MockStore {
   devices: Record<string, Mocks>
+  // starred rules, keyed by appId — delivered to every device of that app, including future connections
+  shared: Record<string, Mocks>
 }
 
 const devices = new Map<string, { info: DeviceInfo; ws: WebSocket; connected: boolean }>()
@@ -64,14 +66,20 @@ function loadMockStore(): MockStore {
       for (const [deviceId, mocks] of Object.entries(m.devices)) {
         scoped[deviceId] = normalizeMocks(mocks)
       }
-      return { devices: scoped }
+      const shared: Record<string, Mocks> = {}
+      if (m.shared && typeof m.shared === 'object') {
+        for (const [appId, mocks] of Object.entries(m.shared)) {
+          shared[appId] = normalizeMocks(mocks)
+        }
+      }
+      return { devices: scoped, shared }
     }
     const legacy = normalizeMocks(m)
     return legacy.http.length || legacy.socket.length
-      ? { devices: { 'legacy-global': legacy } }
-      : { devices: {} }
+      ? { devices: { 'legacy-global': legacy }, shared: {} }
+      : { devices: {}, shared: {} }
   } catch {
-    return { devices: {} }
+    return { devices: {}, shared: {} }
   }
 }
 function persistMocks() {
@@ -115,14 +123,55 @@ function clearEntriesByMessageType(types: Set<unknown>) {
   }
 }
 
+const isStarred = (r: unknown) => (r as { starred?: unknown } | null)?.starred === true
+
+/** starred rules stuck in a device bucket (saved while the device/appId was unknown)
+    move to the app's shared bucket once the device introduces itself */
+function migrateStarredToShared(deviceId: string, appId: string): boolean {
+  const own = mockStore.devices[deviceId]
+  if (!own || !(own.http.some(isStarred) || own.socket.some(isStarred))) return false
+  const shared = mockStore.shared[appId] ?? EMPTY_MOCKS
+  const fresh = (rules: unknown[], into: unknown[]) =>
+    rules.filter(isStarred).filter(r => !into.some(x => (x as { id?: unknown }).id === (r as { id?: unknown }).id))
+  mockStore = {
+    devices: {
+      ...mockStore.devices,
+      [deviceId]: { http: own.http.filter(r => !isStarred(r)), socket: own.socket.filter(r => !isStarred(r)) },
+    },
+    shared: {
+      ...mockStore.shared,
+      [appId]: { http: [...shared.http, ...fresh(own.http, shared.http)], socket: [...shared.socket, ...fresh(own.socket, shared.socket)] },
+    },
+  }
+  persistMocks()
+  return true
+}
+
+/** merged view: shared (starred) rules of the device's app pinned first, then its own rules */
 function mocksFor(deviceId: string): Mocks {
-  return mockStore.devices[deviceId] ?? EMPTY_MOCKS
+  const own = mockStore.devices[deviceId] ?? EMPTY_MOCKS
+  const appId = devices.get(deviceId)?.info.appId
+  const shared = (appId && mockStore.shared[appId]) || EMPTY_MOCKS
+  if (shared.http.length + shared.socket.length === 0) return own
+  return { http: [...shared.http, ...own.http], socket: [...shared.socket, ...own.socket] }
+}
+
+function mergedMocksByDevice(): Record<string, Mocks> {
+  const out: Record<string, Mocks> = {}
+  for (const id of new Set([...Object.keys(mockStore.devices), ...devices.keys()])) out[id] = mocksFor(id)
+  return out
 }
 
 function sendMocksToDevice(deviceId: string) {
   const device = devices.get(deviceId)
   if (!device?.connected) return
-  device.ws.send(JSON.stringify({ type: 'mock-rules', ...mocksFor(deviceId) }))
+  // `starred` is a UI/daemon concern — the SDK wire format stays unchanged
+  const strip = (rules: unknown[]) => rules.map(r => {
+    const { starred: _, ...rest } = r as Record<string, unknown>
+    return rest
+  })
+  const merged = mocksFor(deviceId)
+  device.ws.send(JSON.stringify({ type: 'mock-rules', http: strip(merged.http), socket: strip(merged.socket) }))
 }
 
 function removeDeviceRecord(deviceId: string): { removed: boolean; mocksChanged: boolean } {
@@ -138,7 +187,8 @@ function removeDeviceRecord(deviceId: string): { removed: boolean; mocksChanged:
   let mocksChanged = false
   if (mockStore.devices[deviceId]) {
     const { [deviceId]: _, ...rest } = mockStore.devices
-    mockStore = { devices: rest }
+    // shared rules belong to the app, not the device — they survive device deletion
+    mockStore = { ...mockStore, devices: rest }
     mocksChanged = true
   }
 
@@ -199,10 +249,28 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
     const deviceId = typeof body.deviceId === 'string' ? body.deviceId : ''
     if (!deviceId) return json(res, 400, { error: 'deviceId required' })
     const mocks = normalizeMocks(body)
-    mockStore = { devices: { ...mockStore.devices, [deviceId]: mocks } }
-    persistMocks()
-    sendMocksToDevice(deviceId)
-    broadcastToUi({ type: 'mocks-changed', deviceId, mocks })
+    const appId = devices.get(deviceId)?.info.appId
+    if (appId) {
+      // starred rules live per appId and reach every device of that app; the rest stay per-device
+      const own = { http: mocks.http.filter(r => !isStarred(r)), socket: mocks.socket.filter(r => !isStarred(r)) }
+      const shared = { http: mocks.http.filter(isStarred), socket: mocks.socket.filter(isStarred) }
+      mockStore = {
+        devices: { ...mockStore.devices, [deviceId]: own },
+        shared: { ...mockStore.shared, [appId]: shared },
+      }
+      persistMocks()
+      for (const d of devices.values()) {
+        if (d.info.appId !== appId) continue
+        sendMocksToDevice(d.info.deviceId)
+        broadcastToUi({ type: 'mocks-changed', deviceId: d.info.deviceId, mocks: mocksFor(d.info.deviceId) })
+      }
+    } else {
+      // device gone from the registry: no appId to share under, keep everything per-device
+      mockStore = { ...mockStore, devices: { ...mockStore.devices, [deviceId]: mocks } }
+      persistMocks()
+      sendMocksToDevice(deviceId)
+      broadcastToUi({ type: 'mocks-changed', deviceId, mocks })
+    }
     return json(res, 200, { ok: true })
   }
   if (req.method === 'POST' && url.pathname === '/api/push-event') {
@@ -262,7 +330,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
   if (req.method === 'GET' && url.pathname === '/api/state') {
     return json(res, 200, {
       devices: [...devices.values()].map(d => ({ ...d.info, connected: d.connected })),
-      entryCount: entries.length, mocksByDevice: mockStore.devices,
+      entryCount: entries.length, mocksByDevice: mergedMocksByDevice(),
     })
   }
   json(res, 404, { error: 'not found' })
@@ -367,8 +435,15 @@ deviceWss.on('connection', ws => {
       const { type, ...info } = msg
       devices.set(deviceId, { info: info as unknown as DeviceInfo, ws, connected: true })
       console.log(`[device] ${info.deviceName} (${info.appId}) connected`)
-      sendMocksToDevice(deviceId)
+      const migrated = migrateStarredToShared(deviceId, String(info.appId))
       broadcastToUi({ type: 'device-status', deviceId, connected: true, info })
+      // a fresh device may inherit shared (starred) rules — let the UI see its merged view;
+      // after a migration every device of the app needs the update, not just this one
+      for (const d of devices.values()) {
+        if (d.info.deviceId !== deviceId && (!migrated || d.info.appId !== info.appId)) continue
+        sendMocksToDevice(d.info.deviceId)
+        broadcastToUi({ type: 'mocks-changed', deviceId: d.info.deviceId, mocks: mocksFor(d.info.deviceId) })
+      }
       return
     }
     if (deviceId) pushEntry(deviceId, msg)
@@ -389,7 +464,7 @@ uiWss.on('connection', ws => {
   ws.send(JSON.stringify({
     type: 'init',
     devices: [...devices.values()].map(d => ({ ...d.info, connected: d.connected })),
-    entries, mocksByDevice: mockStore.devices,
+    entries, mocksByDevice: mergedMocksByDevice(),
   }))
   ws.on('close', () => uiClients.delete(ws))
 })

@@ -69,6 +69,9 @@ content (`body: null`). Bodies over **1 MB** are truncated and flagged
 // socket rule, transport "socketio": matched emits are not sent; a fake ack (JSON array of args)
 //   is returned locally. transport "ktor-ws": [event] is a substring matched against outgoing
 //   text frames; matched frames are not sent and [ackPayload] is injected as a fake incoming frame
+// UI-only rule fields the daemon strips before sending to the device: "starred" (rule is shared
+//   with every device of the same appId, stored per appId on the daemon and merged in ahead of
+//   the device's own rules), plus "name" / "createdAt" pass through untouched (SDK ignores them)
 
 // inject a server→client event from the UI; connectionId null = broadcast to all connections
 { "type": "push-event", "connectionId": null, "event": "chat:new",
@@ -93,7 +96,9 @@ WebSocket `/ui`: a snapshot on connect, then a live stream:
 REST (UI → daemon):
 
 ```
-PUT    /api/mocks        body: { "deviceId": "...", "http": [...], "socket": [...] }   full replace for one device
+PUT    /api/mocks        body: { "deviceId": "...", "http": [...], "socket": [...] }   full replace for one device;
+                         rules with "starred": true are stored per appId and delivered to every
+                         device of that app, including ones that connect later
 POST   /api/push-event   body: { "deviceId": "...", "connectionId": null, "event": "...", "payload": "..." }
 DELETE /api/entries      clear recorded traffic
 GET    /api/state        debug snapshot: devices, entry count, mocks

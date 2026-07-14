@@ -461,6 +461,28 @@ button.add { margin-top: 2px; }
 
 .icon-btn { padding: 4px 7px; line-height: 0; display: inline-flex; align-items: center; }
 .icon-btn.danger:hover { border-color: var(--err); color: var(--err); }
+/* floats in the card's top-right corner, detached from the name row */
+.rule-card { position: relative; }
+button.star-btn { position: absolute; top: 5px; right: 5px; }
+button.star-btn[data-on] { color: #eab308; }
+button.star-btn:hover {
+  color: #eab308; border-color: transparent;
+  background: color-mix(in srgb, #eab308 14%, transparent);
+}
+/* instant, theme-matching tooltip */
+button.star-btn:not([data-tip])::after { display: none; }
+button.star-btn::after {
+  content: attr(data-tip);
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 10;
+  width: max-content; max-width: 250px;
+  background: var(--bg-panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 6px 9px; font-size: 12px; font-weight: 400; line-height: 1.45;
+  text-align: left; white-space: normal;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.18);
+  opacity: 0; pointer-events: none;
+}
+button.star-btn:hover::after { opacity: 1; }
 
 /* ---------- confirm modal ---------- */
 
@@ -491,7 +513,7 @@ button.modal-danger:hover {
 
 .rule-name-row {
   display: flex; align-items: center; gap: 7px;
-  margin: 8px 12px 0; color: var(--text-dim);
+  margin: 0 26px 8px 0; color: var(--text-dim);
 }
 .rule-name {
   flex: 1;

@@ -247,6 +247,7 @@ export default function App() {
         )}
         {tab === 'mocks' && (
           <MocksView deviceId={selectedDevice ? deviceId : null}
+            appId={selectedDevice?.appId ?? null}
             mocks={selectedMocks}
             conns={state.socketConns}
             pendingRule={pendingRule}

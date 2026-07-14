@@ -16,6 +16,8 @@ export interface HttpMockRule {
   name?: string
   /** UI-stamped creation time; newest wins among duplicate matchers */
   createdAt?: number
+  /** shared with every device of the same appId; daemon strips it before device sync */
+  starred?: boolean
   enabled: boolean
   method: string | null
   urlPattern: string
@@ -32,6 +34,8 @@ export interface SocketMockRule {
   name?: string
   /** UI-stamped creation time; newest wins among duplicate matchers */
   createdAt?: number
+  /** shared with every device of the same appId; daemon strips it before device sync */
+  starred?: boolean
   enabled: boolean
   transport: 'socketio' | 'ktor-ws'
   event: string
