@@ -438,7 +438,7 @@ deviceWss.on('connection', ws => {
       if (old?.connected && old.ws !== ws) old.ws.close()
       const { type, ...info } = msg
       devices.set(deviceId, { info: info as unknown as DeviceInfo, ws, connected: true })
-      console.log(`[device] ${info.deviceName} (${info.appId}) connected`)
+      console.log(`🟢 [device] ${info.deviceName} (${info.appId}) connected`)
       const migrated = migrateStarredToShared(deviceId, String(info.appId))
       broadcastToUi({ type: 'device-status', deviceId, connected: true, info })
       // a fresh device may inherit shared (starred) rules — let the UI see its merged view;
@@ -457,7 +457,7 @@ deviceWss.on('connection', ws => {
     const d = devices.get(deviceId)
     if (d?.ws === ws) {
       d.connected = false
-      console.log(`[device] ${d.info.deviceName} disconnected`)
+      console.log(`🔴 [device] ${d.info.deviceName} disconnected`)
       broadcastToUi({ type: 'device-status', deviceId, connected: false })
     }
   })
