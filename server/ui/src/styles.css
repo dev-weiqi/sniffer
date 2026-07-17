@@ -295,7 +295,8 @@ table.grid tbody tr[data-selected] { background: var(--accent-soft); box-shadow:
 .mocks-pane h2 { font-size: 14px; margin: 18px 0 8px; }
 .mocks-columns {
   display: grid;
-  grid-template-columns: minmax(500px, 1fr) minmax(500px, 1fr) minmax(320px, .72fr);
+  /* wrap columns instead of overflowing horizontally on narrow windows */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
   gap: 16px;
   align-items: start;
 }
@@ -483,7 +484,7 @@ button.add { margin-top: 2px; }
 .mocks-section-head { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 8px; }
 .mocks-section-head h2 { margin: 0; display: inline-flex; align-items: center; gap: 7px; }
 .section-icon { color: var(--accent); flex-shrink: 0; }
-.rule-tabs { display: flex; align-items: center; gap: 2px; margin-bottom: 8px; }
+.rule-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-bottom: 8px; }
 .rule-tabs .field { margin-left: 12px; }
 .rule-tabs button { border: none; background: transparent; color: var(--text-dim); padding: 3px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; }
 .rule-tabs button[data-active] { background: var(--bg-alt); color: var(--text); font-weight: 600; }
