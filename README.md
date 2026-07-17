@@ -256,3 +256,17 @@ cd client && ./gradlew :core:jvmTest :okhttp:test :sample:compileDebugKotlin
 ```
 
 More detail: [docs/GUIDE.md](docs/GUIDE.md) and [PROTOCOL.md](PROTOCOL.md).
+
+## Troubleshooting
+
+### "Sniffer is damaged and can't be opened" (macOS)
+
+The desktop dmg from GitHub Releases is not notarized by Apple yet, so
+Gatekeeper blocks it after download. Drag `Sniffer.app` into `/Applications`,
+then clear the quarantine flag once:
+
+```bash
+xattr -d com.apple.quarantine /Applications/Sniffer.app
+```
+
+After that it opens normally.
