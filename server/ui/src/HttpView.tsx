@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { HttpMockRule, HttpRow } from './state'
 import { copyText, fmtDuration, fmtSize, fmtTime, statusClass, toCurl, urlParts, useDetailWidth, useListKeys } from './util'
 import { newRuleId } from './util'
@@ -79,27 +79,9 @@ export function HttpView({ rows, onMock, onClear }: {
             </tr>
           </thead>
           <tbody>
-            {sorted.map(r => {
-              const { domain, path } = urlParts(r.url)
-              return (
-                <tr key={r.id} data-selected={r.id === selectedId || undefined}
-                  onClick={() => setSelectedId(r.id === selectedId ? null : r.id)}>
-                  <td className="mono dim">{fmtTime(r.ts)}</td>
-                  <td className="mono method">{r.method}</td>
-                  <td className={`mono ${statusClass(r.status, r.error)}`}>
-                    {r.status === 0 ? 'ERR' : r.status ?? '…'}
-                  </td>
-                  <td className="url-cell">
-                    {r.mocked && <span className="badge mock">MOCK</span>}
-                    {!r.mocked && (r.delayedMs ?? 0) > 0 && <span className="badge delay">DELAY</span>}
-                    <span className="dim">{domain}</span>
-                    <span>{path}</span>
-                  </td>
-                  <td className="mono num dim">{fmtSize(r.respSize)}</td>
-                  <td className="mono num dim">{fmtDuration(r.durationMs)}</td>
-                </tr>
-              )
-            })}
+            {sorted.map(r => (
+              <HttpRowItem key={r.id} row={r} selected={r.id === selectedId} onSelect={setSelectedId} />
+            ))}
           </tbody>
         </table>
         {rows.length === 0 && <div className="empty">No requests yet — traffic appears live once the app starts</div>}
@@ -111,6 +93,33 @@ export function HttpView({ rows, onMock, onClear }: {
     </div>
   )
 }
+
+// memoized: only the rows whose data or selection changed re-render as traffic streams in
+const HttpRowItem = memo(function HttpRowItem({ row: r, selected, onSelect }: {
+  row: HttpRow
+  selected: boolean
+  onSelect: (id: string | null) => void
+}) {
+  const { domain, path } = urlParts(r.url)
+  return (
+    <tr data-selected={selected || undefined}
+      onClick={() => onSelect(selected ? null : r.id)}>
+      <td className="mono dim">{fmtTime(r.ts)}</td>
+      <td className="mono method">{r.method}</td>
+      <td className={`mono ${statusClass(r.status, r.error)}`}>
+        {r.status === 0 ? 'ERR' : r.status ?? '…'}
+      </td>
+      <td className="url-cell">
+        {r.mocked && <span className="badge mock">MOCK</span>}
+        {!r.mocked && (r.delayedMs ?? 0) > 0 && <span className="badge delay">DELAY</span>}
+        <span className="dim">{domain}</span>
+        <span>{path}</span>
+      </td>
+      <td className="mono num dim">{fmtSize(r.respSize)}</td>
+      <td className="mono num dim">{fmtDuration(r.durationMs)}</td>
+    </tr>
+  )
+})
 
 function HttpDetail({ row, onMock, onClose }: {
   row: HttpRow
