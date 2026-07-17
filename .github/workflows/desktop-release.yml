@@ -19,6 +19,8 @@ jobs:
       - run: npm ci --prefix server/daemon
       - run: npm ci --prefix server/ui
       - run: npm ci --prefix desktop/electron
+      # prepare-icon.mjs renders the icns from svg via rsvg-convert
+      - run: brew install librsvg
       - run: npm run package:mac --prefix desktop/electron
       - name: Package x64
         working-directory: desktop/electron
