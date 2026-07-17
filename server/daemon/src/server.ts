@@ -10,10 +10,11 @@ import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline'
 import { WebSocketServer, WebSocket } from 'ws'
 import { Server as SocketIOServer } from 'socket.io'
+import { buildDoctorReport } from './doctor.js'
 
 // Dev build vs the published npm package: the package is always installed under node_modules
 // (bin/sniffer.js → dist/server.js); running from the repo source never is. The UI badges it "Dev".
-const IS_DEV = !import.meta.url.includes('/node_modules/')
+const IS_DEV = process.env.SNIFFER_DESKTOP !== '1' && !import.meta.url.includes('/node_modules/')
 const PORT = Number(process.env.PORT ?? 9091)
 // Which interface the daemon listens on. Loopback-only by default (no network exposure):
 // Android/adb reverse and the iOS simulator reach it via localhost; a real iOS device on
@@ -255,6 +256,9 @@ async function serveStatic(res: ServerResponse, pathname: string) {
 }
 
 async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
+  if (req.method === 'GET' && url.pathname === '/api/doctor') {
+    return json(res, 200, await buildDoctorReport({ port: PORT, bindHost: BIND_HOST }))
+  }
   if (req.method === 'PUT' && url.pathname === '/api/mocks') {
     const body = JSON.parse(await readBody(req))
     const deviceId = typeof body.deviceId === 'string' ? body.deviceId : ''

@@ -104,6 +104,24 @@ export interface State {
   mocksByDevice: Record<string, Mocks>
 }
 
+export type DoctorStatus = 'ok' | 'warn' | 'error' | 'skip'
+
+export interface DoctorCheck {
+  id: string
+  label: string
+  status: DoctorStatus
+  summary: string
+  details?: string[]
+}
+
+export interface DoctorReport {
+  generatedAt: number
+  platform: string
+  port: number
+  bindHost: string
+  checks: DoctorCheck[]
+}
+
 export const emptyMocks: Mocks = { http: [], socket: [] }
 const MAX_MONITOR_ROWS = 500
 
@@ -262,7 +280,19 @@ export function connectStream(dispatch: (a: Action) => void): () => void {
   }
 }
 
+async function getJson<T>(url: string): Promise<T> {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(await readResponseError(res))
+  return await res.json() as T
+}
+
+async function readResponseError(res: Response): Promise<string> {
+  const text = await res.text()
+  return text ? `${res.status} ${text}` : `${res.status} ${res.statusText}`
+}
+
 export const api = {
+  doctor: () => getJson<DoctorReport>('/api/doctor'),
   saveMocks: (deviceId: string, mocks: Mocks) =>
     fetch('/api/mocks', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ deviceId, ...mocks }) }),
   pushEvent: (deviceId: string, connectionId: string | null, event: string, payload: string) =>

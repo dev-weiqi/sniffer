@@ -23,6 +23,7 @@
   "scripts": {
     "dev": "SNIFFER_NO_OPEN=1 tsx watch src/server.ts",
     "start": "tsx src/server.ts",
+    "test:unit": "tsx src/doctor.test.ts",
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json",
     "prepack": "npm run build && npm --prefix ../ui run build && rm -rf ui-dist && cp -R ../ui/dist ui-dist",

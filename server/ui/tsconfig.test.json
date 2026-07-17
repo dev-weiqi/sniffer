@@ -12,6 +12,10 @@
     "src/exportMocks.test.ts",
     "src/engineio.ts",
     "src/engineio.test.ts",
+    "src/desktopPort.ts",
+    "src/desktopPort.test.ts",
+    "src/state.ts",
+    "src/state.test.ts",
     "src/webp.ts",
     "src/webp.test.ts"
   ]

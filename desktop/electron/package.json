@@ -1,0 +1,18 @@
+{
+  "name": "sniffer-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/main.mjs",
+  "scripts": {
+    "prepare:daemon": "npm --prefix ../../server/daemon run build && npm --prefix ../../server/ui run build && node scripts/prepare-daemon.mjs",
+    "prepare:icon": "node scripts/prepare-icon.mjs",
+    "test": "node src/launcher.test.mjs",
+    "start": "electron .",
+    "package:mac": "npm run prepare:daemon && npm run prepare:icon && electron-packager . Sniffer --platform=darwin --arch=arm64 --out=dist --overwrite --icon=build/icon/sniffer.icns --extra-resource=build/daemon"
+  },
+  "devDependencies": {
+    "@electron/packager": "^18.3.6",
+    "electron": "^43.1.1"
+  }
+}

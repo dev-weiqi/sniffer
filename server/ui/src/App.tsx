@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useReducer, useState, useDeferredValue } from 'react'
-import { connectStream, initialState, reducer, api, emptyMocks, type HttpMockRule, type SocketMockRule } from './state'
+import {
+  connectStream,
+  initialState,
+  reducer,
+  api,
+  emptyMocks,
+  type HttpMockRule,
+  type SocketMockRule,
+} from './state'
+import { parsePortInput } from './desktopPort'
 import { useConfirm } from './Confirm'
 import { HttpView } from './HttpView'
 import { SocketView } from './SocketView'
@@ -10,6 +19,15 @@ type PushPrefill = { connectionId: string; event: string; payload: string }
 
 declare const __APP_VERSION__: string
 const APP_VERSION = __APP_VERSION__
+
+declare global {
+  interface Window {
+    snifferDesktop?: {
+      getConfig: () => Promise<{ port?: number }>
+      setPort: (port: number) => Promise<{ port: number; restartRequired: boolean }>
+    }
+  }
+}
 
 
 function MoonIcon() {
@@ -44,6 +62,13 @@ export default function App() {
   const [deletingDevices, setDeletingDevices] = useState(false)
   const [deviceNotice, setDeviceNotice] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const [adbStatus, setAdbStatus] = useState<'ok' | 'warn' | 'loading' | 'unknown'>('unknown')
+  const [adbSummary, setAdbSummary] = useState('Not checked')
+  const initialPort = Number(location.port || 9091)
+  const [desktopPort, setDesktopPort] = useState(Number.isFinite(initialPort) ? initialPort : 9091)
+  const [portDraft, setPortDraft] = useState(String(Number.isFinite(initialPort) ? initialPort : 9091))
+  const [portSaving, setPortSaving] = useState(false)
+  const [portNotice, setPortNotice] = useState<string | null>(null)
 
   useEffect(() => connectStream(dispatch), [])
 
@@ -56,6 +81,41 @@ export default function App() {
 
   // reflect the dev build in the browser tab title too
   useEffect(() => { document.title = state.dev ? 'Sniffer Dev' : 'Sniffer' }, [state.dev])
+
+  useEffect(() => {
+    let cancelled = false
+    window.snifferDesktop?.getConfig()
+      .then(config => {
+        if (cancelled || !config.port) return
+        setDesktopPort(config.port)
+        setPortDraft(String(config.port))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  const refreshAdbStatus = async (isActive: () => boolean = () => true) => {
+    setAdbStatus('loading')
+    setAdbSummary('Checking ADB...')
+    try {
+      const report = await api.doctor()
+      if (!isActive()) return
+      const adb = report.checks.find(check => check.id === 'adb')
+      setAdbStatus(adb?.status === 'ok' ? 'ok' : 'warn')
+      setAdbSummary(adb?.summary ?? 'ADB status unavailable')
+    } catch (e) {
+      if (!isActive()) return
+      setAdbStatus('warn')
+      setAdbSummary(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  useEffect(() => {
+    if (!showSettings) return
+    let cancelled = false
+    void refreshAdbStatus(() => !cancelled)
+    return () => { cancelled = true }
+  }, [showSettings])
 
   // ←/→ cycle the tabs (↑/↓ walk list rows inside a view); form fields keep their arrows
   useEffect(() => {
@@ -162,6 +222,31 @@ export default function App() {
     }
   }
 
+  const savePort = async () => {
+    const port = parsePortInput(portDraft)
+    if (!port) {
+      setPortNotice('Use 1024-65535')
+      return
+    }
+    setPortSaving(true)
+    setPortNotice(null)
+    try {
+      if (!window.snifferDesktop) {
+        setDesktopPort(port)
+        setPortNotice('Desktop app only')
+        return
+      }
+      const result = await window.snifferDesktop.setPort(port)
+      setDesktopPort(result.port)
+      setPortDraft(String(result.port))
+      setPortNotice(result.restartRequired ? 'Restart Sniffer to use this port' : 'Port unchanged')
+    } catch (e) {
+      setPortNotice(e instanceof Error ? e.message : String(e))
+    } finally {
+      setPortSaving(false)
+    }
+  }
+
   return (
     <div className="app">
       <header className="topbar">
@@ -227,10 +312,49 @@ export default function App() {
             <>
               <div className="settings-backdrop" onClick={() => setShowSettings(false)} />
               <div className="settings-popover">
-                <div className="settings-title">Sniffer</div>
-                <div className="settings-row">
-                  <span className="dim">Version</span>
+                <div className="settings-version-row">
+                  <div>
+                    <strong>Version</strong>
+                    <span>Sniffer Desktop</span>
+                  </div>
                   <span className="mono">{APP_VERSION}</span>
+                </div>
+                <div className="settings-port">
+                  <label>
+                    <span>Port</span>
+                    <input
+                      value={portDraft}
+                      inputMode="numeric"
+                      onChange={e => { setPortDraft(e.target.value); setPortNotice(null) }}
+                    />
+                  </label>
+                  <button onClick={savePort} disabled={portSaving || portDraft === String(desktopPort)}>
+                    {portSaving ? 'Saving...' : 'Save'}
+                  </button>
+                  {portNotice && <div className="settings-port-note">{portNotice}</div>}
+                </div>
+                <div className="settings-adb" data-status={adbStatus}>
+                  <div className="settings-adb-head">
+                    <strong>
+                      ADB
+                      <span className="settings-adb-dot"
+                        title={adbStatus === 'ok' ? 'OK' : adbStatus === 'loading' ? 'Checking' : 'Action needed'} />
+                    </strong>
+                    <button className="ghost icon-btn" title="Refresh"
+                      onClick={() => void refreshAdbStatus()} disabled={adbStatus === 'loading'}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="23 4 23 10 17 10" />
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="settings-adb-summary">{adbSummary}</div>
+                  {adbStatus === 'warn' && (
+                    <div className="settings-adb-help">
+                      Install Android platform-tools, or make sure adb is available from Homebrew or Android SDK platform-tools.
+                    </div>
+                  )}
                 </div>
               </div>
             </>
@@ -259,6 +383,7 @@ export default function App() {
             onPendingConsumed={() => { setPendingRule(null); setPendingSocketRule(null); setPendingPush(null) }} />
         )}
       </main>
+
     </div>
   )
 }

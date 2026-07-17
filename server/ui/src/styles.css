@@ -370,6 +370,7 @@ button.add { margin-top: 2px; }
 @media (prefers-reduced-motion: reduce) {
   button:active { transform: none; }
   .chev { transition: none; }
+  .settings-adb[data-status="loading"] .settings-adb-head .icon-btn svg { animation: none; }
 }
 
 .checkbox-field { flex-direction: row; gap: 4px; }
@@ -381,10 +382,89 @@ button.add { margin-top: 2px; }
 .settings-popover {
   position: absolute; top: calc(100% + 6px); right: 0; z-index: 50;
   background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, .18); padding: 12px 14px; width: 180px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .18); width: 280px;
+  overflow: hidden;
 }
-.settings-title { font-weight: 650; margin-bottom: 8px; }
-.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; font-size: 13px; }
+/* flat sections separated by hairline dividers, like .detail-section */
+.settings-version-row,
+.settings-port,
+.settings-adb {
+  padding: 10px 12px;
+}
+.settings-version-row,
+.settings-port {
+  border-bottom: 1px solid var(--border);
+}
+.settings-version-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px; align-items: center;
+}
+.settings-version-row strong,
+.settings-adb strong {
+  display: block;
+  font-size: 13px;
+  line-height: 1.25;
+}
+.settings-version-row span:not(.mono),
+.settings-adb-summary,
+.settings-adb-help {
+  display: block;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.settings-port {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+.settings-port label {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.settings-port label > span {
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.2;
+}
+.settings-port input {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+}
+.settings-port button {
+  height: 30px;
+  padding-inline: 10px;
+}
+.settings-port-note {
+  grid-column: 1 / -1;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.settings-adb-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-bottom: 4px;
+}
+.settings-adb strong { display: flex; align-items: center; gap: 6px; }
+.settings-adb-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--text-dim);
+}
+.settings-adb[data-status="ok"] .settings-adb-dot { background: var(--ok); }
+.settings-adb[data-status="warn"] .settings-adb-dot { background: var(--warn); }
+.settings-adb-head .icon-btn { padding: 3px; }
+.settings-adb[data-status="loading"] .settings-adb-head .icon-btn svg {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.settings-adb-help {
+  margin-top: 6px;
+}
 
 .topbar .icon-btn, .settings > button { display: inline-flex; align-items: center; justify-content: center; }
 .icon-btn svg { display: block; }
