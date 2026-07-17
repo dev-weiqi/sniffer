@@ -1,0 +1,32 @@
+name: Desktop Release
+
+# Push a tag like v0.3.0 to build Sniffer.app and attach a dmg to a GitHub Release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  dmg:
+    runs-on: macos-14 # arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --prefix server/daemon
+      - run: npm ci --prefix server/ui
+      - run: npm ci --prefix desktop/electron
+      - run: npm run package:mac --prefix desktop/electron
+      - name: Build dmg
+        run: |
+          mkdir dmg-root
+          cp -R desktop/electron/dist/Sniffer-darwin-arm64/Sniffer.app dmg-root/
+          ln -s /Applications dmg-root/Applications
+          hdiutil create -volname Sniffer -srcfolder dmg-root -ov -format UDZO "Sniffer-mac-arm64.dmg"
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "Sniffer-mac-arm64.dmg" --title "$GITHUB_REF_NAME" --generate-notes
