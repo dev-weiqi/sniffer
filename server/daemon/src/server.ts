@@ -10,7 +10,11 @@ import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline'
 import { WebSocketServer, WebSocket } from 'ws'
 import { Server as SocketIOServer } from 'socket.io'
-import { buildDoctorReport } from './doctor.js'
+import { buildDoctorReport, buildDoctorPath } from './doctor.js'
+
+// GUI launches (Finder/launchd) get a bare PATH without adb; widen it the same
+// way doctor resolves commands so `adb reverse` works from the desktop app too.
+process.env.PATH = buildDoctorPath()
 
 // Dev build vs the published npm package: the package is always installed under node_modules
 // (bin/sniffer.js → dist/server.js); running from the repo source never is. The UI badges it "Dev".
