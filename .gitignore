@@ -6,6 +6,7 @@
 *.iml
 .vscode/
 .claude/
+.worktrees/
 
 # Local machine config
 local.properties
