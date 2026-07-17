@@ -11,6 +11,9 @@ import { createInterface } from 'node:readline'
 import { WebSocketServer, WebSocket } from 'ws'
 import { Server as SocketIOServer } from 'socket.io'
 
+// Dev build vs the published npm package: the package is always installed under node_modules
+// (bin/sniffer.js → dist/server.js); running from the repo source never is. The UI badges it "Dev".
+const IS_DEV = !import.meta.url.includes('/node_modules/')
 const PORT = Number(process.env.PORT ?? 9091)
 // Which interface the daemon listens on. Loopback-only by default (no network exposure):
 // Android/adb reverse and the iOS simulator reach it via localhost; a real iOS device on
@@ -470,6 +473,8 @@ uiWss.on('connection', ws => {
     devices: [...devices.values()].map(d => ({ ...d.info, connected: d.connected })),
     entries, mocksByDevice: mergedMocksByDevice(),
   }))
+  // sent after init (init resets state): tells the UI whether this is a dev or published build
+  ws.send(JSON.stringify({ type: 'server-info', dev: IS_DEV }))
   ws.on('close', () => uiClients.delete(ws))
 })
 

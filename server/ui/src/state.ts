@@ -93,6 +93,8 @@ export interface SocketRow {
 
 export interface State {
   wsConnected: boolean
+  /** true when the daemon runs from repo source (not the published npm package) */
+  dev: boolean
   devices: Device[]
   http: HttpRow[]
   socketConns: SocketConn[]
@@ -107,6 +109,7 @@ const MAX_MONITOR_ROWS = 500
 
 export const initialState: State = {
   wsConnected: false,
+  dev: false,
   devices: [],
   http: [],
   socketConns: [],
@@ -193,6 +196,8 @@ export function reducer(state: State, action: Action): State {
       for (const e of m.entries ?? []) s = applyDeviceMessage(s, e.deviceId, e.message)
       return s
     }
+    case 'server-info':
+      return { ...state, dev: !!m.dev }
     case 'event':
       return applyDeviceMessage(state, m.deviceId, m.message)
     case 'device-status': {

@@ -54,6 +54,9 @@ export default function App() {
 
   useEffect(() => { localStorage.setItem('sniffer-tab', tab) }, [tab])
 
+  // reflect the dev build in the browser tab title too
+  useEffect(() => { document.title = state.dev ? 'Sniffer Dev' : 'Sniffer' }, [state.dev])
+
   // ←/→ cycle the tabs (↑/↓ walk list rows inside a view); form fields keep their arrows
   useEffect(() => {
     const TABS: Tab[] = ['http', 'socket', 'mocks']
@@ -167,7 +170,7 @@ export default function App() {
             <img src="/sniffer.svg" alt="" />
             <span className="brand-status" data-on={state.wsConnected || undefined} />
           </span>
-          Sniffer
+          {state.dev ? 'Sniffer Dev' : 'Sniffer'}
         </div>
 
         <select className="device-select" value={deviceId}
