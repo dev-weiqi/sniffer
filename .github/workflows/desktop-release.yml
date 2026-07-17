@@ -20,13 +20,21 @@ jobs:
       - run: npm ci --prefix server/ui
       - run: npm ci --prefix desktop/electron
       - run: npm run package:mac --prefix desktop/electron
-      - name: Build dmg
+      - name: Package x64
+        working-directory: desktop/electron
+        # prepare:daemon / prepare:icon already ran in package:mac; the daemon is pure JS so
+        # cross-packaging the Intel build from the arm64 runner just pulls the x64 electron zip
+        run: npx electron-packager . Sniffer --platform=darwin --arch=x64 --out=dist --overwrite --icon=build/icon/sniffer.icns --extra-resource=build/daemon
+      - name: Build dmgs
         run: |
-          mkdir dmg-root
-          cp -R desktop/electron/dist/Sniffer-darwin-arm64/Sniffer.app dmg-root/
-          ln -s /Applications dmg-root/Applications
-          hdiutil create -volname Sniffer -srcfolder dmg-root -ov -format UDZO "Sniffer-mac-arm64.dmg"
+          for pair in arm64:aarch64 x64:x64; do
+            src="${pair%%:*}" name="${pair##*:}"
+            mkdir "dmg-$src"
+            cp -R "desktop/electron/dist/Sniffer-darwin-$src/Sniffer.app" "dmg-$src/"
+            ln -s /Applications "dmg-$src/Applications"
+            hdiutil create -volname Sniffer -srcfolder "dmg-$src" -ov -format UDZO "Sniffer-server-mac-$name.dmg"
+          done
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" "Sniffer-mac-arm64.dmg" --title "$GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" Sniffer-server-mac-*.dmg --title "$GITHUB_REF_NAME" --generate-notes
