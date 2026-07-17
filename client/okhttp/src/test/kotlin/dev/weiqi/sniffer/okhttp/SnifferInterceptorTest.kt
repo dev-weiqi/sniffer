@@ -1,5 +1,9 @@
 package dev.weiqi.sniffer.okhttp
 
+import dev.weiqi.sniffer.core.BreakpointRegistry
+import dev.weiqi.sniffer.core.BreakpointResolution
+import dev.weiqi.sniffer.core.BreakpointRule
+import dev.weiqi.sniffer.core.Breakpoints
 import dev.weiqi.sniffer.core.HttpMockRule
 import dev.weiqi.sniffer.core.MAX_BODY_CHARS
 import dev.weiqi.sniffer.core.MockRegistry
@@ -29,7 +33,90 @@ class SnifferInterceptorTest {
     @AfterTest
     fun cleanup() {
         MockRegistry.update(MockRules())
+        BreakpointRegistry.update(emptyList())
+        Breakpoints.connected = false
+        Breakpoints.resolveAll(BreakpointResolution.Resume())
         Thread.interrupted()
+    }
+
+    private fun armResponseBreakpoint() =
+        BreakpointRegistry.update(listOf(BreakpointRule(id = "b1", urlPattern = "/bp", phase = "response")))
+
+    private fun jsonClient() = clientReturning { request ->
+        response(request, body = """{"real":true}""".toResponseBody("application/json".toMediaType()))
+    }
+
+    /** Runs [action] once a response is paused, on a daemon thread, so runBlocking can be released. */
+    private fun whenPaused(action: () -> Unit) {
+        Thread {
+            val deadline = System.nanoTime() + 5_000_000_000L
+            while (Breakpoints.pendingCount == 0 && System.nanoTime() < deadline) Thread.sleep(1)
+            action()
+        }.apply { isDaemon = true }.start()
+    }
+
+    @Test
+    fun pausableResponse_only_holds_readable_text() {
+        assertTrue(pausableResponse(200, "application/json", 10))
+        assertTrue(pausableResponse(200, "application/json", -1)) // chunked (Transfer-Encoding: chunked)
+        assertFalse(pausableResponse(101, "application/json", 10)) // upgrade
+        assertFalse(pausableResponse(200, "text/event-stream", -1)) // SSE stays excluded
+        assertFalse(pausableResponse(200, "image/png", 10)) // not textual
+        assertFalse(pausableResponse(200, "application/json", (MAX_BODY_CHARS + 1).toLong())) // known-oversized
+    }
+
+    @Test
+    fun response_breakpoint_disconnected_passes_through_unchanged() {
+        armResponseBreakpoint()
+        // connected = false: awaitBreakpoint returns Resume() immediately, so the body is untouched
+        val response = jsonClient().newCall(Request.Builder().url("http://example.test/bp").build()).execute()
+        assertEquals(200, response.code)
+        assertEquals("""{"real":true}""", response.body.string())
+    }
+
+    @Test
+    fun response_breakpoint_resume_with_edits_rewrites_the_response() {
+        armResponseBreakpoint()
+        Breakpoints.connected = true
+        whenPaused {
+            Breakpoints.resolveAll(
+                BreakpointResolution.Resume(status = 503, headers = mapOf("content-type" to "application/json"), body = """{"edited":true}"""),
+            )
+        }
+        val response = jsonClient().newCall(Request.Builder().url("http://example.test/bp").build()).execute()
+        assertEquals(503, response.code)
+        assertEquals("""{"edited":true}""", response.body.string())
+    }
+
+    @Test
+    fun response_breakpoint_abort_fails_the_call() {
+        armResponseBreakpoint()
+        Breakpoints.connected = true
+        whenPaused { Breakpoints.resolveAll(BreakpointResolution.Abort) }
+        assertFailsWith<IOException> {
+            jsonClient().newCall(Request.Builder().url("http://example.test/bp").build()).execute()
+        }
+    }
+
+    @Test
+    fun response_breakpoint_host_cancel_falls_through() {
+        armResponseBreakpoint()
+        Breakpoints.connected = true
+        val caller = Thread.currentThread()
+        whenPaused { caller.interrupt() } // host cancels mid-pause
+        val response = jsonClient().newCall(Request.Builder().url("http://example.test/bp").build()).execute()
+        assertEquals("""{"real":true}""", response.body.string())
+    }
+
+    @Test
+    fun response_breakpoint_ignores_non_pausable_response() {
+        armResponseBreakpoint()
+        Breakpoints.connected = true // would pause, but an image response is not pausable
+        val client = clientReturning { request ->
+            response(request, body = byteArrayOf(1, 2, 3).toResponseBody("image/png".toMediaType()))
+        }
+        val response = client.newCall(Request.Builder().url("http://example.test/bp").build()).execute()
+        assertEquals(listOf<Byte>(1, 2, 3), response.body.bytes().toList())
     }
 
     @Test

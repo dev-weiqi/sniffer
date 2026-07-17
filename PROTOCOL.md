@@ -50,6 +50,13 @@ content (`body: null`). Bodies over **1 MB** are truncated and flagged
 // ack for a previous emit (same id)
 { "type": "socket-ack", "id": "<emit uuid>", "payload": "[...]",
   "mocked": false, "timestamp": 0 }
+
+// a response matched an armed breakpoint and is paused: the host call blocks until the daemon
+// sends a matching breakpoint-resolve. method/url identify the call; status/headers/body are
+// the held (editable) response. Only non-streaming textual responses can be paused.
+{ "type": "breakpoint-hit", "id": "<uuid>", "ruleId": "b1", "phase": "response",
+  "method": "GET", "url": "https://host/path", "status": 200, "headers": {}, "body": "...",
+  "library": "okhttp", "timestamp": 0 }
 ```
 
 ## Daemon → Device
@@ -77,6 +84,20 @@ content (`body: null`). Bodies over **1 MB** are truncated and flagged
 // inject a server→client event from the UI; connectionId null = broadcast to all connections
 { "type": "push-event", "connectionId": null, "event": "chat:new",
   "payload": "{\"msg\":\"hi\"}" }
+
+// full replacement of this device's armed breakpoint rules (like mock-rules)
+{ "type": "breakpoint-rules",
+  "rules": [ { "id": "b1", "enabled": true, "method": "GET",
+               "urlPattern": "/api/orders", "phase": "response" } ] }
+// same matching semantics as a mock (method null = any; urlPattern is an exact path match).
+//   The SDK pauses a matching response (before the app reads it) and blocks until the resolve
+//   below. Golden rule 3: a pause only happens while connected, and the SDK releases every paused
+//   call (as if resumed unchanged) if the daemon connection drops.
+
+// releases a paused response. action "resume" applies any non-null edit to the response then
+//   hands it to the app; "abort" fails the host call.
+{ "type": "breakpoint-resolve", "id": "<hit uuid>", "action": "resume",
+  "status": 200, "headers": {}, "body": "..." }
 ```
 
 ## Daemon ↔ UI
@@ -86,21 +107,30 @@ WebSocket `/ui`: a snapshot on connect, then a live stream:
 ```jsonc
 { "type": "init", "devices": [ { "...": "hello fields", "connected": true } ],
   "entries": [ { "deviceId": "...", "message": { "...": "any device message" } } ],
-  "mocks": { "http": [], "socket": [] } }
+  "mocks": { "http": [], "socket": [] },
+  "breakpointsByDevice": { "<deviceId>": [ { "...": "breakpoint rule" } ] },
+  "pausedHits": [ { "deviceId": "...", "hit": { "...": "breakpoint-hit message" } } ] }
 
 { "type": "event", "deviceId": "...", "message": {} }
 { "type": "device-status", "deviceId": "...", "connected": false }
 { "type": "mocks-changed", "deviceId": "...", "mocks": { "http": [], "socket": [] } }
 { "type": "entries-cleared" }
+{ "type": "breakpoints-changed", "deviceId": "...", "rules": [ { "...": "breakpoint rule" } ] }
+{ "type": "breakpoint-hit", "deviceId": "...", "hit": { "...": "breakpoint-hit message" } }
+{ "type": "breakpoint-resolved", "deviceId": "...", "id": "<hit uuid>" }   // user resumed/aborted
+{ "type": "breakpoints-released", "deviceId": "..." }   // device disconnected: SDK auto-resumed its paused calls
 ```
 
 REST (UI → daemon):
 
 ```
-PUT    /api/mocks        body: { "deviceId": "...", "http": [...], "socket": [...] }   full replace for one device;
-                         rules with "starred": true are stored per appId and delivered to every
-                         device of that app, including ones that connect later
-POST   /api/push-event   body: { "deviceId": "...", "connectionId": null, "event": "...", "payload": "..." }
-DELETE /api/entries      clear recorded traffic
-GET    /api/state        debug snapshot: devices, entry count, mocks
+PUT    /api/mocks              body: { "deviceId": "...", "http": [...], "socket": [...] }   full replace for one device;
+                               rules with "starred": true are stored per appId and delivered to every
+                               device of that app, including ones that connect later
+POST   /api/push-event         body: { "deviceId": "...", "connectionId": null, "event": "...", "payload": "..." }
+PUT    /api/breakpoints         body: { "deviceId": "...", "rules": [...] }   full replace of a device's armed rules
+POST   /api/breakpoints/resolve body: { "deviceId": "...", "id": "<hit uuid>", "action": "resume"|"abort",
+                                         "status"?, "headers"?, "body"? }
+DELETE /api/entries            clear recorded traffic
+GET    /api/state              debug snapshot: devices, entry count, mocks
 ```

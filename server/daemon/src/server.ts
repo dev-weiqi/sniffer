@@ -114,7 +114,37 @@ function sendMocksToDevice(deviceId: string) {
   device.ws.send(JSON.stringify({ type: 'mock-rules', http: merged.http, socket: merged.socket }))
 }
 
+// ---------- breakpoints (in-memory: ephemeral debug state, unlike persisted mocks) ----------
+const breakpointsByDevice: Record<string, unknown[]> = {}
+// paused responses awaiting a resolve, so the UI (incl. after a reload) can see and act on them
+const pendingHits = new Map<string, { deviceId: string; hit: Record<string, unknown> }>()
+
+function sendBreakpointsToDevice(deviceId: string) {
+  const device = devices.get(deviceId)
+  if (!device?.connected) return
+  device.ws.send(JSON.stringify({ type: 'breakpoint-rules', rules: breakpointsByDevice[deviceId] ?? [] }))
+}
+
+/** Drops our view of a device's paused hits (the SDK auto-resumes them on disconnect). */
+function clearDeviceHits(deviceId: string): boolean {
+  let changed = false
+  for (const [id, p] of pendingHits) if (p.deviceId === deviceId) { pendingHits.delete(id); changed = true }
+  return changed
+}
+
+/** Resumes every paused response unchanged (used when traffic is cleared — a clean slate must
+    not leave the app blocked, and should not fail its in-flight requests). */
+function releasePendingHits() {
+  for (const [id, p] of pendingHits) {
+    devices.get(p.deviceId)?.ws.send(JSON.stringify({ type: 'breakpoint-resolve', id, action: 'resume' }))
+    broadcastToUi({ type: 'breakpoint-resolved', deviceId: p.deviceId, id })
+  }
+  pendingHits.clear()
+}
+
 function removeDeviceRecord(deviceId: string): { removed: boolean; mocksChanged: boolean } {
+  delete breakpointsByDevice[deviceId]
+  clearDeviceHits(deviceId)
   const hadDevice = devices.delete(deviceId)
   const hadEntries = entryStore.removeDeviceEntries(deviceId)
 
@@ -150,6 +180,10 @@ const server = createServer(async (req, res) => {
       mocksFor,
       mergedMocksByDevice,
       removeDeviceRecord,
+      setBreakpoints: (deviceId, rules) => { breakpointsByDevice[deviceId] = rules },
+      sendBreakpointsToDevice,
+      resolvePendingHit: (id) => { pendingHits.delete(id) },
+      releasePendingHits,
     })
     if (url.pathname.startsWith('/test/')) return await handleTest(req, res, url, { snifferIcon: SNIFFER_ICON })
     if (req.method === 'GET') return await serveStatic(res, url.pathname, { uiDist: UI_DIST })
@@ -188,6 +222,7 @@ deviceWss.on('connection', ws => {
       devices.set(deviceId, { info: info as unknown as DeviceInfo, ws, connected: true })
       console.log(`🟢 [device] ${info.deviceName} (${info.appId}) connected`)
       const migrated = migrateStarredToShared(deviceId, String(info.appId))
+      sendBreakpointsToDevice(deviceId)
       broadcastToUi({ type: 'device-status', deviceId, connected: true, info })
       // a fresh device may inherit shared (starred) rules — let the UI see its merged view;
       // after a migration every device of the app needs the update, not just this one
@@ -198,6 +233,12 @@ deviceWss.on('connection', ws => {
       }
       return
     }
+    // a paused response is not recorded traffic: relay it to the UI and track it for resolve
+    if (msg.type === 'breakpoint-hit' && deviceId) {
+      pendingHits.set(String(msg.id), { deviceId, hit: msg })
+      broadcastToUi({ type: 'breakpoint-hit', deviceId, hit: msg })
+      return
+    }
     if (deviceId) entryStore.pushEntry(deviceId, msg)
   })
   ws.on('close', () => {
@@ -206,6 +247,8 @@ deviceWss.on('connection', ws => {
     if (d?.ws === ws) {
       d.connected = false
       console.log(`🔴 [device] ${d.info.deviceName} disconnected`)
+      // the SDK releases its own paused calls on disconnect; clear the UI's view of them
+      if (clearDeviceHits(deviceId)) broadcastToUi({ type: 'breakpoints-released', deviceId })
       broadcastToUi({ type: 'device-status', deviceId, connected: false })
     }
   })
@@ -217,6 +260,7 @@ uiWss.on('connection', ws => {
     type: 'init',
     devices: [...devices.values()].map(d => ({ ...d.info, connected: d.connected })),
     entries: entryStore.snapshot(), mocksByDevice: mergedMocksByDevice(),
+    breakpointsByDevice, pausedHits: [...pendingHits.values()],
   }))
   // sent after init (init resets state): tells the UI whether this is a dev or published build
   ws.send(JSON.stringify({ type: 'server-info', dev: IS_DEV }))

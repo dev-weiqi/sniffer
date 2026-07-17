@@ -5,11 +5,15 @@ import {
   reducer,
   api,
   emptyMocks,
+  type BreakpointRule,
   type HttpMockRule,
+  type HttpRow,
+  type PausedHit,
   type SocketMockRule,
 } from './state'
 import { parsePortInput } from './desktopPort'
 import { useConfirm } from './Confirm'
+import { newRuleId } from './util'
 import { HttpView } from './HttpView'
 import { SocketView } from './SocketView'
 import { MocksView } from './MocksView'
@@ -145,6 +149,11 @@ export default function App() {
   const selectedDevice = devices.find(d => d.deviceId === deviceId) ?? null
   // a stale localStorage deviceId must not surface mocks when its device is gone
   const selectedMocks = selectedDevice ? state.mocksByDevice[deviceId] ?? emptyMocks : emptyMocks
+  const deviceBreakpoints = selectedDevice ? state.breakpointsByDevice[deviceId] ?? [] : []
+  const devicePausedHits = useMemo(
+    () => state.pausedHits.filter(h => h.deviceId === deviceId),
+    [state.pausedHits, deviceId],
+  )
   const activeMockCount =
     selectedMocks.http.filter(r => r.enabled).length + selectedMocks.socket.filter(r => r.enabled).length
   const canDeleteDevices = Boolean(selectedDevice)
@@ -191,6 +200,24 @@ export default function App() {
   const pushFromEvent = (prefill: PushPrefill) => {
     setPendingPush(prefill)
     setTab('mocks')
+  }
+
+  // arm a response-phase breakpoint on a request's path (exact-path match, like mocks)
+  const armBreakpoint = (row: HttpRow) => {
+    if (!deviceId) return
+    const path = new URL(row.url, 'http://x').pathname
+    const existing = state.breakpointsByDevice[deviceId] ?? []
+    if (existing.some(r => r.urlPattern === path && r.method === row.method)) return
+    const rule: BreakpointRule = { id: newRuleId(), enabled: true, method: row.method, urlPattern: path, phase: 'response' }
+    api.armBreakpoints(deviceId, [...existing, rule])
+  }
+
+  const resolvePausedHit = (hit: PausedHit, action: 'resume' | 'abort', edits?: { status?: number; headers?: Record<string, string>; body?: string }) => {
+    api.resolveBreakpoint(hit.deviceId, hit.id, action, edits)
+  }
+
+  const disarmAllBreakpoints = () => {
+    if (deviceId) api.armBreakpoints(deviceId, [])
   }
 
   // no "all devices" view — always keep a single concrete device selected
@@ -364,7 +391,10 @@ export default function App() {
 
       <main className="content">
         {tab === 'http' && (
-          <HttpView rows={filteredHttp} onMock={mockFromRequest}
+          <HttpView rows={filteredHttp} pausedHits={devicePausedHits}
+            armedCount={deviceBreakpoints.filter(r => r.enabled).length}
+            onMock={mockFromRequest} onArm={armBreakpoint} onResolve={resolvePausedHit}
+            onDisarmAll={disarmAllBreakpoints}
             onClear={async () => { if (await confirm('Clear API traffic?', 'Clear')) api.clearHttpEntries() }} />
         )}
         {tab === 'socket' && (

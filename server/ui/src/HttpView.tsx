@@ -1,10 +1,13 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import type { HttpMockRule, HttpRow } from './state'
-import { copyText, fmtDuration, fmtSize, fmtTime, statusClass, toCurl, urlParts } from './util'
+import type { HttpMockRule, HttpRow, PausedHit } from './state'
+import { copyText, fmtDuration, fmtSize, fmtTime, prettyJson, statusClass, toCurl, urlParts } from './util'
 import { newRuleId } from './util'
 import { useDetailWidth, useListKeys } from './hooks'
 import { JsonView } from './JsonView'
+import { HeadersEditor } from './MocksView'
 import { base64ToBytes, formatWebpSummary, parseWebpAnimation, type WebpAnimationInfo } from './webp'
+
+export type ResolveEdits = { status?: number; headers?: Record<string, string>; body?: string }
 
 function isSse(row: HttpRow): boolean {
   return (row.respHeaders?.['content-type'] ?? '').includes('event-stream')
@@ -29,16 +32,27 @@ function sniffImageMime(base64: string): string {
   return 'image/png'
 }
 
-export function HttpView({ rows, onMock, onClear }: {
+export function HttpView({ rows, pausedHits, armedCount, onMock, onArm, onResolve, onDisarmAll, onClear }: {
   rows: HttpRow[]
+  pausedHits: PausedHit[]
+  armedCount: number
   onMock: (rule: HttpMockRule, deviceId: string) => void
+  onArm: (row: HttpRow) => void
+  onResolve: (hit: PausedHit, action: 'resume' | 'abort', edits?: ResolveEdits) => void
+  onDisarmAll: () => void
   onClear: () => void
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [sortDesc, setSortDesc] = useState(false)
+  const selectedHit = pausedHits.find(h => h.id === selectedId) ?? null
   const selected = rows.find(r => r.id === selectedId) ?? null
   const listRef = useRef<HTMLDivElement>(null)
   const stickBottom = useRef(true)
+
+  // a paused hit shares its request's id, so mark that row as blocked in place rather than
+  // showing a duplicate. Only hits with no row yet (e.g. after Clear) get pinned to the top.
+  const pausedById = useMemo(() => new Map(pausedHits.map(h => [h.id, h])), [pausedHits])
+  const orphanHits = useMemo(() => pausedHits.filter(h => !rows.some(r => r.id === h.id)), [pausedHits, rows])
 
   // rows arrive in chronological order; reversing yields newest-first
   const sorted = useMemo(() => (sortDesc ? [...rows].reverse() : rows), [rows, sortDesc])
@@ -51,11 +65,37 @@ export function HttpView({ rows, onMock, onClear }: {
     if (el && !sortDesc && stickBottom.current && !selectedId) el.scrollTop = el.scrollHeight
   }, [rows.length, selectedId, sortDesc])
 
+  // debugger-style focus: jump to a freshly paused response, and after resolving the selected one
+  // jump to the next still-paused response so you can work through them.
+  const seenHitIds = useRef<Set<string>>(new Set())
+  const selectedIdRef = useRef(selectedId)
+  selectedIdRef.current = selectedId
+  useEffect(() => {
+    const prev = seenHitIds.current
+    const current = new Set(pausedHits.map(h => h.id))
+    seenHitIds.current = current
+    const cur = selectedIdRef.current
+    const fresh = pausedHits.find(h => !prev.has(h.id))
+    const nextAfterResolve = cur && prev.has(cur) && !current.has(cur) && pausedHits.length > 0 ? pausedHits[0] : null
+    const target = fresh ?? nextAfterResolve
+    if (!target) return
+    setSelectedId(target.id)
+    requestAnimationFrame(() => {
+      listRef.current?.querySelector('tr[data-selected]')?.scrollIntoView({ block: 'nearest' })
+    })
+  }, [pausedHits])
+
   return (
     <div className="split" style={{ ['--detail-w' as string]: `${detailWidth}px` }}>
       <div className="list-pane">
         <div className="panel-toolbar">
           <span className="dim">API traffic</span>
+          {pausedHits.length > 0 && <span className="badge bp-paused bp-blink">⏸ {pausedHits.length} paused</span>}
+          {armedCount > 0 && (
+            <button className="badge bp-armed" title="Disarm all breakpoints" onClick={onDisarmAll}>
+              ⏸ {armedCount} armed ✕
+            </button>
+          )}
           <span className="spacer" />
           <button className="clear-btn" disabled={rows.length === 0} onClick={onClear}>Clear API</button>
         </div>
@@ -81,37 +121,69 @@ export function HttpView({ rows, onMock, onClear }: {
             </tr>
           </thead>
           <tbody>
+            {orphanHits.map(h => (
+              <PausedRowItem key={h.id} hit={h} selected={h.id === selectedId} onSelect={setSelectedId} />
+            ))}
             {sorted.map(r => (
-              <HttpRowItem key={r.id} row={r} selected={r.id === selectedId} onSelect={setSelectedId} />
+              <HttpRowItem key={r.id} row={r} paused={pausedById.has(r.id)}
+                selected={r.id === selectedId} onSelect={setSelectedId} />
             ))}
           </tbody>
         </table>
-        {rows.length === 0 && <div className="empty">No requests yet — traffic appears live once the app starts</div>}
+        {rows.length === 0 && pausedHits.length === 0 && <div className="empty">No requests yet — traffic appears live once the app starts</div>}
         </div>
       </div>
 
-      {selected && <div className="pane-resizer" onMouseDown={startDetailDrag} />}
-      {selected && <HttpDetail row={selected} onMock={onMock} onClose={() => setSelectedId(null)} />}
+      {(selected || selectedHit) && <div className="pane-resizer" onMouseDown={startDetailDrag} />}
+      {selectedHit
+        ? <PausedDetail hit={selectedHit} onResolve={onResolve} onClose={() => setSelectedId(null)} />
+        : selected && <HttpDetail row={selected} onMock={onMock} onArm={onArm} onClose={() => setSelectedId(null)} />}
     </div>
   )
 }
 
+// a response paused on the device, pinned above live traffic until the user resolves it
+const PausedRowItem = memo(function PausedRowItem({ hit, selected, onSelect }: {
+  hit: PausedHit
+  selected: boolean
+  onSelect: (id: string | null) => void
+}) {
+  const { domain, path } = urlParts(hit.url)
+  return (
+    <tr className="bp-row" data-selected={selected || undefined}
+      onClick={() => onSelect(selected ? null : hit.id)}>
+      <td className="mono dim">{fmtTime(hit.timestamp)}</td>
+      <td className="mono method">{hit.method}</td>
+      <td className="mono"><span className="bp-dot" /></td>
+      <td className="url-cell">
+        <span className="badge bp-paused">PAUSED</span>
+        <span className="dim">{domain}</span>
+        <span>{path}</span>
+      </td>
+      <td className="mono num dim" />
+      <td className="mono num dim">…</td>
+    </tr>
+  )
+})
+
 // memoized: only the rows whose data or selection changed re-render as traffic streams in
-const HttpRowItem = memo(function HttpRowItem({ row: r, selected, onSelect }: {
+const HttpRowItem = memo(function HttpRowItem({ row: r, paused, selected, onSelect }: {
   row: HttpRow
+  paused: boolean
   selected: boolean
   onSelect: (id: string | null) => void
 }) {
   const { domain, path } = urlParts(r.url)
   return (
-    <tr data-selected={selected || undefined}
+    <tr className={paused ? 'bp-row' : undefined} data-selected={selected || undefined}
       onClick={() => onSelect(selected ? null : r.id)}>
       <td className="mono dim">{fmtTime(r.ts)}</td>
       <td className="mono method">{r.method}</td>
       <td className={`mono ${statusClass(r.status, r.error)}`}>
-        {r.status === 0 ? 'ERR' : r.status ?? '…'}
+        {paused ? <span className="bp-dot" /> : r.status === 0 ? 'ERR' : r.status ?? '…'}
       </td>
       <td className="url-cell">
+        {paused && <span className="badge bp-paused">PAUSED</span>}
         {r.mocked && <span className="badge mock">MOCK</span>}
         {!r.mocked && (r.delayedMs ?? 0) > 0 && <span className="badge delay">DELAY</span>}
         <span className="dim">{domain}</span>
@@ -123,9 +195,10 @@ const HttpRowItem = memo(function HttpRowItem({ row: r, selected, onSelect }: {
   )
 })
 
-function HttpDetail({ row, onMock, onClose }: {
+function HttpDetail({ row, onMock, onArm, onClose }: {
   row: HttpRow
   onMock: (rule: HttpMockRule, deviceId: string) => void
+  onArm: (row: HttpRow) => void
   onClose: () => void
 }) {
   const { query } = urlParts(row.url)
@@ -153,6 +226,8 @@ function HttpDetail({ row, onMock, onClose }: {
       <div className="detail-toolbar">
         <button onClick={copyCurl}>{copied ? 'Copied ✓' : 'Copy cURL'}</button>
         <button onClick={mockThis}>Mock this request</button>
+        <button title="Pause future responses to this path so you can edit them before the app sees them"
+          onClick={() => onArm(row)}>⏸ Break on this</button>
         <span className="spacer" />
         <button className="ghost" onClick={onClose}>✕</button>
       </div>
@@ -200,6 +275,61 @@ function HttpDetail({ row, onMock, onClose }: {
                 : '(empty or binary)'}
             </div>}
       </Section>
+    </aside>
+  )
+}
+
+function isValidJson(text: string): boolean {
+  if (!text.trim()) return false
+  try { JSON.parse(text); return true } catch { return false }
+}
+
+/** Editor for a paused (response-phase) breakpoint: edit the response then resume, or abort. */
+function PausedDetail({ hit, onResolve, onClose }: {
+  hit: PausedHit
+  onResolve: (hit: PausedHit, action: 'resume' | 'abort', edits?: ResolveEdits) => void
+  onClose: () => void
+}) {
+  const [status, setStatus] = useState(String(hit.status))
+  const [headers, setHeaders] = useState<Record<string, string>>(hit.headers)
+  const [body, setBody] = useState(hit.body ?? '')
+  const bodyIsJson = isValidJson(body)
+  const { domain, path } = urlParts(hit.url)
+
+  return (
+    <aside className="detail-pane">
+      <div className="detail-toolbar">
+        <span className="badge bp-paused bp-blink">⏸ PAUSED</span>
+        <span className="dim">{hit.library}</span>
+        <span className="spacer" />
+        <button className="ghost" onClick={onClose}>✕</button>
+      </div>
+      <div className="bp-editor">
+        <div className="dim bp-hint">
+          Response held — edits apply before the app sees it. The app is blocked until you act.
+        </div>
+        <div className="mono dim bp-target">{hit.method} {domain}{path}</div>
+        <label className="bp-label">Status</label>
+        <input className="bp-method mono" value={status} onChange={e => setStatus(e.target.value)} />
+        <label className="bp-label">Response headers</label>
+        <HeadersEditor value={headers} onChange={setHeaders} />
+        <label className="bp-label bp-label-row">
+          <span>Response body{body.trim() && !bodyIsJson && <span className="bp-invalid"> · invalid JSON</span>}</span>
+          <button className="ghost bp-beautify" disabled={!bodyIsJson}
+            title={bodyIsJson ? 'Format JSON' : 'Body is not valid JSON'}
+            onClick={() => setBody(prettyJson(body))}>Pretty JSON</button>
+        </label>
+        <textarea className="bp-ta mono" rows={10} value={body} onChange={e => setBody(e.target.value)} />
+        <div className="bp-actions">
+          <button className="bp-btn primary"
+            onClick={() => onResolve(hit, 'resume', { status: Number(status) || hit.status, headers, body })}>
+            Resume with edits
+          </button>
+          <button className="bp-btn" onClick={() => onResolve(hit, 'resume')}>Resume unchanged</button>
+          <span className="spacer" />
+          <button className="bp-btn danger" onClick={() => onResolve(hit, 'abort')}>Abort</button>
+        </div>
+      </div>
     </aside>
   )
 }

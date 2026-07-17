@@ -49,6 +49,10 @@ class ProtocolTest {
                 event = "chat", payload = "[]", mocked = false, timestamp = 1,
             ) to "socket-event",
             SocketAckMsg(id = "a1", payload = null, mocked = true, timestamp = 1) to "socket-ack",
+            BreakpointHitMsg(
+                id = "h1", ruleId = "b1", phase = "response", method = "GET", url = "http://x/y",
+                status = 200, headers = mapOf("a" to "b"), body = "{}", library = "okhttp", timestamp = 1,
+            ) to "breakpoint-hit",
         )
 
         for ((message, expectedType) in messages) {
@@ -68,6 +72,20 @@ class ProtocolTest {
             """{"type":"push-event","connectionId":null,"event":"chat:new","payload":"{}"}"""
         ) as PushEvent
         assertEquals("chat:new", push.event)
+
+        val bpRules = SnifferJson.decodeFromString<DaemonMessage>(
+            """{"type":"breakpoint-rules","rules":[{"id":"b1","urlPattern":"/api/x"}]}"""
+        ) as BreakpointRules
+        val bpRule = bpRules.rules.single()
+        assertEquals("response", bpRule.phase) // default
+        assertEquals(true, bpRule.enabled)
+        assertNull(bpRule.method)
+
+        val resolve = SnifferJson.decodeFromString<DaemonMessage>(
+            """{"type":"breakpoint-resolve","id":"h1","action":"resume","status":418,"body":"x"}"""
+        ) as BreakpointResolveMsg
+        assertEquals(418, resolve.status)
+        assertNull(resolve.headers)
     }
 
     @Test
@@ -229,5 +247,33 @@ class ProtocolTest {
             received,
         )
         MockRegistry.update(MockRules())
+    }
+
+    @Test
+    fun daemon_message_handler_updates_breakpoints_and_resolves_hits() {
+        BreakpointRegistry.update(emptyList())
+        val handlers = emptyMap<String, (String, String) -> Unit>()
+
+        handleDaemonMessage(
+            """{"type":"breakpoint-rules","rules":[{"id":"b1","urlPattern":"/bp","phase":"response"}]}""",
+            handlers,
+        )
+        assertEquals("b1", BreakpointRegistry.match("GET", "http://h/bp", "response")?.id)
+
+        Breakpoints.connected = true
+        val resumed = Breakpoints.open("hit1")!!
+        handleDaemonMessage(
+            """{"type":"breakpoint-resolve","id":"hit1","action":"resume","status":201,"body":"x"}""",
+            handlers,
+        )
+        assertTrue(resumed.isCompleted)
+
+        val aborted = Breakpoints.open("hit2")!!
+        handleDaemonMessage("""{"type":"breakpoint-resolve","id":"hit2","action":"abort"}""", handlers)
+        assertTrue(aborted.isCompleted)
+
+        Breakpoints.connected = false
+        Breakpoints.releaseAll()
+        BreakpointRegistry.update(emptyList())
     }
 }

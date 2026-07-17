@@ -30,6 +30,10 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, url: 
   mocksFor(deviceId: string): Mocks
   mergedMocksByDevice(): Record<string, Mocks>
   removeDeviceRecord(deviceId: string): { removed: boolean; mocksChanged: boolean }
+  setBreakpoints(deviceId: string, rules: unknown[]): void
+  sendBreakpointsToDevice(deviceId: string): void
+  resolvePendingHit(id: string): void
+  releasePendingHits(): void
 }) {
   if (req.method === 'PUT' && url.pathname === '/api/mocks') {
     const body = JSON.parse(await readBody(req))
@@ -60,6 +64,31 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, url: 
     }
     return json(res, 200, { ok: true })
   }
+  if (req.method === 'PUT' && url.pathname === '/api/breakpoints') {
+    const body = JSON.parse(await readBody(req))
+    const deviceId = typeof body.deviceId === 'string' ? body.deviceId : ''
+    if (!deviceId) return json(res, 400, { error: 'deviceId required' })
+    const rules = Array.isArray(body.rules) ? body.rules : []
+    deps.setBreakpoints(deviceId, rules)
+    deps.sendBreakpointsToDevice(deviceId)
+    deps.broadcastToUi({ type: 'breakpoints-changed', deviceId, rules })
+    return json(res, 200, { ok: true })
+  }
+  if (req.method === 'POST' && url.pathname === '/api/breakpoints/resolve') {
+    const body = JSON.parse(await readBody(req))
+    const deviceId = typeof body.deviceId === 'string' ? body.deviceId : ''
+    const id = typeof body.id === 'string' ? body.id : ''
+    if (!deviceId || !id) return json(res, 400, { error: 'deviceId and id required' })
+    const device = deps.devices.get(deviceId)
+    if (!device?.connected) return json(res, 404, { error: 'device not connected' })
+    device.ws.send(JSON.stringify({
+      type: 'breakpoint-resolve', id, action: body.action === 'abort' ? 'abort' : 'resume',
+      status: body.status, headers: body.headers, body: body.body,
+    }))
+    deps.resolvePendingHit(id)
+    deps.broadcastToUi({ type: 'breakpoint-resolved', deviceId, id })
+    return json(res, 200, { ok: true })
+  }
   if (req.method === 'POST' && url.pathname === '/api/push-event') {
     const body = JSON.parse(await readBody(req))
     const device = deps.devices.get(body.deviceId)
@@ -72,11 +101,15 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, url: 
   }
   if (req.method === 'DELETE' && url.pathname === '/api/entries') {
     deps.entryStore.clearAll()
+    // paused responses are in-flight HTTP: a clean slate resumes them (unchanged) rather than
+    // leaving the app blocked or silently killing its requests
+    deps.releasePendingHits()
     deps.broadcastToUi({ type: 'entries-cleared' })
     return json(res, 200, { ok: true })
   }
   if (req.method === 'DELETE' && url.pathname === '/api/entries/http') {
     deps.entryStore.clearHttp()
+    deps.releasePendingHits()
     deps.broadcastToUi({ type: 'http-entries-cleared' })
     return json(res, 200, { ok: true })
   }

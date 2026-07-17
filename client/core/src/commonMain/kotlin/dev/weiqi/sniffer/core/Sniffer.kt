@@ -98,6 +98,14 @@ object Sniffer {
         queue.trySend(msg)
     }
 
+    /**
+     * Pauses the calling response until the daemon resolves breakpoint [hit], returning how to
+     * proceed. Never hangs the host when the daemon can't answer: returns Resume() immediately if
+     * we're not connected, and a mid-pause disconnect releases every waiter with Resume().
+     */
+    suspend fun awaitBreakpoint(hit: BreakpointHitMsg): BreakpointResolution =
+        Breakpoints.await(hit.id) { report(hit) }
+
     /** Plugin modules register their capability; it shows up in hello.capabilities. */
     fun registerCapability(name: String) {
         capabilities = capabilities + name
@@ -120,6 +128,7 @@ object Sniffer {
             try {
                 client.webSocket(host = host, port = port, path = "/device") {
                     send(SnifferJson.encodeToString<DeviceMessage>(hello.copy(capabilities = capabilities.toList())))
+                    Breakpoints.connected = true
                     val sender = launch {
                         for (msg in queue) send(SnifferJson.encodeToString<DeviceMessage>(msg))
                     }
@@ -128,6 +137,9 @@ object Sniffer {
                             if (frame is Frame.Text) handleDaemonMessage(frame.readText(), pushHandlers)
                         }
                     } finally {
+                        Breakpoints.connected = false
+                        // release every paused response before tearing the connection down
+                        Breakpoints.releaseAll()
                         sender.cancel()
                     }
                 }
@@ -149,6 +161,12 @@ internal fun handleDaemonMessage(
     val msg = runCatching { SnifferJson.decodeFromString<DaemonMessage>(text) }.getOrNull() ?: return
     when (msg) {
         is MockRules -> MockRegistry.update(msg)
+        is BreakpointRules -> BreakpointRegistry.update(msg.rules)
+        is BreakpointResolveMsg -> Breakpoints.resolve(
+            msg.id,
+            if (msg.action == "abort") BreakpointResolution.Abort
+            else BreakpointResolution.Resume(msg.status, msg.headers, msg.body),
+        )
         is PushEvent -> {
             // expand ${randomId}/${now}/${randomString} just like mock payloads
             val payload = runCatching { expandMockPlaceholders(msg.payload) }.getOrDefault(msg.payload)

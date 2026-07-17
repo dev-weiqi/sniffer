@@ -90,6 +90,24 @@ data class SocketAckMsg(
     val timestamp: Long,
 ) : DeviceMessage
 
+// A response matched an armed breakpoint and is now paused on the device: the real response is
+// held and the host's call blocks until the daemon sends back a matching BreakpointResolve.
+// [method]/[url] identify the call; [status]/[headers]/[body] are the editable response.
+@Serializable
+@SerialName("breakpoint-hit")
+data class BreakpointHitMsg(
+    val id: String,
+    val ruleId: String,
+    val phase: String, // "response"
+    val method: String,
+    val url: String,
+    val status: Int,
+    val headers: Map<String, String>,
+    val body: String?,
+    val library: String,
+    val timestamp: Long,
+) : DeviceMessage
+
 @Serializable
 sealed interface DaemonMessage
 
@@ -108,6 +126,25 @@ data class PushEvent(
     val payload: String,
 ) : DaemonMessage
 
+// Full replacement of this device's armed breakpoint rules (like mock-rules).
+@Serializable
+@SerialName("breakpoint-rules")
+data class BreakpointRules(
+    val rules: List<BreakpointRule> = emptyList(),
+) : DaemonMessage
+
+// Releases a paused response. action "resume" applies any non-null edit to the response then
+// hands it to the app; "abort" fails the host call. Sent by the UI via the daemon.
+@Serializable
+@SerialName("breakpoint-resolve")
+data class BreakpointResolveMsg(
+    val id: String,
+    val action: String, // "resume" | "abort"
+    val status: Int? = null,
+    val headers: Map<String, String>? = null,
+    val body: String? = null,
+) : DaemonMessage
+
 @Serializable
 data class HttpMockRule(
     val id: String,
@@ -120,6 +157,16 @@ data class HttpMockRule(
     val delayMs: Long = 0,
     // delayOnly: let the real request run but inject [delayMs]; do not fake the response
     val delayOnly: Boolean = false,
+)
+
+@Serializable
+data class BreakpointRule(
+    val id: String,
+    val enabled: Boolean = true,
+    val method: String? = null,
+    val urlPattern: String,
+    // "response": pause after the real response arrives, before the app sees it.
+    val phase: String = "response",
 )
 
 @Serializable

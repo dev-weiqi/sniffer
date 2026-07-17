@@ -62,6 +62,8 @@ s = dispatch(initialState, {
   type: 'init',
   devices: [device],
   mocksByDevice: { d1: mocks },
+  breakpointsByDevice: { d1: [{ id: 'b1', enabled: true, method: null, urlPattern: '/users', phase: 'response' }] },
+  pausedHits: [{ deviceId: 'd1', hit: { id: 'hit1', ruleId: 'b1', phase: 'response', method: 'GET', url: 'https://example.com/users', status: 200, headers: {}, body: '{}', library: 'okhttp', timestamp: 5 } }],
   entries: [
     {
       deviceId: 'd1',
@@ -95,6 +97,9 @@ assertEqual(s.http.length, 1, 'init replays HTTP entries')
 assertEqual(s.socketConns.length, 1, 'init replays socket connections')
 assertEqual(s.connUrls.c1, 'ws://demo', 'init stores connection URLs')
 assertEqual(s.mocksByDevice.d1.http[0].id, 'h1', 'init hydrates mocks')
+assertEqual(s.breakpointsByDevice.d1[0].id, 'b1', 'init hydrates breakpoint rules')
+assertEqual(s.pausedHits[0].id, 'hit1', 'init flattens paused hits')
+assertEqual(s.pausedHits[0].deviceId, 'd1', 'init tags paused hit with device')
 
 s = dispatch(s, { type: 'server-info', dev: true })
 assertEqual(s.dev, true, 'server-info updates dev flag')
@@ -208,6 +213,20 @@ assertEqual(s.socketConns.find(c => c.deviceId === 'd1')!.status, 'disconnected'
 s = dispatch(s, { type: 'mocks-changed', deviceId: 'd2', mocks })
 assertEqual(s.mocksByDevice.d2.socket[0].id, 's1', 'mocks-changed updates device bucket')
 
+// breakpoints
+s = dispatch(s, { type: 'breakpoints-changed', deviceId: 'd1', rules: [{ id: 'b2', enabled: true, method: 'GET', urlPattern: '/x', phase: 'response' }] })
+assertEqual(s.breakpointsByDevice.d1[0].id, 'b2', 'breakpoints-changed updates device rules')
+
+s = dispatch(s, { type: 'breakpoint-hit', deviceId: 'd1', hit: { id: 'hitA', ruleId: 'b2', phase: 'response', method: 'GET', url: 'https://example.com/x', status: 200, headers: {}, body: '{}', library: 'okhttp', timestamp: 30 } })
+assertEqual(s.pausedHits.some(h => h.id === 'hitA'), true, 'breakpoint-hit adds a paused hit')
+assertEqual(s.pausedHits.find(h => h.id === 'hitA')!.deviceId, 'd1', 'breakpoint-hit tags device')
+
+const afterResolve = dispatch(s, { type: 'breakpoint-resolved', deviceId: 'd1', id: 'hitA' })
+assertEqual(afterResolve.pausedHits.some(h => h.id === 'hitA'), false, 'breakpoint-resolved drops the hit')
+
+const afterRelease = dispatch(s, { type: 'breakpoints-released', deviceId: 'd1' })
+assertEqual(afterRelease.pausedHits.some(h => h.deviceId === 'd1'), false, 'breakpoints-released drops device hits')
+
 let cleared = dispatch(s, { type: 'http-entries-cleared' })
 assertEqual(cleared.http.length, 0, 'http clear removes HTTP rows only')
 assertEqual(cleared.socketEvents.length, 1, 'http clear keeps socket rows')
@@ -227,6 +246,8 @@ assert(!deleted.http.some(r => r.deviceId === 'd1'), 'device delete removes HTTP
 assert(!deleted.socketConns.some(c => c.deviceId === 'd1'), 'device delete removes sockets')
 assert(!deleted.socketEvents.some(e => e.deviceId === 'd1'), 'device delete removes socket events')
 assert(!deleted.mocksByDevice.d1, 'device delete removes mocks')
+assert(!deleted.breakpointsByDevice.d1, 'device delete removes breakpoint rules')
+assert(!deleted.pausedHits.some(h => h.deviceId === 'd1'), 'device delete removes paused hits')
 
 const unknownServer = dispatch(s, { type: 'unknown-server-message' })
 assert(unknownServer === s, 'unknown server message returns original state')
@@ -264,6 +285,9 @@ await api.clearHttpEntries()
 await api.clearSocketEntries()
 await api.deleteOfflineDevices()
 await api.deleteDevice('d/1')
+await api.armBreakpoints('d1', [{ id: 'b1', enabled: true, method: null, urlPattern: '/x', phase: 'response' }])
+await api.resolveBreakpoint('d1', 'hit1', 'resume', { status: 503, body: 'edited' })
+await api.resolveBreakpoint('d1', 'hit2', 'abort')
 
 assertEqual(fetchCalls[0].input, '/api/mocks', 'saveMocks URL')
 assertEqual(fetchCalls[0].init?.method, 'PUT', 'saveMocks method')
@@ -276,6 +300,11 @@ assertEqual(fetchCalls[4].input, '/api/entries/http', 'clear HTTP URL')
 assertEqual(fetchCalls[5].input, '/api/entries/socket', 'clear socket URL')
 assertEqual(fetchCalls[6].input, '/api/devices/offline', 'delete offline URL')
 assertEqual(fetchCalls[7].input, '/api/devices/d%2F1', 'delete device URL encodes id')
+assertEqual(fetchCalls[8].input, '/api/breakpoints', 'armBreakpoints URL')
+assertEqual(fetchCalls[8].init?.method, 'PUT', 'armBreakpoints method')
+assertEqual(fetchCalls[9].input, '/api/breakpoints/resolve', 'resolveBreakpoint URL')
+assert(String(fetchCalls[9].init?.body).includes('"status":503'), 'resolveBreakpoint carries edits')
+assert(String(fetchCalls[10].init?.body).includes('"action":"abort"'), 'resolveBreakpoint abort action')
 globalThis.fetch = originalFetch
 
 const wsActions: Action[] = []

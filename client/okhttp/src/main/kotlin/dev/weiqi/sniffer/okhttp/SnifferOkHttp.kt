@@ -1,5 +1,8 @@
 package dev.weiqi.sniffer.okhttp
 
+import dev.weiqi.sniffer.core.BreakpointHitMsg
+import dev.weiqi.sniffer.core.BreakpointRegistry
+import dev.weiqi.sniffer.core.BreakpointResolution
 import dev.weiqi.sniffer.core.HttpRequestMsg
 import dev.weiqi.sniffer.core.HttpResponseMsg
 import dev.weiqi.sniffer.core.MAX_BODY_CHARS
@@ -9,6 +12,8 @@ import dev.weiqi.sniffer.core.capBody
 import dev.weiqi.sniffer.core.expandMockPlaceholders
 import dev.weiqi.sniffer.core.newId
 import dev.weiqi.sniffer.core.now
+import kotlinx.coroutines.runBlocking
+import okhttp3.Headers.Companion.toHeaders
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Protocol
@@ -20,6 +25,19 @@ import okio.buffer as okioBuffer
 import java.io.IOException
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
+
+/** Thrown when the user aborts a paused response; surfaces to the app as a failed call. */
+private class BreakpointAbort : Exception()
+
+/** A response can be held/edited only if we can read it whole and rebuild it. Chunked responses
+ *  (contentLength -1, e.g. JSON over Transfer-Encoding: chunked) are allowed — peekBody reads to
+ *  EOF; only SSE (event-stream) is truly unbounded and is excluded above. A known oversized body
+ *  is skipped so we never buffer more than the cap. */
+internal fun pausableResponse(code: Int, contentType: String?, contentLength: Long): Boolean =
+    code != 101 &&
+        contentType?.contains("event-stream", ignoreCase = true) != true &&
+        isTextual(contentType) &&
+        contentLength <= MAX_BODY_CHARS.toLong()
 
 object SnifferOkHttp {
     /**
@@ -44,6 +62,7 @@ internal class SnifferInterceptor(
 ) : Interceptor {
     init {
         Sniffer.registerCapability("http")
+        Sniffer.registerCapability("breakpoint")
     }
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -86,11 +105,69 @@ internal class SnifferInterceptor(
             }
             throw e
         }
-        return try {
-            reportResponse(id, start, response, injectedDelayMs)
+
+        // Breakpoint (response-phase): hold the real response until the user resumes/aborts. Abort
+        // is a deliberate failure and must propagate; only non-streaming textual responses can be
+        // paused (streaming / 101 / images pass through). SDK faults and host-cancel fall through.
+        val bpResponse = try {
+            maybeBreakpoint(id, request, response)
+        } catch (abort: BreakpointAbort) {
+            runCatching {
+                Sniffer.report(
+                    HttpResponseMsg(
+                        id = id, status = 0, headers = emptyMap(), body = null,
+                        bodySize = 0, bodyTruncated = false,
+                        durationMs = (System.nanoTime() - start) / 1_000_000,
+                        mocked = false, error = "Sniffer breakpoint aborted", timestamp = now(),
+                        delayedMs = injectedDelayMs,
+                    )
+                )
+            }
+            runCatching { response.close() }
+            throw IOException("Sniffer breakpoint aborted")
         } catch (t: Throwable) {
-            response
+            if (t is InterruptedException) Thread.currentThread().interrupt()
+            response // any SDK fault or host-cancel: hand back the real response untouched
         }
+
+        return try {
+            reportResponse(id, start, bpResponse, injectedDelayMs)
+        } catch (t: Throwable) {
+            bpResponse
+        }
+    }
+
+    /** Pauses on a matched, non-streaming response; returns the possibly-edited response. */
+    private fun maybeBreakpoint(id: String, request: Request, response: Response): Response {
+        val rule = BreakpointRegistry.match(request.method, request.url.toString(), "response") ?: return response
+        if (!pausableResponse(response.code, response.header("content-type"), response.body.contentLength()))
+            return response
+        // peekBody copies the body without consuming it, so an unchanged resume returns as-is
+        val bodyStr = response.peekBody((MAX_BODY_CHARS + 1).toLong()).string()
+        val hit = BreakpointHitMsg(
+            id = id, ruleId = rule.id, phase = "response",
+            method = request.method, url = request.url.toString(),
+            status = response.code, headers = response.headers.toMap(),
+            body = capBody(bodyStr).body, library = "okhttp", timestamp = now(),
+        )
+        return when (val res = runBlocking { Sniffer.awaitBreakpoint(hit) }) {
+            is BreakpointResolution.Resume -> rebuildResponse(response, bodyStr, res)
+            BreakpointResolution.Abort -> throw BreakpointAbort()
+        }
+    }
+
+    /** Rebuilds [response] with the user's edits; nulls keep the original (unchanged = original). */
+    private fun rebuildResponse(response: Response, originalBody: String, res: BreakpointResolution.Resume): Response {
+        if (res.status == null && res.headers == null && res.body == null) return response
+        val builder = response.newBuilder()
+        res.status?.let { builder.code(it) }
+        res.headers?.let { builder.headers(it.toHeaders()) }
+        val ct = (res.headers ?: response.headers.toMap())
+            .entries.firstOrNull { it.key.equals("content-type", true) }?.value
+        // replacing the body: release the original connection
+        runCatching { response.body.close() }
+        builder.body((res.body ?: originalBody).toResponseBody(ct?.toMediaTypeOrNull()))
+        return builder.build()
     }
 
     private fun reportRequest(id: String, request: Request) {

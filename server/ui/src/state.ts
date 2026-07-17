@@ -48,6 +48,31 @@ export interface Mocks {
   socket: SocketMockRule[]
 }
 
+export interface BreakpointRule {
+  id: string
+  enabled: boolean
+  method: string | null
+  urlPattern: string
+  /** pause after the real response arrives, before the app sees it */
+  phase: 'response'
+}
+
+/** A response paused on the device, waiting for the user to resume (with optional edits) or abort.
+ *  method/url identify the call; status/headers/body are the editable response. */
+export interface PausedHit {
+  id: string
+  deviceId: string
+  ruleId: string
+  phase: string
+  method: string
+  url: string
+  status: number
+  headers: Record<string, string>
+  body: string | null
+  library: string
+  timestamp: number
+}
+
 export interface HttpRow {
   id: string
   deviceId: string
@@ -102,6 +127,8 @@ export interface State {
   connUrls: Record<string, string>
   socketEvents: SocketRow[]
   mocksByDevice: Record<string, Mocks>
+  breakpointsByDevice: Record<string, BreakpointRule[]>
+  pausedHits: PausedHit[]
 }
 
 export type DoctorStatus = 'ok' | 'warn' | 'error' | 'skip'
@@ -134,6 +161,8 @@ export const initialState: State = {
   connUrls: {},
   socketEvents: [],
   mocksByDevice: {},
+  breakpointsByDevice: {},
+  pausedHits: [],
 }
 
 type Msg = Record<string, any>
@@ -210,6 +239,9 @@ export function reducer(state: State, action: Action): State {
         wsConnected: true,
         devices: m.devices ?? [],
         mocksByDevice: m.mocksByDevice ?? {},
+        breakpointsByDevice: m.breakpointsByDevice ?? {},
+        // daemon sends [{ deviceId, hit }]; flatten to the UI's PausedHit shape
+        pausedHits: (m.pausedHits ?? []).map((p: any) => ({ deviceId: p.deviceId, ...p.hit })),
       }
       for (const e of m.entries ?? []) s = applyDeviceMessage(s, e.deviceId, e.message)
       return s
@@ -235,6 +267,17 @@ export function reducer(state: State, action: Action): State {
         ...state,
         mocksByDevice: { ...state.mocksByDevice, [m.deviceId]: m.mocks },
       }
+    case 'breakpoints-changed':
+      return {
+        ...state,
+        breakpointsByDevice: { ...state.breakpointsByDevice, [m.deviceId]: m.rules },
+      }
+    case 'breakpoint-hit':
+      return { ...state, pausedHits: [...state.pausedHits, { deviceId: m.deviceId, ...m.hit }] }
+    case 'breakpoint-resolved':
+      return { ...state, pausedHits: state.pausedHits.filter(h => h.id !== m.id) }
+    case 'breakpoints-released': // device disconnected: the SDK auto-resumed its paused calls
+      return { ...state, pausedHits: state.pausedHits.filter(h => h.deviceId !== m.deviceId) }
     case 'entries-cleared':
       return { ...state, http: [], socketEvents: [], socketConns: [] }
     case 'http-entries-cleared':
@@ -243,6 +286,7 @@ export function reducer(state: State, action: Action): State {
       return { ...state, socketEvents: [] }
     case 'device-deleted': {
       const { [m.deviceId]: _, ...mocksByDevice } = state.mocksByDevice
+      const { [m.deviceId]: __, ...breakpointsByDevice } = state.breakpointsByDevice
       return {
         ...state,
         devices: state.devices.filter(d => d.deviceId !== m.deviceId),
@@ -250,6 +294,8 @@ export function reducer(state: State, action: Action): State {
         socketConns: state.socketConns.filter(c => c.deviceId !== m.deviceId),
         socketEvents: state.socketEvents.filter(e => e.deviceId !== m.deviceId),
         mocksByDevice,
+        breakpointsByDevice,
+        pausedHits: state.pausedHits.filter(h => h.deviceId !== m.deviceId),
       }
     }
     default:
@@ -297,6 +343,10 @@ export const api = {
     fetch('/api/mocks', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ deviceId, ...mocks }) }),
   pushEvent: (deviceId: string, connectionId: string | null, event: string, payload: string) =>
     fetch('/api/push-event', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ deviceId, connectionId, event, payload }) }),
+  armBreakpoints: (deviceId: string, rules: BreakpointRule[]) =>
+    fetch('/api/breakpoints', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ deviceId, rules }) }),
+  resolveBreakpoint: (deviceId: string, id: string, action: 'resume' | 'abort', edits?: { status?: number; headers?: Record<string, string>; body?: string }) =>
+    fetch('/api/breakpoints/resolve', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ deviceId, id, action, ...edits }) }),
   clearEntries: () => fetch('/api/entries', { method: 'DELETE' }),
   clearHttpEntries: () => fetch('/api/entries/http', { method: 'DELETE' }),
   clearSocketEntries: () => fetch('/api/entries/socket', { method: 'DELETE' }),

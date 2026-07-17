@@ -761,7 +761,7 @@ function HttpRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
 }
 
 // Editable response headers (key/value rows). Empty-key rows are dropped from the saved rule.
-function HeadersEditor({ value, onChange }: {
+export function HeadersEditor({ value, onChange }: {
   value: Record<string, string>
   onChange: (h: Record<string, string>) => void
 }) {

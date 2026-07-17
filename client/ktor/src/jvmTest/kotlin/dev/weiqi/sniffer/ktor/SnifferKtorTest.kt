@@ -1,5 +1,9 @@
 package dev.weiqi.sniffer.ktor
 
+import dev.weiqi.sniffer.core.BreakpointRegistry
+import dev.weiqi.sniffer.core.BreakpointResolution
+import dev.weiqi.sniffer.core.BreakpointRule
+import dev.weiqi.sniffer.core.Breakpoints
 import dev.weiqi.sniffer.core.DeviceMessage
 import dev.weiqi.sniffer.core.HttpMockRule
 import dev.weiqi.sniffer.core.HttpRequestMsg
@@ -35,7 +39,9 @@ import io.ktor.utils.io.ByteReadChannel
 import io.ktor.sse.ServerSentEvent
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
@@ -51,7 +57,67 @@ class SnifferKtorTest {
     @AfterTest
     fun cleanup() {
         MockRegistry.update(MockRules())
+        BreakpointRegistry.update(emptyList())
+        Breakpoints.connected = false
+        Breakpoints.resolveAll(BreakpointResolution.Resume())
         setReportSink(null)
+    }
+
+    private fun armResponseBreakpoint() =
+        BreakpointRegistry.update(listOf(BreakpointRule(id = "b1", urlPattern = "/bp", phase = "response")))
+
+    private fun jsonClient() = HttpClient(
+        MockEngine {
+            respond(
+                content = """{"real":true}""",
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+            )
+        },
+    ) { install(SnifferKtor) }
+
+    @Test
+    fun response_breakpoint_disconnected_passes_through_unchanged() = runBlocking {
+        armResponseBreakpoint()
+        val client = jsonClient()
+        // connected = false: awaitBreakpoint returns Resume() immediately, so the body is untouched
+        val response = client.get("http://example.test/bp")
+        assertEquals(200, response.status.value)
+        assertEquals("""{"real":true}""", response.bodyAsText())
+        client.close()
+    }
+
+    @Test
+    fun response_breakpoint_resume_with_edits_rewrites_the_response() = runBlocking {
+        val reports = captureReports()
+        armResponseBreakpoint()
+        Breakpoints.connected = true
+        val client = jsonClient()
+        val resolver = launch {
+            while (Breakpoints.pendingCount == 0) yield()
+            Breakpoints.resolveAll(
+                BreakpointResolution.Resume(status = 503, headers = mapOf("content-type" to "application/json"), body = """{"edited":true}"""),
+            )
+        }
+        val response = client.get("http://example.test/bp")
+        resolver.join()
+        assertEquals(503, response.status.value)
+        assertEquals("""{"edited":true}""", response.bodyAsText())
+        assertEquals(503, reports.filterIsInstance<HttpResponseMsg>().last().status)
+        client.close()
+    }
+
+    @Test
+    fun response_breakpoint_abort_fails_the_call() = runBlocking {
+        armResponseBreakpoint()
+        Breakpoints.connected = true
+        val client = jsonClient()
+        val resolver = launch {
+            while (Breakpoints.pendingCount == 0) yield()
+            Breakpoints.resolveAll(BreakpointResolution.Abort)
+        }
+        assertFailsWith<BreakpointAbort> { client.get("http://example.test/bp") }
+        resolver.join()
+        client.close()
     }
 
     @Test

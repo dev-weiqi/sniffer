@@ -227,10 +227,41 @@ table.grid tbody tr[data-selected] { background: var(--accent-soft); box-shadow:
 /* ---------- detail ---------- */
 
 .detail-toolbar {
-  display: flex; gap: 8px; padding: 10px;
+  display: flex; align-items: center; gap: 8px; padding: 10px;
   border-bottom: 1px solid var(--border);
   position: sticky; top: 0; background: var(--bg-panel); z-index: 1;
 }
+
+/* breakpoints — a blocked (paused) response reads red: dot + light-red row */
+.badge.bp-paused { background: var(--err); color: #fff; }
+.badge.bp-armed { background: transparent; border: 1px solid var(--warn); color: var(--warn); cursor: pointer; font: inherit; font-weight: 700; }
+.badge.bp-armed:hover { background: var(--warn); color: #fff; }
+.bp-blink { animation: bp-pulse 1.2s ease-in-out infinite; }
+@keyframes bp-pulse { 50% { opacity: .45; } }
+tr.bp-row td { background: color-mix(in srgb, var(--err) 10%, var(--bg-panel)); }
+.bp-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--err); animation: bp-pulse 1.2s ease-in-out infinite;
+}
+.bp-editor { display: flex; flex-direction: column; gap: 6px; padding: 12px; overflow-y: auto; }
+.bp-hint { font-size: 12px; line-height: 1.4; }
+.bp-target { font-size: 12px; padding: 2px 0; }
+.bp-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-dim); margin-top: 4px; }
+.bp-label-row { display: flex; align-items: center; justify-content: space-between; }
+.bp-beautify { font-size: 11px; text-transform: none; letter-spacing: 0; padding: 1px 8px; border-radius: 5px; }
+.bp-invalid { color: var(--err); text-transform: none; letter-spacing: 0; font-weight: 600; }
+.bp-method {
+  width: 92px; background: var(--bg-alt); border: 1px solid var(--border); color: var(--text);
+  border-radius: 6px; padding: 5px 8px; font-size: 12.5px;
+}
+.bp-ta {
+  background: var(--bg-alt); border: 1px solid var(--border); color: var(--text);
+  border-radius: 6px; padding: 5px 8px; font-size: 12.5px; resize: vertical;
+}
+.bp-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.bp-btn { border: 1px solid var(--border); background: var(--bg-alt); color: var(--text); border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+.bp-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.bp-btn.danger { color: var(--err); border-color: var(--err); }
 
 .detail-section { border-bottom: 1px solid var(--border); padding-bottom: 6px; }
 .detail-section h3 {

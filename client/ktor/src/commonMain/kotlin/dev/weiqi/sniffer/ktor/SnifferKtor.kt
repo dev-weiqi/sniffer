@@ -1,5 +1,8 @@
 package dev.weiqi.sniffer.ktor
 
+import dev.weiqi.sniffer.core.BreakpointHitMsg
+import dev.weiqi.sniffer.core.BreakpointRegistry
+import dev.weiqi.sniffer.core.BreakpointResolution
 import dev.weiqi.sniffer.core.HttpMockRule
 import dev.weiqi.sniffer.core.HttpRequestMsg
 import dev.weiqi.sniffer.core.HttpResponseMsg
@@ -65,6 +68,40 @@ private class ResponseStatusHolder(var status: Int? = null, var headers: Map<Str
 private val StatusHolderKey = AttributeKey<ResponseStatusHolder>("SnifferStatusHolder")
 private val SnifferSseIdKey = AttributeKey<String>("SnifferSseId")
 
+/** Thrown when the user aborts a paused response; propagates out of the send pipeline. */
+internal class BreakpointAbort : Exception("Sniffer breakpoint aborted")
+
+// Fabricates a call carrying the edited response on the HOST's client, so the app's response
+// pipeline (ContentNegotiation, ...) still applies — same approach as mockHttpCall. Transport
+// headers are dropped: the edited body sets its own length.
+@OptIn(InternalAPI::class)
+private suspend fun breakpointCall(
+    client: HttpClient,
+    request: HttpRequestBuilder,
+    status: Int,
+    headersMap: Map<String, String>,
+    bodyText: String,
+): HttpClientCall {
+    val headers = io.ktor.http.headers {
+        headersMap.forEach { (k, v) ->
+            if (!k.equals("content-length", true) && !k.equals("transfer-encoding", true)) append(k, v)
+        }
+    }
+    val requestData = HttpRequestData(
+        url = request.url.build(), method = request.method,
+        headers = request.headers.build(), body = EmptyContent,
+        executionContext = Job(), attributes = request.attributes,
+    )
+    val responseData = HttpResponseData(
+        statusCode = HttpStatusCode.fromValue(status),
+        requestTime = GMTDate(), headers = headers,
+        version = HttpProtocolVersion.HTTP_1_1,
+        body = ByteReadChannel(bodyText.encodeToByteArray()),
+        callContext = currentCoroutineContext() + Job(),
+    )
+    return HttpClientCall(client, requestData, responseData)
+}
+
 // when a mock rule matches, fabricate the HttpClientCall on the HOST's client -- not an
 // internal one -- so its response pipeline (ContentNegotiation, ...) still applies when the
 // app calls body<T>() on the mocked response.
@@ -129,6 +166,7 @@ private fun isTextual(contentType: ContentType?): Boolean =
 /** HttpClient { install(SnifferKtor) } */
 val SnifferKtor = createClientPlugin("SnifferKtor") {
     Sniffer.registerCapability("http")
+    Sniffer.registerCapability("breakpoint")
 
     // fires when a response is received, before any response validator can convert it to an exception
     onResponse { response ->
@@ -275,6 +313,8 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
 
             var resultCall = call
             var respBodyRaw: String? = null
+            var respStatus = call.response.status.value
+            var respHeaders = call.response.headers.flattenEntries().toMap()
             // a 101 (WebSocket upgrade) body is a live connection -- save() would freeze it, pass through.
             // SSE is a never-ending stream: tee it as the app consumes it, reporting body updates.
             // a malformed Content-Type from the server must not become our exception in the host
@@ -335,19 +375,41 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
                         call.response.contentType()?.charset() ?: Charsets.UTF_8
                     )
                 }
+                // Breakpoint (response-phase): hold the saved textual response before the app reads
+                // it. Abort propagates (see the catch below); a resume with edits fabricates a new
+                // call carrying the edited status/headers/body.
+                val bpRule = if (respBodyRaw != null)
+                    BreakpointRegistry.match(request.method.value, request.url.buildString(), "response") else null
+                if (bpRule != null) {
+                    val hit = BreakpointHitMsg(
+                        id = id, ruleId = bpRule.id, phase = "response",
+                        method = request.method.value, url = request.url.buildString(),
+                        status = respStatus, headers = respHeaders,
+                        body = capBody(respBodyRaw).body, library = "ktor", timestamp = now(),
+                    )
+                    when (val res = Sniffer.awaitBreakpoint(hit)) {
+                        is BreakpointResolution.Resume ->
+                            if (res.status != null || res.headers != null || res.body != null) {
+                                respStatus = res.status ?: respStatus
+                                respHeaders = res.headers ?: respHeaders
+                                respBodyRaw = res.body ?: respBodyRaw
+                                resultCall = breakpointCall(client, request, respStatus, respHeaders, respBodyRaw ?: "")
+                            }
+                        BreakpointResolution.Abort -> throw BreakpointAbort()
+                    }
+                }
             }
             val respBody = capBody(respBodyRaw)
             Sniffer.report(
                 HttpResponseMsg(
-                    id = id, status = call.response.status.value,
-                    headers = call.response.headers.flattenEntries().toMap(),
+                    id = id, status = respStatus, headers = respHeaders,
                     body = respBody.body, bodySize = respBody.size, bodyTruncated = respBody.truncated,
                     durationMs = durationMs, mocked = false, error = null, timestamp = now(), delayedMs = injectedDelayMs,
                 )
             )
             resultCall
         } catch (t: Throwable) {
-            if (t is CancellationException) throw t
+            if (t is CancellationException || t is BreakpointAbort) throw t
             call
         }
     }

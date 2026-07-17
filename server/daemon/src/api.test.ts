@@ -48,6 +48,10 @@ function makeDeps() {
   let persisted = 0
   const removed: Array<{ deviceId: string; result: { removed: boolean; mocksChanged: boolean } }> = []
   const entryCalls: string[] = []
+  const breakpointSets: Array<{ deviceId: string; rules: unknown[] }> = []
+  const breakpointSends: string[] = []
+  const resolvedHits: string[] = []
+  let releasedHits = 0
   const devices = new Map<string, {
     info: { deviceId: string; appId: string; deviceName: string }
     connected: boolean
@@ -83,8 +87,12 @@ function makeDeps() {
       removed.push({ deviceId, result })
       return result
     },
+    setBreakpoints: (deviceId: string, rules: unknown[]) => breakpointSets.push({ deviceId, rules }),
+    sendBreakpointsToDevice: (deviceId: string) => breakpointSends.push(deviceId),
+    resolvePendingHit: (id: string) => resolvedHits.push(id),
+    releasePendingHits: () => { releasedHits += 1 },
   }
-  return { deps, addDevice, get mockStore() { return mockStore }, sends, closes, broadcasts, sentMocks, get persisted() { return persisted }, removed, entryCalls }
+  return { deps, addDevice, get mockStore() { return mockStore }, sends, closes, broadcasts, sentMocks, get persisted() { return persisted }, removed, entryCalls, breakpointSets, breakpointSends, resolvedHits, get releasedHits() { return releasedHits } }
 }
 
 let ctx = makeDeps()
@@ -128,16 +136,67 @@ await handleApi(fakeReq('POST', { deviceId: 'd1', event: 'notify', payload: '{}'
 assertEqual(res.status, 200, 'push event connected status')
 assertEqual(JSON.parse(ctx.sends[0].text).connectionId, null, 'push event defaults null connection')
 
-for (const [path, call, event] of [
-  ['/api/entries', 'all', 'entries-cleared'],
-  ['/api/entries/http', 'http', 'http-entries-cleared'],
-  ['/api/entries/socket', 'socket', 'socket-entries-cleared'],
+// breakpoints: arm rules
+ctx = makeDeps()
+res = fakeRes()
+await handleApi(fakeReq('PUT', { rules: [] }), res as unknown as ServerResponse, new URL('http://localhost/api/breakpoints'), ctx.deps)
+assertEqual(res.status, 400, 'PUT breakpoints requires deviceId')
+
+ctx = makeDeps()
+res = fakeRes()
+await handleApi(fakeReq('PUT', { deviceId: 'd1', rules: [{ id: 'b1' }] }), res as unknown as ServerResponse, new URL('http://localhost/api/breakpoints'), ctx.deps)
+assertEqual(res.status, 200, 'PUT breakpoints status')
+assertEqual(ctx.breakpointSets[0].deviceId, 'd1', 'PUT breakpoints stores rules for device')
+assertEqual(ctx.breakpointSends[0], 'd1', 'PUT breakpoints syncs to device')
+assertEqual((ctx.broadcasts[0] as { type: string }).type, 'breakpoints-changed', 'PUT breakpoints broadcasts')
+
+// breakpoints: non-array rules default to empty
+ctx = makeDeps()
+res = fakeRes()
+await handleApi(fakeReq('PUT', { deviceId: 'd1' }), res as unknown as ServerResponse, new URL('http://localhost/api/breakpoints'), ctx.deps)
+assertEqual(ctx.breakpointSets[0].rules.length, 0, 'PUT breakpoints missing rules is empty')
+
+// breakpoints: resolve requires deviceId + id
+ctx = makeDeps()
+res = fakeRes()
+await handleApi(fakeReq('POST', { deviceId: 'd1' }), res as unknown as ServerResponse, new URL('http://localhost/api/breakpoints/resolve'), ctx.deps)
+assertEqual(res.status, 400, 'resolve requires id')
+
+// breakpoints: resolve on disconnected device
+ctx = makeDeps()
+res = fakeRes()
+await handleApi(fakeReq('POST', { deviceId: 'gone', id: 'h1' }), res as unknown as ServerResponse, new URL('http://localhost/api/breakpoints/resolve'), ctx.deps)
+assertEqual(res.status, 404, 'resolve disconnected device')
+
+// breakpoints: resolve resume with edits
+ctx = makeDeps()
+ctx.addDevice('d1', 'app', true)
+res = fakeRes()
+await handleApi(fakeReq('POST', { deviceId: 'd1', id: 'h1', action: 'resume', status: 503, body: 'x' }), res as unknown as ServerResponse, new URL('http://localhost/api/breakpoints/resolve'), ctx.deps)
+assertEqual(res.status, 200, 'resolve resume status')
+assertEqual(JSON.parse(ctx.sends[0].text).action, 'resume', 'resolve sends resume to device')
+assertEqual(JSON.parse(ctx.sends[0].text).status, 503, 'resolve carries edited status')
+assertEqual(ctx.resolvedHits[0], 'h1', 'resolve drops the pending hit')
+assertEqual((ctx.broadcasts[0] as { type: string }).type, 'breakpoint-resolved', 'resolve broadcasts')
+
+// breakpoints: resolve abort maps action
+ctx = makeDeps()
+ctx.addDevice('d1', 'app', true)
+res = fakeRes()
+await handleApi(fakeReq('POST', { deviceId: 'd1', id: 'h1', action: 'abort' }), res as unknown as ServerResponse, new URL('http://localhost/api/breakpoints/resolve'), ctx.deps)
+assertEqual(JSON.parse(ctx.sends[0].text).action, 'abort', 'resolve maps abort action')
+
+for (const [path, call, event, releases] of [
+  ['/api/entries', 'all', 'entries-cleared', 1],
+  ['/api/entries/http', 'http', 'http-entries-cleared', 1],
+  ['/api/entries/socket', 'socket', 'socket-entries-cleared', 0],
 ] as const) {
   ctx = makeDeps()
   res = fakeRes()
   await handleApi(fakeReq('DELETE'), res as unknown as ServerResponse, new URL(`http://localhost${path}`), ctx.deps)
   assertEqual(ctx.entryCalls[0], call, `${path} entry call`)
   assertEqual((ctx.broadcasts[0] as { type: string }).type, event, `${path} broadcast`)
+  assertEqual(ctx.releasedHits, releases, `${path} releases paused hits`)
 }
 
 ctx = makeDeps()
