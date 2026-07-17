@@ -27,6 +27,10 @@ const UI_DIST = [
   fileURLToPath(new URL('../../ui/dist', import.meta.url)),
   fileURLToPath(new URL('../ui-dist', import.meta.url)),
 ].find(existsSync) ?? fileURLToPath(new URL('../../ui/dist', import.meta.url))
+const SNIFFER_ICON = [
+  fileURLToPath(new URL('../../ui/public/sniffer.svg', import.meta.url)),
+  join(UI_DIST, 'sniffer.svg'),
+].find(existsSync)
 
 // ---------- state (in-memory, cleared on restart) ----------
 
@@ -366,7 +370,16 @@ async function handleTest(req: IncomingMessage, res: ServerResponse, url: URL) {
   }
   if (url.pathname === '/test/error') return json(res, 500, { error: 'boom' })
   if (url.pathname === '/test/image') {
-    const png = makePng(180, 120, 74, 108, 247) // solid indigo block
+    if (SNIFFER_ICON) {
+      const icon = readFileSync(SNIFFER_ICON)
+      res.writeHead(200, {
+        'content-type': 'image/svg+xml; charset=utf-8',
+        'content-length': icon.length,
+      })
+      res.end(icon)
+      return
+    }
+    const png = makePng(180, 120, 74, 108, 247) // fallback if the packaged icon is missing
     res.writeHead(200, { 'content-type': 'image/png', 'content-length': png.length })
     res.end(png)
     return
@@ -384,7 +397,7 @@ async function handleTest(req: IncomingMessage, res: ServerResponse, url: URL) {
   json(res, 404, { error: 'not found' })
 }
 
-// minimal solid-colour PNG generator (RGB, no deps beyond node:zlib) for the /test/image endpoint
+// minimal solid-colour PNG generator (RGB, no deps beyond node:zlib) for the /test/image fallback
 function makePng(w: number, h: number, r: number, g: number, b: number): Buffer {
   const chunk = (type: string, data: Buffer) => {
     const len = Buffer.alloc(4); len.writeUInt32BE(data.length, 0)

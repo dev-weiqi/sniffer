@@ -7,5 +7,12 @@
     "outDir": "build/test",
     "rootDir": "src"
   },
-  "include": ["src/exportMocks.ts", "src/exportMocks.test.ts", "src/engineio.ts", "src/engineio.test.ts"]
+  "include": [
+    "src/exportMocks.ts",
+    "src/exportMocks.test.ts",
+    "src/engineio.ts",
+    "src/engineio.test.ts",
+    "src/webp.ts",
+    "src/webp.test.ts"
+  ]
 }

@@ -2,13 +2,13 @@ package dev.weiqi.sniffer.samplecmp
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -29,10 +29,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun App() {
     val demo = remember { DemoController() }
@@ -60,17 +61,30 @@ TopAppBar(title = { Text("Sniffer CMP Sample") })
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(bottom = 6.dp),
                         )
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            section.actions.forEach { action ->
-                                FilledTonalButton(
-                                    onClick = { demo.run(action) },
-                                    contentPadding = PaddingValues(horizontal = 24.dp),
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            section.actions.chunked(3).forEach { rowActions ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 ) {
-                                    Text(action.label, maxLines = 1)
+                                    rowActions.forEach { action ->
+                                        FilledTonalButton(
+                                            onClick = { demo.run(action) },
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(4.dp),
+                                            contentPadding = PaddingValues(horizontal = 8.dp),
+                                        ) {
+                                            Text(
+                                                action.label,
+                                                modifier = Modifier.fillMaxWidth(),
+                                                maxLines = 1,
+                                                textAlign = TextAlign.Center,
+                                            )
+                                        }
+                                    }
+                                    repeat(3 - rowActions.size) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
                                 }
                             }
                         }
@@ -89,6 +103,7 @@ TopAppBar(title = { Text("Sniffer CMP Sample") })
                     )
                     TextButton(
                         onClick = { demo.clearLog() },
+                        shape = RoundedCornerShape(4.dp),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                     ) { Text("Clear") }
                 }
@@ -116,13 +131,14 @@ TopAppBar(title = { Text("Sniffer CMP Sample") })
                                     fontFamily = FontFamily.Monospace,
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(end = 8.dp),
+                                    modifier = Modifier.padding(end = 8.dp).alignByBaseline(),
                                 )
                                 Text(
                                     entry.text,
                                     fontFamily = FontFamily.Monospace,
                                     fontSize = 12.sp,
                                     lineHeight = 17.sp,
+                                    modifier = Modifier.alignByBaseline(),
                                     color = when (entry.kind) {
                                         LogKind.OK -> Color(0xFF147A3D)
                                         LogKind.ERROR -> Color(0xFFD92626)

@@ -78,7 +78,7 @@ class DemoController {
     private var pendingWsAck: CompletableDeferred<String>? = null
 
     val sections = listOf(
-        DemoSection("HTTP · okhttp", listOf(
+        DemoSection("HTTP · OkHttp", listOf(
             DemoAction("GET") {
                 io { okhttp.newCall(okhttp3.Request.Builder().url("$BASE/test/users/18").build()).execute()
                     .use { log("okhttp GET → ${it.code} ${it.body.string().take(120)}", it.kind()) } }
@@ -91,13 +91,13 @@ class DemoController {
                         .use { log("okhttp POST → ${it.code}", it.kind()) }
                 }
             },
-            DemoAction("ERROR") {
+            DemoAction("Error") {
                 io { okhttp.newCall(okhttp3.Request.Builder().url("$BASE/test/error").build()).execute()
                     .use { log("okhttp GET /test/error → ${it.code}", it.kind()) } }
             },
             DemoAction("IMG") {
                 io {
-                    okhttp.newCall(okhttp3.Request.Builder().url("https://picsum.photos/200/300").build()).execute().use { resp ->
+                    okhttp.newCall(okhttp3.Request.Builder().url("$BASE/test/image").build()).execute().use { resp ->
                         log("okhttp IMG → ${resp.code} ${resp.body.bytes().size} bytes", resp.kind())
                     }
                 }
@@ -123,7 +123,7 @@ class DemoController {
                 }
             },
         )),
-        DemoSection("HTTP · ktor", listOf(
+        DemoSection("HTTP · Ktor", listOf(
             DemoAction("GET") {
                 val resp = ktor.get("$BASE/test/users/7")
                 log("ktor GET → ${resp.status.value} ${resp.bodyAsText().take(120)}", resp.status.value.kind())
@@ -135,12 +135,12 @@ class DemoController {
                 }
                 log("ktor POST → ${resp.status.value}", resp.status.value.kind())
             },
-            DemoAction("ERROR") {
+            DemoAction("Error") {
                 val resp = ktor.get("$BASE/test/error")
                 log("ktor GET /test/error → ${resp.status.value}", resp.status.value.kind())
             },
             DemoAction("IMG") {
-                val resp = ktor.get("https://picsum.photos/200/300")
+                val resp = ktor.get("$BASE/test/image")
                 val bytes: ByteArray = resp.body()
                 log("ktor IMG → ${resp.status.value} ${bytes.size} bytes", resp.status.value.kind())
             },
@@ -159,7 +159,7 @@ class DemoController {
             },
         )),
         DemoSection("Socket.IO", listOf(
-            DemoAction("connect") {
+            DemoAction("Connect") {
                 if (socket != null) return@DemoAction log("already connected", LogKind.INFO)
                 socket = SnifferSocketIO.wrap(IO.socket(BASE), BASE).also { s ->
                     s.on("chat:new") { args -> log("in chat:new: ${args.joinToString()}", LogKind.EVENT) }
@@ -167,25 +167,25 @@ class DemoController {
                 }
                 log("socket.io connecting…", LogKind.INFO)
             },
-            DemoAction("send") {
+            DemoAction("Send") {
                 val s = socket ?: return@DemoAction log("connect first", LogKind.ERROR)
                 s.emit("chat:send", "fire-and-forget from sample") // emit without ack
                 log("emit chat:send (no ack)", LogKind.INFO)
             },
-            DemoAction("ack") {
+            DemoAction("ACK") {
                 val s = socket ?: return@DemoAction log("connect first", LogKind.ERROR)
                 s.emit("chat:send", "hello from sample", Ack { args ->
                     log("ack: ${args.joinToString()}", LogKind.OK)
                 })
             },
-            DemoAction("disconnect") {
+            DemoAction("Disconnect") {
                 socket?.disconnect() ?: return@DemoAction log("not connected", LogKind.ERROR)
                 socket = null
                 log("socket.io disconnected", LogKind.INFO)
             },
         )),
-        DemoSection("ktor WebSocket", listOf(
-            DemoAction("connect") {
+        DemoSection("Ktor WebSocket", listOf(
+            DemoAction("Connect") {
                 if (ws != null) return@DemoAction log("already connected", LogKind.INFO)
                 val session = ktor.webSocketSession("ws://localhost:$DEFAULT_PORT/test/ws")
                 ws = session
@@ -207,11 +207,11 @@ class DemoController {
                     ws = null
                 }
             },
-            DemoAction("send") {
+            DemoAction("Send") {
                 val session = ws ?: return@DemoAction log("connect first", LogKind.ERROR)
                 session.send("ping ${System.currentTimeMillis()}")
             },
-            DemoAction("ack") {
+            DemoAction("ACK") {
                 val session = ws ?: return@DemoAction log("connect first", LogKind.ERROR)
                 // raw WebSocket has no protocol ack; correlate the next reply frame by convention
                 val deferred = CompletableDeferred<String>()
@@ -221,7 +221,7 @@ class DemoController {
                 if (reply != null) log("ws ack: ${reply.take(100)}", LogKind.OK)
                 else { pendingWsAck = null; log("ws ack: (timeout)", LogKind.ERROR) }
             },
-            DemoAction("disconnect") {
+            DemoAction("Disconnect") {
                 val session = ws ?: return@DemoAction log("not connected", LogKind.ERROR)
                 session.close(CloseReason(CloseReason.Codes.NORMAL, "bye"))
             },

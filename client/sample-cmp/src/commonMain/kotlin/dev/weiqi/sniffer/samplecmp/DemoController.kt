@@ -62,7 +62,7 @@ class DemoController {
     private var pendingWsAck: CompletableDeferred<String>? = null
 
     val sections = listOf(
-        DemoSection("HTTP · ktor", listOf(
+        DemoSection("HTTP · Ktor", listOf(
             DemoAction("GET") {
                 val resp = ktor.get("$BASE/test/users/7")
                 log("GET → ${resp.status.value} ${resp.bodyAsText().take(120)}", resp.status.value.kind())
@@ -74,12 +74,12 @@ class DemoController {
                 }
                 log("POST → ${resp.status.value}", resp.status.value.kind())
             },
-            DemoAction("ERROR") {
+            DemoAction("Error") {
                 val resp = ktor.get("$BASE/test/error")
                 log("GET /test/error → ${resp.status.value}", resp.status.value.kind())
             },
             DemoAction("IMG") {
-                val resp = ktor.get("https://picsum.photos/200/300")
+                val resp = ktor.get("$BASE/test/image")
                 val bytes: ByteArray = resp.body()
                 log("IMG → ${resp.status.value} ${bytes.size} bytes", resp.status.value.kind())
             },
@@ -97,8 +97,8 @@ class DemoController {
                 }
             },
         )),
-        DemoSection("ktor WebSocket", listOf(
-            DemoAction("connect") {
+        DemoSection("Ktor WebSocket", listOf(
+            DemoAction("Connect") {
                 if (ws != null) return@DemoAction log("already connected", LogKind.INFO)
                 val session = ktor.webSocketSession("ws://localhost:$DEFAULT_PORT/test/ws")
                 ws = session
@@ -120,11 +120,11 @@ class DemoController {
                     ws = null
                 }
             },
-            DemoAction("send") {
+            DemoAction("Send") {
                 val session = ws ?: return@DemoAction log("connect first", LogKind.ERROR)
                 session.send("hello from cmp")
             },
-            DemoAction("ack") {
+            DemoAction("ACK") {
                 val session = ws ?: return@DemoAction log("connect first", LogKind.ERROR)
                 // raw WebSocket has no protocol ack; correlate the next reply frame by convention
                 val deferred = CompletableDeferred<String>()
@@ -134,7 +134,7 @@ class DemoController {
                 if (reply != null) log("ws ack: ${reply.take(100)}", LogKind.OK)
                 else { pendingWsAck = null; log("ws ack: (timeout)", LogKind.ERROR) }
             },
-            DemoAction("disconnect") {
+            DemoAction("Disconnect") {
                 val session = ws ?: return@DemoAction log("not connected", LogKind.ERROR)
                 session.close(CloseReason(CloseReason.Codes.NORMAL, "bye"))
             },

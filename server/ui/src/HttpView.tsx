@@ -3,6 +3,7 @@ import type { HttpMockRule, HttpRow } from './state'
 import { copyText, fmtDuration, fmtSize, fmtTime, statusClass, toCurl, urlParts, useDetailWidth, useListKeys } from './util'
 import { newRuleId } from './util'
 import { JsonView } from './JsonView'
+import { base64ToBytes, formatWebpSummary, parseWebpAnimation, type WebpAnimationInfo } from './webp'
 
 function isSse(row: HttpRow): boolean {
   return (row.respHeaders?.['content-type'] ?? '').includes('event-stream')
@@ -218,15 +219,6 @@ function ImagePreview({ contentType, base64 }: { contentType: string; base64: st
   )
 }
 
-interface WebpAnimationInfo {
-  animated: boolean
-  frames: number
-  durationMs: number
-  loopCount: number
-  canvasWidth?: number
-  canvasHeight?: number
-}
-
 function WebpPlayer({ src, base64, info }: { src: string; base64: string; info: WebpAnimationInfo }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
@@ -303,10 +295,7 @@ function WebpPlayer({ src, base64, info }: { src: string; base64: string; info: 
     setPlaying(p => !p)
   }
 
-  const size = info.canvasWidth && info.canvasHeight ? ` · ${info.canvasWidth} × ${info.canvasHeight}` : ''
-  // infinite looping is the norm — only a finite loop count is worth calling out
-  const loops = info.loopCount > 0 ? ` · plays ${info.loopCount}×` : ''
-  const summary = `${info.frames} frames · ${fmtDuration(info.durationMs)}${loops}${size}`
+  const summary = formatWebpSummary(info)
 
   return (
     <div className="webp-player">
@@ -336,65 +325,6 @@ function WebpPlayer({ src, base64, info }: { src: string; base64: string; info: 
 interface ImageDecoderLike {
   decode(init: { frameIndex: number }): Promise<{ image: ImageBitmap }>
   close?: () => void
-}
-
-function parseWebpAnimation(base64: string): WebpAnimationInfo | null {
-  const bytes = base64ToBytes(base64)
-  if (ascii(bytes, 0, 4) !== 'RIFF' || ascii(bytes, 8, 4) !== 'WEBP') return null
-  let loopCount = 0
-  let frames = 0
-  let durationMs = 0
-  let canvasWidth: number | undefined
-  let canvasHeight: number | undefined
-
-  for (let offset = 12; offset + 8 <= bytes.length;) {
-    const fourcc = ascii(bytes, offset, 4)
-    const size = readUint32LE(bytes, offset + 4)
-    const payload = offset + 8
-    if (payload + size > bytes.length) break
-
-    if (fourcc === 'VP8X' && size >= 10) {
-      canvasWidth = readUint24LE(bytes, payload + 4) + 1
-      canvasHeight = readUint24LE(bytes, payload + 7) + 1
-    } else if (fourcc === 'ANIM' && size >= 6) {
-      loopCount = bytes[payload + 4] | (bytes[payload + 5] << 8)
-    } else if (fourcc === 'ANMF' && size >= 16) {
-      frames += 1
-      durationMs += readUint24LE(bytes, payload + 12)
-    }
-
-    offset = payload + size + (size % 2)
-  }
-
-  return frames > 0
-    ? { animated: true, frames, durationMs, loopCount, canvasWidth, canvasHeight }
-    : { animated: false, frames: 1, durationMs: 0, loopCount: 0, canvasWidth, canvasHeight }
-}
-
-function base64ToBlob(base64: string, type: string): Blob {
-  const bytes = base64ToBytes(base64)
-  const copy = new Uint8Array(bytes.length)
-  copy.set(bytes)
-  return new Blob([copy.buffer], { type })
-}
-
-function base64ToBytes(base64: string): Uint8Array {
-  const bin = atob(base64)
-  const bytes = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-  return bytes
-}
-
-function ascii(bytes: Uint8Array, offset: number, length: number): string {
-  return String.fromCharCode(...bytes.slice(offset, offset + length))
-}
-
-function readUint24LE(bytes: Uint8Array, offset: number): number {
-  return bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16)
-}
-
-function readUint32LE(bytes: Uint8Array, offset: number): number {
-  return bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) | (bytes[offset + 3] << 24)
 }
 
 export function Section({ title, action, children }: {
