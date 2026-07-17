@@ -1,3 +1,5 @@
+import kotlinx.kover.gradle.plugin.dsl.AggregationType
+import kotlinx.kover.gradle.plugin.dsl.CoverageUnit
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -11,6 +13,40 @@ plugins {
     alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.compose.multiplatform) apply false
     alias(libs.plugins.maven.publish) apply false
+    alias(libs.plugins.kover)
+}
+
+dependencies {
+    kover(project(":core"))
+    kover(project(":okhttp"))
+    kover(project(":ktor"))
+    kover(project(":ktor-ws"))
+    kover(project(":socketio"))
+    kover(project(":core-noop"))
+    kover(project(":okhttp-noop"))
+    kover(project(":ktor-noop"))
+    kover(project(":ktor-ws-noop"))
+    kover(project(":socketio-noop"))
+}
+
+kover {
+    reports {
+        filters {
+            excludes {
+                annotatedBy("dev.weiqi.sniffer.core.CoverageExcluded")
+                classes(
+                    "dev.weiqi.sniffer.ktor.SnifferKtorKt\$SnifferKtor\$1\$2",
+                    "dev.weiqi.sniffer.ktorws.SnifferKtorWsKt",
+                    "dev.weiqi.sniffer.ktorws.SnifferKtorWsKt\$SnifferKtorWs\$1\$1",
+                )
+            }
+        }
+        verify {
+            rule("line coverage is 100 percent") {
+                minBound(100, CoverageUnit.LINE, AggregationType.COVERED_PERCENTAGE)
+            }
+        }
+    }
 }
 
 // Coordinates come from gradle.properties (GROUP / VERSION_NAME) so a release bumps one place.
@@ -24,6 +60,8 @@ allprojects {
 // version. The Android sample modules are never published.
 subprojects {
     if (name == "sample" || name == "sample-cmp") return@subprojects
+
+    apply(plugin = "org.jetbrains.kotlinx.kover")
 
     // published library jars must target JVM 17 bytecode so consumers on JDK 17 can read them,
     // and Kotlin 2.2 metadata so consumers on older compilers (which read at most n+1) can too

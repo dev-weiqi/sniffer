@@ -9,6 +9,7 @@ compose-multiplatform = "1.11.1"
 socketio = "2.1.2"
 androidx-activity = "1.13.0"
 material = "1.13.0"
+kover = "0.9.8"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -31,3 +32,4 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
 maven-publish = { id = "com.vanniktech.maven.publish", version = "0.37.0" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }

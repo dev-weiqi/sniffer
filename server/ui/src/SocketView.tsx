@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SocketConn, SocketMockRule, SocketRow } from './state'
-import { fmtTime, newRuleId, useDetailWidth, useListKeys } from './util'
+import { fmtTime, newRuleId } from './util'
+import { useDetailWidth, useListKeys } from './hooks'
 import { JsonView } from './JsonView'
 import { CopyButton, KV, Section } from './HttpView'
 import { decodeEngineIoFrame, frameLabel } from './engineio'

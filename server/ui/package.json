@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "test:unit": "tsc -p tsconfig.test.json && node build/test/exportMocks.test.js && node build/test/engineio.test.js && node build/test/desktopPort.test.js && node build/test/state.test.js && node build/test/webp.test.js",
-    "typecheck": "tsc --noEmit"
+    "test:unit": "tsc -p tsconfig.test.json && node build/test/exportMocks.test.js && node build/test/engineio.test.js && node build/test/desktopPort.test.js && node build/test/state.test.js && node build/test/util.test.js && node build/test/webp.test.js",
+    "typecheck": "tsc --noEmit",
+    "coverage": "tsc -p tsconfig.test.json && c8 --all --src build/test --include \"build/test/**/*.js\" --exclude \"build/test/**/*.test.js\" --check-coverage --lines 100 --statements 100 --functions 100 --reporter=text --reporter=json-summary --reporter=lcov --reports-dir coverage node --input-type=module -e \"await import('./build/test/exportMocks.test.js'); await import('./build/test/engineio.test.js'); await import('./build/test/desktopPort.test.js'); await import('./build/test/state.test.js'); await import('./build/test/util.test.js'); await import('./build/test/webp.test.js')\""
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -17,6 +18,7 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "c8": "^12.0.0",
     "typescript": "^5.6.0",
     "vite": "^6.0.0"
   }

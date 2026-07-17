@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  client:
+    name: Client build and coverage
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build client samples and collect coverage
+        working-directory: client
+        run: ./gradlew :sample:assembleDebug :sample-cmp:assembleDebug :koverXmlReport :koverHtmlReport :koverLog :koverVerify
+
+      - name: Summarize client coverage
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs')
+          const xml = fs.readFileSync('client/build/reports/kover/report.xml', 'utf8')
+          const totalCounter = [...xml.matchAll(/<counter type="LINE" missed="(\d+)" covered="(\d+)"\/>/g)].at(-1)
+          if (!totalCounter) throw new Error('Kover LINE counter not found')
+          const missed = Number(totalCounter[1])
+          const covered = Number(totalCounter[2])
+          const lines = covered + missed
+          const pct = lines === 0 ? 100 : (covered / lines * 100)
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, [
+            '## Client Coverage',
+            '',
+            `Line coverage: **${pct.toFixed(2)}%** (${covered}/${lines})`,
+            '',
+          ].join('\n'))
+          NODE
+
+      - name: Upload client coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-coverage
+          path: |
+            client/build/reports/kover/html
+            client/build/reports/kover/report.xml
+          if-no-files-found: error
+
+  server:
+    name: Server build and coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            server/ui/package-lock.json
+            server/daemon/package-lock.json
+
+      - name: Install server dependencies
+        run: |
+          npm ci --prefix server/ui
+          npm ci --prefix server/daemon
+
+      - name: Build server packages
+        run: |
+          npm --prefix server/ui run build
+          npm --prefix server/daemon run build
+
+      - name: Collect server coverage
+        run: npm run coverage:server
+
+      - name: Summarize server coverage
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs')
+          const ui = JSON.parse(fs.readFileSync('server/ui/coverage/coverage-summary.json', 'utf8')).total.lines
+          const daemon = JSON.parse(fs.readFileSync('server/daemon/coverage/coverage-summary.json', 'utf8')).total.lines
+          const total = ui.total + daemon.total
+          const covered = ui.covered + daemon.covered
+          const pct = total === 0 ? 100 : (covered / total * 100)
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, [
+            '## Server Coverage',
+            '',
+            `Combined line coverage: **${pct.toFixed(2)}%** (${covered}/${total})`,
+            `UI line coverage: **${ui.pct.toFixed(2)}%** (${ui.covered}/${ui.total})`,
+            `Daemon line coverage: **${daemon.pct.toFixed(2)}%** (${daemon.covered}/${daemon.total})`,
+            '',
+          ].join('\n'))
+          NODE
+
+      - name: Upload server coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-coverage
+          path: |
+            server/ui/coverage/lcov-report
+            server/ui/coverage/coverage-summary.json
+            server/ui/coverage/lcov.info
+            server/daemon/coverage/lcov-report
+            server/daemon/coverage/coverage-summary.json
+            server/daemon/coverage/lcov.info
+          if-no-files-found: error

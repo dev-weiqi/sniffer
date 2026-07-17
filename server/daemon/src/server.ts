@@ -1,16 +1,29 @@
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:http'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { execFile, execSync } from 'node:child_process'
-import { deflateSync, crc32 } from 'node:zlib'
-import { extname, join, normalize } from 'node:path'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline'
 import { WebSocketServer, WebSocket } from 'ws'
 import { Server as SocketIOServer } from 'socket.io'
+import { handleApi } from './api.js'
+import { runAdbReverse } from './adb.js'
 import { buildDoctorReport, buildDoctorPath } from './doctor.js'
+import { createEntryStore } from './entryStore.js'
+import { json } from './http.js'
+import {
+  EMPTY_MOCKS,
+  loadMockStore,
+  mergeMocks,
+  migrateStarredToSharedStore,
+  stripUiOnlyFields,
+  type Mocks,
+  type MockStore,
+} from './mockStore.js'
+import { serveStatic } from './static.js'
+import { handleTest } from './testHandlers.js'
 
 // GUI launches (Finder/launchd) get a bare PATH without adb; widen it the same
 // way doctor resolves commands so `adb reverse` works from the desktop app too.
@@ -24,7 +37,6 @@ const PORT = Number(process.env.PORT ?? 9091)
 // Android/adb reverse and the iOS simulator reach it via localhost; a real iOS device on
 // wifi (hitting the host's LAN IP) needs SNIFFER_BIND=0.0.0.0.
 const BIND_HOST = process.env.SNIFFER_BIND ?? '127.0.0.1'
-const MAX_STORED_MESSAGES = 2000
 // UI location differs by layout: `ui-dist/` sits next to `dist/` in the published npm package;
 // `../ui/dist` is the repo checkout (running from src/ via tsx).
 // repo layout first: a stale ui-dist/ left behind by npm pack must never shadow ui/dist
@@ -48,56 +60,10 @@ interface DeviceInfo {
   capabilities: string[]
 }
 
-interface Mocks {
-  http: unknown[]
-  socket: unknown[]
-}
-
-interface MockStore {
-  devices: Record<string, Mocks>
-  // starred rules, keyed by appId — delivered to every device of that app, including future connections
-  shared: Record<string, Mocks>
-}
-
 const devices = new Map<string, { info: DeviceInfo; ws: WebSocket; connected: boolean }>()
-const entries: { deviceId: string; message: Record<string, unknown> }[] = []
 
 // mock rules survive daemon restarts and are scoped by deviceId; traffic stays in-memory by design
 const MOCKS_FILE = join(homedir(), '.sniffer', 'mocks.json')
-const EMPTY_MOCKS: Mocks = { http: [], socket: [] }
-
-function normalizeMocks(value: unknown): Mocks {
-  const m = value as Partial<Mocks> | null | undefined
-  return {
-    http: Array.isArray(m?.http) ? m.http : [],
-    socket: Array.isArray(m?.socket) ? m.socket : [],
-  }
-}
-
-function loadMockStore(): MockStore {
-  try {
-    const m = JSON.parse(readFileSync(MOCKS_FILE, 'utf8'))
-    if (m.devices && typeof m.devices === 'object') {
-      const scoped: Record<string, Mocks> = {}
-      for (const [deviceId, mocks] of Object.entries(m.devices)) {
-        scoped[deviceId] = normalizeMocks(mocks)
-      }
-      const shared: Record<string, Mocks> = {}
-      if (m.shared && typeof m.shared === 'object') {
-        for (const [appId, mocks] of Object.entries(m.shared)) {
-          shared[appId] = normalizeMocks(mocks)
-        }
-      }
-      return { devices: scoped, shared }
-    }
-    const legacy = normalizeMocks(m)
-    return legacy.http.length || legacy.socket.length
-      ? { devices: { 'legacy-global': legacy }, shared: {} }
-      : { devices: {}, shared: {} }
-  } catch {
-    return { devices: {}, shared: {} }
-  }
-}
 function persistMocks() {
   try {
     mkdirSync(join(homedir(), '.sniffer'), { recursive: true })
@@ -106,7 +72,7 @@ function persistMocks() {
     console.error('failed to persist mocks:', e)
   }
 }
-let mockStore: MockStore = loadMockStore()
+let mockStore: MockStore = loadMockStore(MOCKS_FILE)
 const uiClients = new Set<WebSocket>()
 
 function broadcastToUi(msg: unknown) {
@@ -114,51 +80,14 @@ function broadcastToUi(msg: unknown) {
   for (const ws of uiClients) if (ws.readyState === WebSocket.OPEN) ws.send(text)
 }
 
-// Clear watermarks: a disconnected SDK buffers up to 1000 messages and replays them on
-// reconnect, which would resurrect traffic the user already cleared. Anything timestamped
-// before the last clear stays cleared.
-// ponytail: 5s tolerance for device clock skew; switch to per-device watermarks if it ever matters
-const CLEAR_SKEW_MS = 5000
-const HTTP_ENTRY_TYPES = new Set(['http-request', 'http-response'])
-const SOCKET_ENTRY_TYPES = new Set(['socket-event', 'socket-ack'])
-const clearedAt = { http: 0, socket: 0 }
-
-function pushEntry(deviceId: string, message: Record<string, unknown>) {
-  const ts = typeof message.timestamp === 'number' ? message.timestamp : Infinity
-  const watermark = HTTP_ENTRY_TYPES.has(message.type as string) ? clearedAt.http
-    : SOCKET_ENTRY_TYPES.has(message.type as string) ? clearedAt.socket : 0
-  if (ts < watermark - CLEAR_SKEW_MS) return // buffered replay of already-cleared traffic
-  entries.push({ deviceId, message })
-  if (entries.length > MAX_STORED_MESSAGES) entries.splice(0, entries.length - MAX_STORED_MESSAGES)
-  broadcastToUi({ type: 'event', deviceId, message })
-}
-
-function clearEntriesByMessageType(types: Set<unknown>) {
-  for (let i = entries.length - 1; i >= 0; i--) {
-    if (types.has(entries[i].message.type)) entries.splice(i, 1)
-  }
-}
-
-const isStarred = (r: unknown) => (r as { starred?: unknown } | null)?.starred === true
+const entryStore = createEntryStore(broadcastToUi)
 
 /** starred rules stuck in a device bucket (saved while the device/appId was unknown)
     move to the app's shared bucket once the device introduces itself */
 function migrateStarredToShared(deviceId: string, appId: string): boolean {
-  const own = mockStore.devices[deviceId]
-  if (!own || !(own.http.some(isStarred) || own.socket.some(isStarred))) return false
-  const shared = mockStore.shared[appId] ?? EMPTY_MOCKS
-  const fresh = (rules: unknown[], into: unknown[]) =>
-    rules.filter(isStarred).filter(r => !into.some(x => (x as { id?: unknown }).id === (r as { id?: unknown }).id))
-  mockStore = {
-    devices: {
-      ...mockStore.devices,
-      [deviceId]: { http: own.http.filter(r => !isStarred(r)), socket: own.socket.filter(r => !isStarred(r)) },
-    },
-    shared: {
-      ...mockStore.shared,
-      [appId]: { http: [...shared.http, ...fresh(own.http, shared.http)], socket: [...shared.socket, ...fresh(own.socket, shared.socket)] },
-    },
-  }
+  const result = migrateStarredToSharedStore(mockStore, deviceId, appId)
+  if (!result.changed) return false
+  mockStore = result.store
   persistMocks()
   return true
 }
@@ -168,8 +97,7 @@ function mocksFor(deviceId: string): Mocks {
   const own = mockStore.devices[deviceId] ?? EMPTY_MOCKS
   const appId = devices.get(deviceId)?.info.appId
   const shared = (appId && mockStore.shared[appId]) || EMPTY_MOCKS
-  if (shared.http.length + shared.socket.length === 0) return own
-  return { http: [...shared.http, ...own.http], socket: [...shared.socket, ...own.socket] }
+  return mergeMocks(own, shared)
 }
 
 function mergedMocksByDevice(): Record<string, Mocks> {
@@ -182,23 +110,13 @@ function sendMocksToDevice(deviceId: string) {
   const device = devices.get(deviceId)
   if (!device?.connected) return
   // `starred` is a UI/daemon concern — the SDK wire format stays unchanged
-  const strip = (rules: unknown[]) => rules.map(r => {
-    const { starred: _, ...rest } = r as Record<string, unknown>
-    return rest
-  })
-  const merged = mocksFor(deviceId)
-  device.ws.send(JSON.stringify({ type: 'mock-rules', http: strip(merged.http), socket: strip(merged.socket) }))
+  const merged = stripUiOnlyFields(mocksFor(deviceId))
+  device.ws.send(JSON.stringify({ type: 'mock-rules', http: merged.http, socket: merged.socket }))
 }
 
 function removeDeviceRecord(deviceId: string): { removed: boolean; mocksChanged: boolean } {
   const hadDevice = devices.delete(deviceId)
-  let hadEntries = false
-  for (let i = entries.length - 1; i >= 0; i--) {
-    if (entries[i].deviceId === deviceId) {
-      entries.splice(i, 1)
-      hadEntries = true
-    }
-  }
+  const hadEntries = entryStore.removeDeviceEntries(deviceId)
 
   let mocksChanged = false
   if (mockStore.devices[deviceId]) {
@@ -215,220 +133,26 @@ function removeDeviceRecord(deviceId: string): { removed: boolean; mocksChanged:
 
 // ---------- HTTP server: /api, /test, UI static files ----------
 
-async function readBody(req: IncomingMessage, limit = 2 * 1024 * 1024): Promise<string> {
-  const chunks: Buffer[] = []
-  let size = 0
-  for await (const chunk of req) {
-    size += (chunk as Buffer).length
-    if (size > limit) throw new Error('body too large')
-    chunks.push(chunk as Buffer)
-  }
-  return Buffer.concat(chunks).toString('utf8')
-}
-
-function json(res: ServerResponse, status: number, body: unknown) {
-  const text = JSON.stringify(body)
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
-  res.end(text)
-}
-
-const MIME: Record<string, string> = {
-  '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
-  '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon',
-  '.woff2': 'font/woff2', '.map': 'application/json',
-}
-
-async function serveStatic(res: ServerResponse, pathname: string) {
-  if (!existsSync(UI_DIST)) {
-    res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' })
-    res.end('Sniffer daemon is running, but the UI is not built yet: cd ui && npm install && npm run build')
-    return
-  }
-  let file = normalize(join(UI_DIST, pathname === '/' ? 'index.html' : pathname))
-  if (!file.startsWith(UI_DIST)) { res.writeHead(403); res.end(); return }
-  if (!existsSync(file)) file = join(UI_DIST, 'index.html') // SPA fallback
-  const data = await readFile(file)
-  // hashed assets are immutable; index.html must always revalidate so a new build is picked up
-  const cacheControl = file.includes(`${'/'}assets${'/'}`)
-    ? 'public, max-age=31536000, immutable'
-    : 'no-cache'
-  res.writeHead(200, {
-    'content-type': MIME[extname(file)] ?? 'application/octet-stream',
-    'cache-control': cacheControl,
-  })
-  res.end(data)
-}
-
-async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL) {
-  if (req.method === 'GET' && url.pathname === '/api/doctor') {
-    return json(res, 200, await buildDoctorReport({ port: PORT, bindHost: BIND_HOST }))
-  }
-  if (req.method === 'PUT' && url.pathname === '/api/mocks') {
-    const body = JSON.parse(await readBody(req))
-    const deviceId = typeof body.deviceId === 'string' ? body.deviceId : ''
-    if (!deviceId) return json(res, 400, { error: 'deviceId required' })
-    const mocks = normalizeMocks(body)
-    const appId = devices.get(deviceId)?.info.appId
-    if (appId) {
-      // starred rules live per appId and reach every device of that app; the rest stay per-device
-      const own = { http: mocks.http.filter(r => !isStarred(r)), socket: mocks.socket.filter(r => !isStarred(r)) }
-      const shared = { http: mocks.http.filter(isStarred), socket: mocks.socket.filter(isStarred) }
-      mockStore = {
-        devices: { ...mockStore.devices, [deviceId]: own },
-        shared: { ...mockStore.shared, [appId]: shared },
-      }
-      persistMocks()
-      for (const d of devices.values()) {
-        if (d.info.appId !== appId) continue
-        sendMocksToDevice(d.info.deviceId)
-        broadcastToUi({ type: 'mocks-changed', deviceId: d.info.deviceId, mocks: mocksFor(d.info.deviceId) })
-      }
-    } else {
-      // device gone from the registry: no appId to share under, keep everything per-device
-      mockStore = { ...mockStore, devices: { ...mockStore.devices, [deviceId]: mocks } }
-      persistMocks()
-      sendMocksToDevice(deviceId)
-      broadcastToUi({ type: 'mocks-changed', deviceId, mocks })
-    }
-    return json(res, 200, { ok: true })
-  }
-  if (req.method === 'POST' && url.pathname === '/api/push-event') {
-    const body = JSON.parse(await readBody(req))
-    const device = devices.get(body.deviceId)
-    if (!device?.connected) return json(res, 404, { error: 'device not connected' })
-    device.ws.send(JSON.stringify({
-      type: 'push-event', connectionId: body.connectionId ?? null,
-      event: body.event, payload: body.payload,
-    }))
-    return json(res, 200, { ok: true })
-  }
-  if (req.method === 'DELETE' && url.pathname === '/api/entries') {
-    entries.length = 0
-    clearedAt.http = Date.now()
-    clearedAt.socket = Date.now()
-    broadcastToUi({ type: 'entries-cleared' })
-    return json(res, 200, { ok: true })
-  }
-  if (req.method === 'DELETE' && url.pathname === '/api/entries/http') {
-    clearEntriesByMessageType(HTTP_ENTRY_TYPES)
-    clearedAt.http = Date.now()
-    broadcastToUi({ type: 'http-entries-cleared' })
-    return json(res, 200, { ok: true })
-  }
-  if (req.method === 'DELETE' && url.pathname === '/api/entries/socket') {
-    clearEntriesByMessageType(SOCKET_ENTRY_TYPES)
-    clearedAt.socket = Date.now()
-    broadcastToUi({ type: 'socket-entries-cleared' })
-    return json(res, 200, { ok: true })
-  }
-  if (req.method === 'DELETE' && url.pathname === '/api/devices/offline') {
-    const offlineDeviceIds = [...devices.values()]
-      .filter(d => !d.connected)
-      .map(d => d.info.deviceId)
-    let mocksChanged = false
-    const deleted: string[] = []
-    for (const deviceId of offlineDeviceIds) {
-      const result = removeDeviceRecord(deviceId)
-      if (result.removed) deleted.push(deviceId)
-      mocksChanged = mocksChanged || result.mocksChanged
-    }
-    if (mocksChanged) persistMocks()
-    return json(res, 200, { ok: true, deleted })
-  }
-  if (req.method === 'DELETE' && url.pathname.startsWith('/api/devices/')) {
-    const deviceId = decodeURIComponent(url.pathname.slice('/api/devices/'.length))
-    if (!deviceId) return json(res, 400, { error: 'deviceId required' })
-    const device = devices.get(deviceId)
-    const result = removeDeviceRecord(deviceId)
-    if (result.mocksChanged) persistMocks()
-    // kick after the record is gone so the close handler is a no-op; the SDK
-    // reconnects on its own and re-registers as a fresh device
-    if (device?.connected) device.ws.close()
-    return json(res, 200, { ok: true })
-  }
-  if (req.method === 'GET' && url.pathname === '/api/state') {
-    return json(res, 200, {
-      devices: [...devices.values()].map(d => ({ ...d.info, connected: d.connected })),
-      entryCount: entries.length, mocksByDevice: mergedMocksByDevice(),
-    })
-  }
-  json(res, 404, { error: 'not found' })
-}
-
-// test endpoints for the sample app
-async function handleTest(req: IncomingMessage, res: ServerResponse, url: URL) {
-  if (url.pathname === '/test/echo') {
-    const body = await readBody(req)
-    return json(res, 200, {
-      method: req.method, path: url.pathname + url.search,
-      headers: req.headers, body: body || null, ts: Date.now(),
-    })
-  }
-  const userMatch = url.pathname.match(/^\/test\/users\/(\w+)$/)
-  if (userMatch) {
-    return json(res, 200, {
-      id: Number(userMatch[1]), name: `User ${userMatch[1]}`,
-      email: `user${userMatch[1]}@example.com`, tags: ['alpha', 'beta'],
-    })
-  }
-  if (url.pathname === '/test/slow') {
-    const ms = Number(url.searchParams.get('ms') ?? 1500)
-    await new Promise(r => setTimeout(r, ms))
-    return json(res, 200, { slept: ms })
-  }
-  if (url.pathname === '/test/error') return json(res, 500, { error: 'boom' })
-  if (url.pathname === '/test/image') {
-    if (SNIFFER_ICON) {
-      const icon = readFileSync(SNIFFER_ICON)
-      res.writeHead(200, {
-        'content-type': 'image/svg+xml; charset=utf-8',
-        'content-length': icon.length,
-      })
-      res.end(icon)
-      return
-    }
-    const png = makePng(180, 120, 74, 108, 247) // fallback if the packaged icon is missing
-    res.writeHead(200, { 'content-type': 'image/png', 'content-length': png.length })
-    res.end(png)
-    return
-  }
-  if (url.pathname === '/test/sse') {
-    res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' })
-    let n = 0
-    const timer = setInterval(() => {
-      res.write(`data: {"tick":${++n},"ts":${Date.now()}}\n\n`)
-      if (n >= 5) { clearInterval(timer); res.end() }
-    }, 400)
-    req.on('close', () => clearInterval(timer))
-    return
-  }
-  json(res, 404, { error: 'not found' })
-}
-
-// minimal solid-colour PNG generator (RGB, no deps beyond node:zlib) for the /test/image fallback
-function makePng(w: number, h: number, r: number, g: number, b: number): Buffer {
-  const chunk = (type: string, data: Buffer) => {
-    const len = Buffer.alloc(4); len.writeUInt32BE(data.length, 0)
-    const typeBuf = Buffer.from(type, 'ascii')
-    const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])) >>> 0, 0)
-    return Buffer.concat([len, typeBuf, data, crc])
-  }
-  const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
-  const ihdr = Buffer.alloc(13)
-  ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2 // 8-bit RGB
-  const row = Buffer.alloc(1 + w * 3)
-  for (let x = 0; x < w; x++) { row[1 + x * 3] = r; row[2 + x * 3] = g; row[3 + x * 3] = b }
-  const raw = Buffer.concat(Array.from({ length: h }, () => row))
-  const idat = deflateSync(raw)
-  return Buffer.concat([sig, chunk('IHDR', ihdr), chunk('IDAT', idat), chunk('IEND', Buffer.alloc(0))])
-}
-
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`)
   try {
-    if (url.pathname.startsWith('/api/')) return await handleApi(req, res, url)
-    if (url.pathname.startsWith('/test/')) return await handleTest(req, res, url)
-    if (req.method === 'GET') return await serveStatic(res, url.pathname)
+    if (req.method === 'GET' && url.pathname === '/api/doctor') {
+      return json(res, 200, await buildDoctorReport({ port: PORT, bindHost: BIND_HOST }))
+    }
+    if (url.pathname.startsWith('/api/')) return await handleApi(req, res, url, {
+      devices,
+      getMockStore: () => mockStore,
+      setMockStore: store => { mockStore = store },
+      persistMocks,
+      entryStore,
+      broadcastToUi,
+      sendMocksToDevice,
+      mocksFor,
+      mergedMocksByDevice,
+      removeDeviceRecord,
+    })
+    if (url.pathname.startsWith('/test/')) return await handleTest(req, res, url, { snifferIcon: SNIFFER_ICON })
+    if (req.method === 'GET') return await serveStatic(res, url.pathname, { uiDist: UI_DIST })
     res.writeHead(405); res.end()
   } catch (e) {
     json(res, 500, { error: String(e) })
@@ -474,7 +198,7 @@ deviceWss.on('connection', ws => {
       }
       return
     }
-    if (deviceId) pushEntry(deviceId, msg)
+    if (deviceId) entryStore.pushEntry(deviceId, msg)
   })
   ws.on('close', () => {
     if (!deviceId) return
@@ -492,7 +216,7 @@ uiWss.on('connection', ws => {
   ws.send(JSON.stringify({
     type: 'init',
     devices: [...devices.values()].map(d => ({ ...d.info, connected: d.connected })),
-    entries, mocksByDevice: mergedMocksByDevice(),
+    entries: entryStore.snapshot(), mocksByDevice: mergedMocksByDevice(),
   }))
   // sent after init (init resets state): tells the UI whether this is a dev or published build
   ws.send(JSON.stringify({ type: 'server-info', dev: IS_DEV }))
@@ -522,15 +246,7 @@ io.on('connection', socket => {
 // ---------- adb reverse: route device/emulator localhost:9091 to this machine ----------
 
 function adbReverse() {
-  execFile('adb', ['devices'], (err, stdout) => {
-    if (err) return // adb not installed, never mind
-    for (const line of stdout.split('\n').slice(1)) {
-      const [serial, state] = line.trim().split('\t')
-      if (state === 'device') {
-        execFile('adb', ['-s', serial, 'reverse', `tcp:${PORT}`, `tcp:${PORT}`], () => {})
-      }
-    }
-  })
+  runAdbReverse({ port: PORT, execFile })
 }
 setInterval(adbReverse, 5000)
 adbReverse()

@@ -22,9 +22,13 @@ Self-hosted Flipper alternative: monitor and mock an app's HTTP/Socket traffic.
    the JSON and re-enter through the PUT path). A field that is correct on the wire can still be
    wrong on one of these.
 2. **Non-trivial logic ships with a test.** Pure logic (mock matching, placeholder expansion, protocol (de)serialization) → `client/core/src/commonTest`. Keep the existing `MockRegistryTest` / `MockPlaceholdersTest` style.
-3. **The SDK must never affect the host app.** Swallow errors, reconnect silently, cap buffers (1000 msgs offline). A monitoring bug must not surface in production traffic.
-4. **Keep `sample` and `sample-cmp` in parity** — same layout, headers, and action labels. The only allowed difference: CMP is ktor-only (no okhttp / socketio).
-5. **Commits:** split by feature; end messages with the `Co-Authored-By` trailer.
+3. **Production code changes must keep coverage at 100%.** Any change outside tests/docs must
+   include or update automated tests that exercise the changed behaviour. Do not lower or bypass
+   coverage gates; if a path is intentionally untestable, extract the testable logic first and
+   document any coverage exclusion in the same change.
+4. **The SDK must never affect the host app.** Swallow errors, reconnect silently, cap buffers (1000 msgs offline). A monitoring bug must not surface in production traffic.
+5. **Keep `sample` and `sample-cmp` in parity** — same layout, headers, and action labels. The only allowed difference: CMP is ktor-only (no okhttp / socketio).
+6. **Commits:** split by feature; end messages with the `Co-Authored-By` trailer.
    **Never push without explicit approval for that push** — committing locally is fine,
    pushing (normal or force) always waits for the user's go-ahead.
 

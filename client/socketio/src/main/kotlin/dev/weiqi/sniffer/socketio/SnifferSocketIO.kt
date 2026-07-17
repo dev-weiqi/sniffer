@@ -171,12 +171,12 @@ class SnifferSocket internal constructor(
 }
 
 /** Payload string (JSON array = multiple args, anything else = single arg) → socket.io args. */
-private fun parseArgs(payload: String): Array<Any?> {
+internal fun parseArgs(payload: String): Array<Any?> {
     val parsed = runCatching { JSONTokener(payload).nextValue() }.getOrElse { payload }
     return if (parsed is JSONArray) Array(parsed.length()) { parsed.opt(it) } else arrayOf(parsed)
 }
 
-private fun toJsonArrayString(args: Array<out Any?>): String {
+internal fun toJsonArrayString(args: Array<out Any?>): String {
     val arr = JSONArray()
     for (a in args) {
         when (a) {

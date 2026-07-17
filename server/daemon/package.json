@@ -23,9 +23,10 @@
   "scripts": {
     "dev": "SNIFFER_NO_OPEN=1 tsx watch src/server.ts",
     "start": "tsx src/server.ts",
-    "test:unit": "tsx src/doctor.test.ts",
+    "test:unit": "tsc -p tsconfig.test.json && node build/test/doctor.test.js && node build/test/adb.test.js && node build/test/api.test.js && node build/test/entryStore.test.js && node build/test/http.test.js && node build/test/mockStore.test.js && node build/test/png.test.js && node build/test/static.test.js && node build/test/testHandlers.test.js",
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json",
+    "coverage": "tsc -p tsconfig.test.json && c8 --all --src build/test --include \"build/test/doctor.js\" --include \"build/test/adb.js\" --include \"build/test/api.js\" --include \"build/test/entryStore.js\" --include \"build/test/http.js\" --include \"build/test/mockStore.js\" --include \"build/test/png.js\" --include \"build/test/static.js\" --include \"build/test/testHandlers.js\" --check-coverage --lines 100 --statements 100 --functions 100 --reporter=text --reporter=json-summary --reporter=lcov --reports-dir coverage node --input-type=module -e \"await import('./build/test/doctor.test.js'); await import('./build/test/adb.test.js'); await import('./build/test/api.test.js'); await import('./build/test/entryStore.test.js'); await import('./build/test/http.test.js'); await import('./build/test/mockStore.test.js'); await import('./build/test/png.test.js'); await import('./build/test/static.test.js'); await import('./build/test/testHandlers.test.js')\"",
     "prepack": "npm run build && npm --prefix ../ui run build && rm -rf ui-dist && cp -R ../ui/dist ui-dist",
     "postpack": "rm -rf ui-dist"
   },
@@ -36,6 +37,7 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/ws": "^8.5.12",
+    "c8": "^12.0.0",
     "socket.io-client": "^4.8.3",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"

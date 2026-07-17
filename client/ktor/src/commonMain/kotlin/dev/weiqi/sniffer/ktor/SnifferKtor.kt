@@ -141,43 +141,16 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
     // SSE plugin sessions: observe events by swapping the pipeline subject for a delegating
     // wrapper — same SSESession type, so the SSE plugin's own Transform still accepts it.
     // Any failure falls back to the original, untouched session.
-    client.responsePipeline.intercept(HttpResponsePipeline.Parse) { (info, body) ->
-        val id = context.request.attributes.getOrNull(SnifferSseIdKey) ?: return@intercept
-        if (body !is SSESession) return@intercept
-        val wrapped = runCatching {
-            val headersMap = context.response.headers.flattenEntries().toMap()
-            val status = context.response.status.value
-            val captured = StringBuilder()
-            var lastReport = 0L
-            fun report(final: Boolean) {
-                val nowMs = now()
-                if (!final && nowMs - lastReport < 1000) return
-                lastReport = nowMs
-                val capped = capBody(captured.toString())
-                Sniffer.report(
-                    HttpResponseMsg(
-                        id = id, status = status, headers = headersMap,
-                        body = capped.body, bodySize = capped.size, bodyTruncated = capped.truncated,
-                        durationMs = 0, mocked = false, error = null, timestamp = nowMs,
-                    )
-                )
-            }
-            object : SSESession {
-                override val coroutineContext get() = body.coroutineContext
-                override val incoming = body.incoming
-                    .onEach { ev ->
-                        runCatching {
-                            ev.event?.let { captured.append("event: ").append(it).append('\n') }
-                            ev.data?.let { captured.append("data: ").append(it).append('\n') }
-                            captured.append('\n')
-                            report(final = false)
-                        }
-                    }
-                    .onCompletion { runCatching { report(final = true) } }
-            }
-        }.getOrNull() ?: return@intercept
-        proceedWith(HttpResponseContainer(info, wrapped))
-    }
+	    client.responsePipeline.intercept(HttpResponsePipeline.Parse) { (info, body) ->
+	        val id = context.request.attributes.getOrNull(SnifferSseIdKey) ?: return@intercept
+	        if (body !is SSESession) return@intercept
+	        val wrapped = runCatching {
+	            val headersMap = context.response.headers.flattenEntries().toMap()
+	            val status = context.response.status.value
+	            snifferSseSession(id, body, headersMap, status)
+	        }.getOrNull() ?: return@intercept
+	        proceedWith(HttpResponseContainer(info, wrapped))
+	    }
 
     on(Send) { request ->
         val id = newId()
@@ -377,6 +350,42 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
             if (t is CancellationException) throw t
             call
         }
+    }
+}
+
+internal fun snifferSseSession(
+    id: String,
+    body: SSESession,
+    headersMap: Map<String, String>,
+    status: Int,
+): SSESession {
+    val captured = StringBuilder()
+    var lastReport = 0L
+    fun report(final: Boolean) {
+        val nowMs = now()
+        if (!final && nowMs - lastReport < 1000) return
+        lastReport = nowMs
+        val capped = capBody(captured.toString())
+        Sniffer.report(
+            HttpResponseMsg(
+                id = id, status = status, headers = headersMap,
+                body = capped.body, bodySize = capped.size, bodyTruncated = capped.truncated,
+                durationMs = 0, mocked = false, error = null, timestamp = nowMs,
+            )
+        )
+    }
+    return object : SSESession {
+        override val coroutineContext get() = body.coroutineContext
+        override val incoming = body.incoming
+            .onEach { ev ->
+                runCatching {
+                    ev.event?.let { captured.append("event: ").append(it).append('\n') }
+                    ev.data?.let { captured.append("data: ").append(it).append('\n') }
+                    captured.append('\n')
+                    report(final = false)
+                }
+            }
+            .onCompletion { runCatching { report(final = true) } }
     }
 }
 

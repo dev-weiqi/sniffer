@@ -117,4 +117,66 @@ assert(desktopById.npm.summary === 'Not required for Sniffer Desktop',
   `desktop npm summary, got ${desktopById.npm.summary}`)
 assert(!desktopExec.calls.some(call => call.file === 'npm'), 'desktop doctor should not run npm')
 
+const missingNpm = await buildDoctorReport({
+  port: 9091,
+  bindHost: '127.0.0.1',
+  platform: 'darwin',
+  nodeVersion: 'v25.0.0',
+  execFileFn: fakeExecFile({
+    'npm --version': Object.assign(new Error('spawn npm ENOENT'), { code: 'ENOENT' }),
+    'adb version': Object.assign(new Error('spawn adb ENOENT'), { code: 'ENOENT' }),
+  }) as never,
+})
+const missingNpmById = Object.fromEntries(missingNpm.checks.map(check => [check.id, check]))
+assert(missingNpmById.npm.status === 'warn', `missing npm status, got ${missingNpmById.npm.status}`)
+assert(missingNpmById.npm.summary === 'npm not found', `missing npm summary, got ${missingNpmById.npm.summary}`)
+
+const deviceListFailure = await buildDoctorReport({
+  port: 9091,
+  bindHost: '127.0.0.1',
+  platform: 'darwin',
+  nodeVersion: 'v25.0.0',
+  execFileFn: fakeExecFile({
+    'npm --version': { stdout: '10.9.0\n' },
+    'adb version': { stdout: 'Android Debug Bridge version 1.0.41\nVersion 37.0.0\n' },
+    'adb devices -l': Object.assign(new Error('adb devices failed'), { code: 'EADB' }),
+  }) as never,
+})
+const deviceFailureById = Object.fromEntries(deviceListFailure.checks.map(check => [check.id, check]))
+assert(deviceFailureById.devices.status === 'warn', `device failure status, got ${deviceFailureById.devices.status}`)
+assert(deviceFailureById.devices.summary === 'Unable to list Android devices',
+  `device failure summary, got ${deviceFailureById.devices.summary}`)
+assert(deviceFailureById.reverse.status === 'skip', `device failure reverse, got ${deviceFailureById.reverse.status}`)
+
+const reverseProblems = await buildDoctorReport({
+  port: 9091,
+  bindHost: '127.0.0.1',
+  platform: 'darwin',
+  nodeVersion: 'v25.0.0',
+  execFileFn: fakeExecFile({
+    'npm --version': { stdout: '10.9.0\n' },
+    'adb version': { stdout: 'Android Debug Bridge version 1.0.41\nVersion 37.0.0\n' },
+    'adb devices -l': {
+      stdout: `List of devices attached
+emulator-5554	device product:sdk_gphone64_arm64 model:Pixel_9_Pro transport_id:1
+ABC123	device usb:1-1
+`,
+    },
+    'adb -s emulator-5554 reverse --list': Object.assign(new Error('reverse list failed'), { code: 'EADB' }),
+    'adb -s ABC123 reverse --list': { stdout: 'ABC123 tcp:8080 tcp:8080\n' },
+  }) as never,
+})
+const reverseProblemsById = Object.fromEntries(reverseProblems.checks.map(check => [check.id, check]))
+assert(reverseProblemsById.devices.status === 'ok', `connected devices status, got ${reverseProblemsById.devices.status}`)
+assert(reverseProblemsById.devices.summary === '2 connected',
+  `connected devices summary, got ${reverseProblemsById.devices.summary}`)
+assert(reverseProblemsById.reverse.status === 'warn', `reverse warn status, got ${reverseProblemsById.reverse.status}`)
+assert(reverseProblemsById.reverse.summary === '2 device(s) missing reverse for port 9091',
+  `reverse warn summary, got ${reverseProblemsById.reverse.summary}`)
+const reverseDetails = reverseProblemsById.reverse.details ?? []
+assert(reverseDetails.some((line: string) => line.includes('unable to inspect reverse list')),
+  'reverse warning should mention inspect failure')
+assert(reverseDetails.some((line: string) => line.includes('missing tcp:9091 tcp:9091')),
+  'reverse warning should mention missing reverse')
+
 console.log('doctor.test: all assertions passed')

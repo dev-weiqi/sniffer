@@ -2,6 +2,9 @@
   "name": "sniffer",
   "private": true,
   "scripts": {
+    "coverage": "npm run coverage:client && npm run coverage:server",
+    "coverage:client": "cd client && ./gradlew :koverXmlReport :koverHtmlReport :koverLog :koverVerify",
+    "coverage:server": "npm --prefix server/ui run coverage && npm --prefix server/daemon run coverage",
     "setup": "cd server/daemon && npm install && cd ../ui && npm install && npm run build",
     "start": "node scripts/start.mjs"
   }

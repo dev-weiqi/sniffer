@@ -44,6 +44,8 @@ fun now(): Long = epochMillis()
 object Sniffer {
     private val queue = Channel<DeviceMessage>(1000, BufferOverflow.DROP_OLDEST)
 
+    internal var reportSinkForTests: ((DeviceMessage) -> Unit)? = null
+
     @Volatile
     private var capabilities: Set<String> = emptySet()
 
@@ -92,6 +94,7 @@ object Sniffer {
 
     /** Reports one message. While disconnected, up to 1000 messages are buffered (oldest dropped). */
     fun report(msg: DeviceMessage) {
+        reportSinkForTests?.invoke(msg)
         queue.trySend(msg)
     }
 
@@ -111,6 +114,7 @@ object Sniffer {
 
     private val client by lazy { HttpClient(CIO) { install(WebSockets) } }
 
+    @CoverageExcluded
     private suspend fun connectLoop(host: String, port: Int, hello: Hello) {
         while (currentCoroutineContext().isActive) {
             try {
@@ -121,7 +125,7 @@ object Sniffer {
                     }
                     try {
                         for (frame in incoming) {
-                            if (frame is Frame.Text) handleDaemonMessage(frame.readText())
+                            if (frame is Frame.Text) handleDaemonMessage(frame.readText(), pushHandlers)
                         }
                     } finally {
                         sender.cancel()
@@ -136,18 +140,22 @@ object Sniffer {
         }
     }
 
-    private fun handleDaemonMessage(text: String) {
-        val msg = runCatching { SnifferJson.decodeFromString<DaemonMessage>(text) }.getOrNull() ?: return
-        when (msg) {
-            is MockRules -> MockRegistry.update(msg)
-            is PushEvent -> {
-                // expand ${randomId}/${now}/${randomString} just like mock payloads
-                val payload = runCatching { expandMockPlaceholders(msg.payload) }.getOrDefault(msg.payload)
-                val targets = if (msg.connectionId == null) pushHandlers.values
-                else listOfNotNull(pushHandlers[msg.connectionId])
-                // a throwing handler must not kill the daemon connection loop
-                targets.forEach { h -> runCatching { h(msg.event, payload) } }
-            }
+}
+
+internal fun handleDaemonMessage(
+    text: String,
+    pushHandlers: Map<String, (event: String, payload: String) -> Unit>,
+) {
+    val msg = runCatching { SnifferJson.decodeFromString<DaemonMessage>(text) }.getOrNull() ?: return
+    when (msg) {
+        is MockRules -> MockRegistry.update(msg)
+        is PushEvent -> {
+            // expand ${randomId}/${now}/${randomString} just like mock payloads
+            val payload = runCatching { expandMockPlaceholders(msg.payload) }.getOrDefault(msg.payload)
+            val targets = if (msg.connectionId == null) pushHandlers.values
+            else listOfNotNull(pushHandlers[msg.connectionId])
+            // a throwing handler must not kill the daemon connection loop
+            targets.forEach { h -> runCatching { h(msg.event, payload) } }
         }
     }
 }

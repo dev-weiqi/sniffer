@@ -1,7 +1,8 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { HttpMockRule, HttpRow } from './state'
-import { copyText, fmtDuration, fmtSize, fmtTime, statusClass, toCurl, urlParts, useDetailWidth, useListKeys } from './util'
+import { copyText, fmtDuration, fmtSize, fmtTime, statusClass, toCurl, urlParts } from './util'
 import { newRuleId } from './util'
+import { useDetailWidth, useListKeys } from './hooks'
 import { JsonView } from './JsonView'
 import { base64ToBytes, formatWebpSummary, parseWebpAnimation, type WebpAnimationInfo } from './webp'
 

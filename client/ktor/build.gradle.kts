@@ -13,5 +13,9 @@ kotlin {
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.mock)
         }
+        jvmTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.ktor.client.mock)
+        }
     }
 }

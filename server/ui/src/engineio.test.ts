@@ -22,6 +22,11 @@ const defaultNs = decodeEngineIoFrame('42["ping",1]')
 assert(defaultNs!.namespace === undefined, `default ns omitted, got ${defaultNs!.namespace}`)
 assert(defaultNs!.eventName === 'ping', `default ns event, got ${defaultNs!.eventName}`)
 
+const binaryEvent = decodeEngineIoFrame('452-/files,["upload",{"_placeholder":true,"num":0}]')
+assert(binaryEvent!.socketLabel === 'BINARY_EVENT', `binary label, got ${binaryEvent!.socketLabel}`)
+assert(binaryEvent!.namespace === '/files', `binary namespace, got ${binaryEvent!.namespace}`)
+assert(binaryEvent!.eventName === 'upload', `binary eventName, got ${binaryEvent!.eventName}`)
+
 // CONNECT with handshake object
 const connect = decodeEngineIoFrame('40/chat,{"sid":"abc"}')
 assert(connect!.socketLabel === 'CONNECT', `CONNECT label, got ${connect!.socketLabel}`)
