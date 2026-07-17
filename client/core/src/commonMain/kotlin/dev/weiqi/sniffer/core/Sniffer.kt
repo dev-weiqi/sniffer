@@ -23,6 +23,9 @@ import kotlin.uuid.Uuid
 
 const val SDK_VERSION = "0.1.0"
 
+/** Default daemon port. Single source for the SDK default and the sample apps. */
+const val DEFAULT_PORT = 9091
+
 /** Bodies larger than this are truncated (approximated by UTF-16 length). */
 const val MAX_BODY_CHARS = 1024 * 1024
 
@@ -59,7 +62,7 @@ object Sniffer {
     fun start(
         appId: String,
         host: String = "localhost",
-        port: Int = 9091,
+        port: Int = DEFAULT_PORT,
         deviceName: String? = null,
     ) {
         if (scope != null) return

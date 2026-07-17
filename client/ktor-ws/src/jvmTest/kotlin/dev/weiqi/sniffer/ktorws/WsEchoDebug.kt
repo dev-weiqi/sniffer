@@ -20,7 +20,7 @@ fun main() = runBlocking {
         install(WebSockets)
         install(dev.weiqi.sniffer.ktor.SnifferKtor)
     }
-    val session = client.webSocketSession("ws://localhost:9091/test/ws")
+    val session = client.webSocketSession("ws://localhost:${dev.weiqi.sniffer.core.DEFAULT_PORT}/test/ws")
     println("connected, sending…")
     session.send("hello-debug")
     withTimeout(3000) {

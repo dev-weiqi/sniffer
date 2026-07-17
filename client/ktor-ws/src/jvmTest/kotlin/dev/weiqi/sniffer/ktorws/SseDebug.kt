@@ -15,7 +15,7 @@ fun main() = runBlocking {
     delay(1500) // let the SDK connect so reports flow to the daemon
 
     val client = HttpClient(CIO) { install(dev.weiqi.sniffer.ktor.SnifferKtor) }
-    client.prepareGet("http://localhost:9091/test/sse").execute { resp ->
+    client.prepareGet("http://localhost:${dev.weiqi.sniffer.core.DEFAULT_PORT}/test/sse").execute { resp ->
         println("status: ${resp.status}")
         val ch = resp.bodyAsChannel()
         while (true) {

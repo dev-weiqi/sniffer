@@ -1,6 +1,7 @@
 package dev.weiqi.sniffer.samplecmp
 
 import androidx.compose.runtime.mutableStateListOf
+import dev.weiqi.sniffer.core.DEFAULT_PORT
 import dev.weiqi.sniffer.ktor.SnifferKtor
 import dev.weiqi.sniffer.ktorws.SnifferKtorWs
 import io.ktor.client.plugins.websocket.webSocketSession
@@ -31,7 +32,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 // Android reaches the daemon via adb reverse; the iOS simulator shares the Mac's loopback
-const val BASE = "http://localhost:9091"
+const val BASE = "http://localhost:$DEFAULT_PORT"
 private const val ANIMATED_WEBP = "https://mathiasbynens.be/demo/animated-webp-supported.webp"
 
 enum class LogKind { INFO, OK, ERROR, EVENT }
@@ -99,7 +100,7 @@ class DemoController {
         DemoSection("ktor WebSocket", listOf(
             DemoAction("connect") {
                 if (ws != null) return@DemoAction log("already connected", LogKind.INFO)
-                val session = ktor.webSocketSession("ws://localhost:9091/test/ws")
+                val session = ktor.webSocketSession("ws://localhost:$DEFAULT_PORT/test/ws")
                 ws = session
                 log("ws connected", LogKind.OK)
                 scope.launch(handler) {
