@@ -78,7 +78,7 @@ npm install -g @dev-weiqi/sniffer@latest
 Or pin a specific version:
 
 ```bash
-npm install -g @dev-weiqi/sniffer@0.1.7
+npm install -g @dev-weiqi/sniffer@0.4.0
 ```
 
 ## Add the SDK

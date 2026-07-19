@@ -108,7 +108,9 @@ public key published to keys.openpgp.org). POM metadata lives in `client/gradle.
 **Daemon → npm** (`@dev-weiqi/sniffer`, from `server/daemon`):
 
 1. Bump `version` in `server/daemon/package.json`. Daemon and SDK version independently —
-   sync is not required or implied.
+   sync is not required or implied. Also update the pinned-install example in README
+   (`npm install -g @dev-weiqi/sniffer@<v>`) — the npm/maven badges auto-track, the
+   body text does not.
 2. `cd server/daemon && npm publish --access public` — `prepack` compiles TS to `dist/`
    and bundles the built web UI into `ui-dist/` automatically.
 3. Verify: `npm view @dev-weiqi/sniffer version`, then install the tarball in a temp dir and
