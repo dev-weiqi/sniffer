@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { HttpMockRule, HttpRow, PausedHit } from './state'
-import { copyText, fmtDuration, fmtSize, fmtTime, prettyJson, statusClass, toCurl, urlParts } from './util'
+import { copyText, fmtDuration, fmtSize, fmtTime, prettyJson, splitHighlight, statusClass, toCurl, urlParts } from './util'
 import { newRuleId } from './util'
 import { useDetailWidth, useListKeys } from './hooks'
 import { JsonView } from './JsonView'
@@ -32,8 +32,9 @@ function sniffImageMime(base64: string): string {
   return 'image/png'
 }
 
-export function HttpView({ rows, pausedHits, armedCount, onMock, onArm, onResolve, onDisarmAll, onClear }: {
+export function HttpView({ rows, query, pausedHits, armedCount, onMock, onArm, onResolve, onDisarmAll, onClear }: {
   rows: HttpRow[]
+  query: string
   pausedHits: PausedHit[]
   armedCount: number
   onMock: (rule: HttpMockRule, deviceId: string) => void
@@ -125,7 +126,7 @@ export function HttpView({ rows, pausedHits, armedCount, onMock, onArm, onResolv
               <PausedRowItem key={h.id} hit={h} selected={h.id === selectedId} onSelect={setSelectedId} />
             ))}
             {sorted.map(r => (
-              <HttpRowItem key={r.id} row={r} paused={pausedById.has(r.id)}
+              <HttpRowItem key={r.id} row={r} query={query} paused={pausedById.has(r.id)}
                 selected={r.id === selectedId} onSelect={setSelectedId} />
             ))}
           </tbody>
@@ -137,7 +138,7 @@ export function HttpView({ rows, pausedHits, armedCount, onMock, onArm, onResolv
       {(selected || selectedHit) && <div className="pane-resizer" onMouseDown={startDetailDrag} />}
       {selectedHit
         ? <PausedDetail hit={selectedHit} onResolve={onResolve} onClose={() => setSelectedId(null)} />
-        : selected && <HttpDetail row={selected} onMock={onMock} onArm={onArm} onClose={() => setSelectedId(null)} />}
+        : selected && <HttpDetail row={selected} query={query} onMock={onMock} onArm={onArm} onClose={() => setSelectedId(null)} />}
     </div>
   )
 }
@@ -167,8 +168,9 @@ const PausedRowItem = memo(function PausedRowItem({ hit, selected, onSelect }: {
 })
 
 // memoized: only the rows whose data or selection changed re-render as traffic streams in
-const HttpRowItem = memo(function HttpRowItem({ row: r, paused, selected, onSelect }: {
+const HttpRowItem = memo(function HttpRowItem({ row: r, query, paused, selected, onSelect }: {
   row: HttpRow
+  query: string
   paused: boolean
   selected: boolean
   onSelect: (id: string | null) => void
@@ -178,7 +180,7 @@ const HttpRowItem = memo(function HttpRowItem({ row: r, paused, selected, onSele
     <tr className={paused ? 'bp-row' : undefined} data-selected={selected || undefined}
       onClick={() => onSelect(selected ? null : r.id)}>
       <td className="mono dim">{fmtTime(r.ts)}</td>
-      <td className="mono method">{r.method}</td>
+      <td className="mono method"><Highlight text={r.method} query={query} /></td>
       <td className={`mono ${statusClass(r.status, r.error)}`}>
         {paused ? <span className="bp-dot" /> : r.status === 0 ? 'ERR' : r.status ?? '…'}
       </td>
@@ -186,8 +188,8 @@ const HttpRowItem = memo(function HttpRowItem({ row: r, paused, selected, onSele
         {paused && <span className="badge bp-paused">PAUSED</span>}
         {r.mocked && <span className="badge mock">MOCK</span>}
         {!r.mocked && (r.delayedMs ?? 0) > 0 && <span className="badge delay">DELAY</span>}
-        <span className="dim">{domain}</span>
-        <span>{path}</span>
+        <span className="dim"><Highlight text={domain} query={query} /></span>
+        <span><Highlight text={path} query={query} /></span>
       </td>
       <td className="mono num dim">{fmtSize(r.respSize)}</td>
       <td className="mono num dim">{fmtDuration(r.durationMs)}</td>
@@ -195,13 +197,14 @@ const HttpRowItem = memo(function HttpRowItem({ row: r, paused, selected, onSele
   )
 })
 
-function HttpDetail({ row, onMock, onArm, onClose }: {
+function HttpDetail({ row, query, onMock, onArm, onClose }: {
   row: HttpRow
+  query: string
   onMock: (rule: HttpMockRule, deviceId: string) => void
   onArm: (row: HttpRow) => void
   onClose: () => void
 }) {
-  const { query } = urlParts(row.url)
+  const { query: queryParams } = urlParts(row.url)
   const [copied, setCopied] = useState(false)
 
   const copyCurl = () => {
@@ -233,8 +236,8 @@ function HttpDetail({ row, onMock, onArm, onClose }: {
       </div>
 
       <Section title="Request">
-        <KV k="URL" v={row.url} />
-        <KV k="Method" v={row.method} />
+        <KV k="URL" v={row.url} query={query} />
+        <KV k="Method" v={row.method} query={query} />
         <KV k="Library" v={row.library} />
         {row.durationMs !== undefined && <KV k="Duration" v={fmtDuration(row.durationMs)} />}
         {(row.delayedMs ?? 0) > 0 && <KV k="Delayed" v={`+${row.delayedMs} ms injected by a delay-only rule`} />}
@@ -242,9 +245,9 @@ function HttpDetail({ row, onMock, onArm, onClose }: {
         {row.error && <KV k="Error" v={row.error} />}
       </Section>
 
-      {query.length > 0 && (
+      {queryParams.length > 0 && (
         <Section title="Query">
-          {query.map(([k, v], i) => <KV key={i} k={k} v={v} />)}
+          {queryParams.map(([k, v], i) => <KV key={i} k={k} v={v} query={query} />)}
         </Section>
       )}
 
@@ -254,7 +257,7 @@ function HttpDetail({ row, onMock, onArm, onClose }: {
 
       {row.reqBody && (
         <Section title="Request Body">
-          <JsonView text={row.reqBody} />
+          <JsonView text={row.reqBody} query={query} />
         </Section>
       )}
 
@@ -268,7 +271,7 @@ function HttpDetail({ row, onMock, onArm, onClose }: {
         {row.respBody
           ? (row.respBase64 && imageContentType(row)
               ? <ImagePreview contentType={imageContentType(row)!} base64={row.respBody} />
-              : isSse(row) ? <pre className="body-pre">{row.respBody}</pre> : <JsonView text={row.respBody} />)
+              : isSse(row) ? <pre className="body-pre"><Highlight text={row.respBody} query={query} /></pre> : <JsonView text={row.respBody} query={query} />)
           : <div className="dim pad">
               {row.status === undefined ? 'Waiting for response…'
                 : isSse(row) ? 'SSE stream — events appear here as the app reads them'
@@ -496,11 +499,16 @@ export function CopyButton({ text }: { text: string }) {
   )
 }
 
-export function KV({ k, v }: { k: string; v: string }) {
+/** Wraps query matches in <mark> so search hits are visible in place. */
+export function Highlight({ text, query }: { text: string; query: string }) {
+  return <>{splitHighlight(text, query).map((s, i) => s.match ? <mark key={i} className="hl">{s.text}</mark> : s.text)}</>
+}
+
+export function KV({ k, v, query = '' }: { k: string; v: string; query?: string }) {
   return (
     <div className="kv">
       <span className="kv-k">{k}</span>
-      <span className="kv-v mono">{v}</span>
+      <span className="kv-v mono"><Highlight text={v} query={query} /></span>
     </div>
   )
 }

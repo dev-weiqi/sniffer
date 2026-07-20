@@ -68,3 +68,21 @@ export function copyText(text: string): void {
 export function newRuleId(): string {
   return Math.random().toString(36).slice(2, 10)
 }
+
+/** Split text into segments, flagging which match the query (case-insensitive). Blank query → the whole text as one non-match. */
+export function splitHighlight(text: string, query: string): Array<{ text: string; match: boolean }> {
+  const q = query.trim().toLowerCase()
+  if (!q || !text) return text ? [{ text, match: false }] : []
+  const out: Array<{ text: string; match: boolean }> = []
+  const lower = text.toLowerCase()
+  let from = 0
+  let i = lower.indexOf(q, from)
+  while (i !== -1) {
+    if (i > from) out.push({ text: text.slice(from, i), match: false })
+    out.push({ text: text.slice(i, i + q.length), match: true })
+    from = i + q.length
+    i = lower.indexOf(q, from)
+  }
+  if (from < text.length) out.push({ text: text.slice(from), match: false })
+  return out
+}

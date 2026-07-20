@@ -201,6 +201,8 @@ table.grid tbody tr { cursor: default; transition: background 0.12s; }
 table.grid tbody tr:hover { background: var(--hover); }
 table.grid tbody tr[data-selected] { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
 
+mark.hl { background: var(--warn); color: var(--bg-panel); border-radius: 2px; padding: 0 1px; font-weight: 600; }
+
 .url-cell { overflow: hidden; text-overflow: ellipsis; max-width: 0; width: 99%; }
 .method { font-weight: 600; }
 

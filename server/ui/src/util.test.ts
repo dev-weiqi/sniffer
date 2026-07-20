@@ -5,6 +5,7 @@ import {
   fmtTime,
   newRuleId,
   prettyJson,
+  splitHighlight,
   statusClass,
   toCurl,
   urlParts,
@@ -125,5 +126,14 @@ if (originalDocument) {
 } else {
   delete (globalThis as { document?: Document }).document
 }
+
+const hl = (t: string, q: string) => JSON.stringify(splitHighlight(t, q))
+assertEqual(hl('abc', '  '), '[{"text":"abc","match":false}]', 'splitHighlight blank query keeps whole text')
+assertEqual(hl('', 'x'), '[]', 'splitHighlight empty text yields nothing')
+assertEqual(hl('no match here', 'zzz'), '[{"text":"no match here","match":false}]', 'splitHighlight no match')
+assertEqual(hl('GET', 'ge'), '[{"text":"GE","match":true},{"text":"T","match":false}]', 'splitHighlight match at start, case-insensitive')
+assertEqual(hl('/users/1', 'ser'), '[{"text":"/u","match":false},{"text":"ser","match":true},{"text":"s/1","match":false}]', 'splitHighlight match in middle')
+assertEqual(hl('chat', 'hat'), '[{"text":"c","match":false},{"text":"hat","match":true}]', 'splitHighlight match at end')
+assertEqual(hl('aXaXa', 'x'), '[{"text":"a","match":false},{"text":"X","match":true},{"text":"a","match":false},{"text":"X","match":true},{"text":"a","match":false}]', 'splitHighlight multiple matches')
 
 console.log('util.test: all assertions passed')

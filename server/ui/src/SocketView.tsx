@@ -3,11 +3,12 @@ import type { SocketConn, SocketMockRule, SocketRow } from './state'
 import { fmtTime, newRuleId } from './util'
 import { useDetailWidth, useListKeys } from './hooks'
 import { JsonView } from './JsonView'
-import { CopyButton, KV, Section } from './HttpView'
+import { CopyButton, Highlight, KV, Section } from './HttpView'
 import { decodeEngineIoFrame, frameLabel } from './engineio'
 
-export function SocketView({ events, conns, connUrls, deviceId, onMockAck, onPushPrefill, onClear }: {
+export function SocketView({ events, query, conns, connUrls, deviceId, onMockAck, onPushPrefill, onClear }: {
   events: SocketRow[]
+  query: string
   conns: SocketConn[]
   connUrls: Record<string, string>
   deviceId: string
@@ -97,9 +98,9 @@ export function SocketView({ events, conns, connUrls, deviceId, onMockAck, onPus
                 </td>
                 <td className="mono">
                   {e.mocked && <span className="badge mock">MOCK</span>}
-                  {f ? (f.eventName ?? f.socketLabel ?? f.engineLabel) : e.event}
+                  <Highlight text={f ? (f.eventName ?? f.socketLabel ?? f.engineLabel) : e.event} query={query} />
                 </td>
-                <td className="mono dim ellipsis">{f ? (f.data ?? frameLabel(f)) : e.payload}</td>
+                <td className="mono dim ellipsis"><Highlight text={f ? (f.data ?? frameLabel(f)) : e.payload} query={query} /></td>
                 <td className="mono dim">
                   {e.ackPayload !== undefined ? (e.ackMocked ? 'mock ✓' : '✓') : ''}
                 </td>
@@ -149,7 +150,7 @@ export function SocketView({ events, conns, connUrls, deviceId, onMockAck, onPus
               <button className="ghost" onClick={() => setSelectedId(null)}>✕</button>
             </div>
             <Section title="Event">
-              <KV k="Event" v={selectedFrame ? (selectedFrame.eventName ?? frameLabel(selectedFrame)) : selected.event} />
+              <KV k="Event" v={selectedFrame ? (selectedFrame.eventName ?? frameLabel(selectedFrame)) : selected.event} query={query} />
               {selectedFrame && <KV k="Frame" v={frameLabel(selectedFrame)} />}
               <KV k="Direction" v={selected.direction === 'out' ? 'client → server' : 'server → client'} />
               <KV k="Transport" v={selected.transport} />
@@ -158,13 +159,13 @@ export function SocketView({ events, conns, connUrls, deviceId, onMockAck, onPus
             </Section>
             <Section title="Payload" action={selected.payload ? <CopyButton text={selected.payload} /> : undefined}>
               {selectedFrame
-                ? (selectedFrame.data ? <JsonView text={selectedFrame.data} /> : <span className="dim">(no payload)</span>)
-                : <JsonView text={selected.payload} />}
+                ? (selectedFrame.data ? <JsonView text={selectedFrame.data} query={query} /> : <span className="dim">(no payload)</span>)
+                : <JsonView text={selected.payload} query={query} />}
             </Section>
             {selected.ackPayload !== undefined && (
               <Section title={selected.ackMocked ? 'Ack (mock)' : 'Ack'}
                 action={selected.ackPayload ? <CopyButton text={selected.ackPayload} /> : undefined}>
-                <JsonView text={selected.ackPayload} />
+                <JsonView text={selected.ackPayload} query={query} />
               </Section>
             )}
       </aside>

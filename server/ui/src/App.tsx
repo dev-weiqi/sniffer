@@ -391,14 +391,14 @@ export default function App() {
 
       <main className="content">
         {tab === 'http' && (
-          <HttpView rows={filteredHttp} pausedHits={devicePausedHits}
+          <HttpView rows={filteredHttp} query={deferredSearch} pausedHits={devicePausedHits}
             armedCount={deviceBreakpoints.filter(r => r.enabled).length}
             onMock={mockFromRequest} onArm={armBreakpoint} onResolve={resolvePausedHit}
             onDisarmAll={disarmAllBreakpoints}
             onClear={async () => { if (await confirm('Clear API traffic?', 'Clear')) api.clearHttpEntries() }} />
         )}
         {tab === 'socket' && (
-          <SocketView events={filteredSocketEvents} conns={state.socketConns} connUrls={state.connUrls} deviceId={deviceId}
+          <SocketView events={filteredSocketEvents} query={deferredSearch} conns={state.socketConns} connUrls={state.connUrls} deviceId={deviceId}
             onMockAck={mockFromSocketEvent} onPushPrefill={pushFromEvent}
             onClear={async () => { if (await confirm('Clear socket events?', 'Clear')) api.clearSocketEntries() }} />
         )}

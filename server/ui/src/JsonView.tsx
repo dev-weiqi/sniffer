@@ -1,30 +1,31 @@
 import { useState } from 'react'
+import { Highlight } from './HttpView'
 
 // Collapsible JSON tree; falls back to raw text when the body isn't JSON.
-export function JsonView({ text }: { text: string | null | undefined }) {
+export function JsonView({ text, query = '' }: { text: string | null | undefined; query?: string }) {
   const [raw, setRaw] = useState(false)
   if (!text) return null
   let data: unknown
   try {
     data = JSON.parse(text)
   } catch {
-    return <pre className="body-pre">{text}</pre>
+    return <pre className="body-pre"><Highlight text={text} query={query} /></pre>
   }
   return (
     <div className="json-view">
       <button className="jn-toggle" onClick={() => setRaw(r => !r)}>{raw ? 'Tree' : 'Raw'}</button>
       {raw ? (
-        <pre className="body-pre">{JSON.stringify(data, null, 2)}</pre>
+        <pre className="body-pre"><Highlight text={JSON.stringify(data, null, 2)} query={query} /></pre>
       ) : (
         <div className="json-tree body-pre">
-          <Node name={null} value={data} depth={0} />
+          <Node name={null} value={data} depth={0} query={query} />
         </div>
       )}
     </div>
   )
 }
 
-function Node({ name, value, depth }: { name: string | number | null; value: unknown; depth: number }) {
+function Node({ name, value, depth, query }: { name: string | number | null; value: unknown; depth: number; query: string }) {
   // socket.io / double-encoded APIs often nest JSON inside string values —
   // parse those for display (Raw view keeps the literal truth)
   let display = value
@@ -45,7 +46,7 @@ function Node({ name, value, depth }: { name: string | number | null; value: unk
   const isObject = !isArray && display !== null && typeof display === 'object'
   const [open, setOpen] = useState(depth < 2)
 
-  const key = name !== null ? <span className="jn-key">{name}</span> : null
+  const key = name !== null ? <span className="jn-key"><Highlight text={String(name)} query={query} /></span> : null
   const sep = name !== null ? <span className="jn-punc">: </span> : null
 
   if (isArray || isObject) {
@@ -72,7 +73,7 @@ function Node({ name, value, depth }: { name: string | number | null; value: unk
         {open && (
           <>
             <div className="jn-children">
-              {entries.map(([k, v]) => <Node key={String(k)} name={k} value={v} depth={depth + 1} />)}
+              {entries.map(([k, v]) => <Node key={String(k)} name={k} value={v} depth={depth + 1} query={query} />)}
             </div>
             <div className="jn-punc jn-close">{closeB}</div>
           </>
@@ -85,7 +86,7 @@ function Node({ name, value, depth }: { name: string | number | null; value: unk
     <div className="jn-node jn-leaf">
       <span className="jn-chev-spacer" />
       {key}{sep}
-      <span className={'jn-val ' + valClass(value)}>{fmt(value)}</span>
+      <span className={'jn-val ' + valClass(value)}><Highlight text={fmt(value)} query={query} /></span>
     </div>
   )
 }
