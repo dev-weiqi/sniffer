@@ -78,7 +78,7 @@ npm install -g @dev-weiqi/sniffer@latest
 Or pin a specific version:
 
 ```bash
-npm install -g @dev-weiqi/sniffer@0.4.0
+npm install -g @dev-weiqi/sniffer@0.4.1
 ```
 
 ## Desktop app
@@ -117,7 +117,7 @@ Supported client integrations:
 | Ktor WebSocket | `io.github.dev-weiqi.sniffer:ktor-ws` |
 
 ```kotlin
-val snifferVersion = "0.4.0"
+val snifferVersion = "0.4.1"
 
 dependencies {
     debugImplementation("io.github.dev-weiqi.sniffer:core:$snifferVersion")
