@@ -81,6 +81,26 @@ Or pin a specific version:
 npm install -g @dev-weiqi/sniffer@0.4.0
 ```
 
+## Desktop app
+
+A macOS desktop build bundles the daemon and UI into one window, with no Node.js
+or npm needed. Download the latest `.dmg` from the
+[Releases page](https://github.com/dev-weiqi/sniffer/releases)
+(`Sniffer-server-mac-aarch64.dmg` for Apple Silicon, `Sniffer-server-mac-x64.dmg`
+for Intel), drag `Sniffer.app` into `/Applications`, and launch. It runs the same
+daemon as the CLI; change port 9091 in the app's settings if needed.
+
+### "Sniffer is damaged and can't be opened" (macOS)
+
+The dmg is not notarized by Apple yet, so Gatekeeper blocks it after download.
+Drag `Sniffer.app` into `/Applications`, then clear the quarantine flag once:
+
+```bash
+xattr -d com.apple.quarantine /Applications/Sniffer.app
+```
+
+After that it opens normally.
+
 ## Add the SDK
 
 Use `core` plus the transport modules your app actually uses. Add the matching
@@ -258,17 +278,3 @@ cd client && ./gradlew :core:jvmTest :okhttp:test :sample:compileDebugKotlin
 ```
 
 More detail: [docs/GUIDE.md](docs/GUIDE.md) and [PROTOCOL.md](PROTOCOL.md).
-
-## Troubleshooting
-
-### "Sniffer is damaged and can't be opened" (macOS)
-
-The desktop dmg from GitHub Releases is not notarized by Apple yet, so
-Gatekeeper blocks it after download. Drag `Sniffer.app` into `/Applications`,
-then clear the quarantine flag once:
-
-```bash
-xattr -d com.apple.quarantine /Applications/Sniffer.app
-```
-
-After that it opens normally.
