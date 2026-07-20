@@ -46,7 +46,7 @@ class ProtocolTest {
             ) to "socket-status",
             SocketEventMsg(
                 id = "e1", connectionId = "c1", transport = "socketio", direction = "out",
-                event = "chat", payload = "[]", mocked = false, timestamp = 1,
+                event = "chat", payload = "[]", mocked = false, timestamp = 1, label = "x",
             ) to "socket-event",
             SocketAckMsg(id = "a1", payload = null, mocked = true, timestamp = 1) to "socket-ack",
             BreakpointHitMsg(

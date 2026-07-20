@@ -43,9 +43,11 @@ content (`body: null`). Bodies over **1 MB** are truncated and flagged
 
 // socket events; direction: "out" = client emit, "in" = server→client
 // ktor-ws frames use the fixed event name "message"
+// label (optional): short app-provided display tag (SDK label labeler on socket.on); the UI
+// renders event(label). "event" stays the real wire name — mock matching and injection always use "event"
 { "type": "socket-event", "id": "<uuid>", "connectionId": "<uuid>",
   "transport": "socketio", "direction": "out", "event": "chat:send",
-  "payload": "[\"hello\"]", "mocked": false, "timestamp": 0 }
+  "payload": "[\"hello\"]", "mocked": false, "timestamp": 0, "label": null }
 
 // ack for a previous emit (same id)
 { "type": "socket-ack", "id": "<emit uuid>", "payload": "[...]",

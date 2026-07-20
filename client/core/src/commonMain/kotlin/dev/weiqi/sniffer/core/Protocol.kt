@@ -79,6 +79,8 @@ data class SocketEventMsg(
     val payload: String,
     val mocked: Boolean,
     val timestamp: Long,
+    // optional display tag (app-provided labeler); the UI renders "event(label)" — [event] stays the real wire name
+    val label: String? = null,
 ) : DeviceMessage
 
 @Serializable

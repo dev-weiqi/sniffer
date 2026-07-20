@@ -213,6 +213,22 @@ socket.connect()
 socket.emit("cart:update", mapOf("sku" to "pro"))
 ```
 
+Apps that multiplex everything over one generic event can pass a `label` lambda
+to `on`: it receives the args and returns a short tag the UI shows as
+`event(tag)` in the list. Only the tag inside the parentheses is app-controlled,
+and the real event name is always visible. The tag is display-only: listeners,
+the wire event name, and mock matching all use the real name. Return null for
+no tag:
+
+```kotlin
+socket.on("message", label = { args ->
+    args.optJSONObject(0)?.optString("type")?.takeIf { it.isNotEmpty() }
+}) { args ->
+    // normal listener
+}
+// server sends: message {"type":"chat",...} → listed as message(chat)
+```
+
 Ktor WebSocket: install the plugin once and plain `webSocket` calls are monitored:
 
 ```kotlin

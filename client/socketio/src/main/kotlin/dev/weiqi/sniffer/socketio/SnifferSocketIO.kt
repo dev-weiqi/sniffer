@@ -44,6 +44,11 @@ class SnifferSocket internal constructor(
 ) : Emitter() {
     private val connectionId = newId()
     private val bridged = ConcurrentHashMap.newKeySet<String>()
+    private val eventLabels = ConcurrentHashMap<String, (JSONArray) -> String?>()
+
+    // optional display tag for inbound reports (UI renders "event(tag)"); null = no labeler, blank, or failed
+    private fun labelFor(event: String, args: JSONArray): String? =
+        runCatching { eventLabels[event]?.invoke(args)?.takeUnless { it.isBlank() } }.getOrNull()
 
     init {
         // report connection status even if the app never subscribes to these events
@@ -57,8 +62,9 @@ class SnifferSocket internal constructor(
     private fun registerPushHandler() {
         Sniffer.registerPushHandler(connectionId) { event, payload ->
             val args = parseArgs(payload)
+            val json = toJsonArray(args)
             Sniffer.report(
-                SocketEventMsg(newId(), connectionId, "socketio", "in", event, toJsonArrayString(args), mocked = true, timestamp = now())
+                SocketEventMsg(newId(), connectionId, "socketio", "in", event, json.toString(), mocked = true, timestamp = now(), label = labelFor(event, json))
             )
             // host callbacks keep io.socket's EventThread guarantee
             EventThread.exec { super.emit(event, *args) }
@@ -83,9 +89,12 @@ class SnifferSocket internal constructor(
                     Sniffer.unregisterPushHandler(connectionId)
                     Sniffer.report(SocketStatusMsg(connectionId, "socketio", url, "disconnected", now()))
                 }
-                else -> Sniffer.report(
-                    SocketEventMsg(newId(), connectionId, "socketio", "in", event, toJsonArrayString(args), mocked = false, timestamp = now())
-                )
+                else -> {
+                    val json = toJsonArray(args)
+                    Sniffer.report(
+                        SocketEventMsg(newId(), connectionId, "socketio", "in", event, json.toString(), mocked = false, timestamp = now(), label = labelFor(event, json))
+                    )
+                }
             }
             super.emit(event, *args)
         }
@@ -94,6 +103,19 @@ class SnifferSocket internal constructor(
     override fun on(event: String, fn: Listener): Emitter {
         ensureBridge(event)
         return super.on(event, fn)
+    }
+
+    /**
+     * [on] with a display tag for this event in the UI: [label] receives the args (as a JSON array)
+     * and returns a short tag the UI shows as `event(tag)` — e.g. apps that multiplex everything
+     * over a generic `"message"` event can surface the payload type as `message(chat)`. Only the
+     * tag inside the parentheses is app-controlled; the real event name is always shown. Display
+     * only: listeners, the wire event name, mock matching, and injection all use the real name.
+     * Return null (or blank) for no tag; a throwing labeler yields no tag.
+     */
+    fun on(event: String, label: (args: JSONArray) -> String?, fn: Listener): Emitter {
+        eventLabels[event] = label
+        return on(event, fn)
     }
 
     override fun once(event: String, fn: Listener): Emitter {
@@ -176,7 +198,9 @@ internal fun parseArgs(payload: String): Array<Any?> {
     return if (parsed is JSONArray) Array(parsed.length()) { parsed.opt(it) } else arrayOf(parsed)
 }
 
-internal fun toJsonArrayString(args: Array<out Any?>): String {
+internal fun toJsonArrayString(args: Array<out Any?>): String = toJsonArray(args).toString()
+
+internal fun toJsonArray(args: Array<out Any?>): JSONArray {
     val arr = JSONArray()
     for (a in args) {
         when (a) {
@@ -188,5 +212,5 @@ internal fun toJsonArrayString(args: Array<out Any?>): String {
             else -> arr.put(a.toString())
         }
     }
-    return arr.toString()
+    return arr
 }

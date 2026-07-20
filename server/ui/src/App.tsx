@@ -182,7 +182,9 @@ export default function App() {
     const q = deferredSearch.trim().toLowerCase()
     return state.socketEvents.filter(r =>
       r.deviceId === deviceId &&
-      (!q || r.event.toLowerCase().includes(q) || r.payload.toLowerCase().includes(q)))
+      (!q || r.event.toLowerCase().includes(q) ||
+        (r.label?.toLowerCase().includes(q) ?? false) ||
+        r.payload.toLowerCase().includes(q)))
   }, [state.socketEvents, deviceId, deferredSearch])
 
   const mockFromRequest = (rule: HttpMockRule, targetDeviceId: string) => {

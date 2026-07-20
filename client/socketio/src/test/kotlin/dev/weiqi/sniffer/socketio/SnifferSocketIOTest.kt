@@ -146,18 +146,77 @@ class SnifferSocketIOTest {
     }
 
     @Test
-    fun push_handler_injects_mocked_inbound_event() = runBlocking {
+    fun push_handler_injects_mocked_inbound_event() = runBlocking<Unit> {
         val reports = captureReports()
         val socket = FakeSocket()
         val wrapped = SnifferSocketIO.wrap(socket)
         val received = CompletableDeferred<List<Any?>>()
         wrapped.on("push") { args -> received.complete(args.toList()) }
+        val before = pushHandlers().keys.toSet()
         wrapped.connect()
 
-        pushHandlers().values.single().invoke("push", """["server",5]""")
+        pushHandlers().entries.single { it.key !in before }.value.invoke("push", """["server",5]""")
 
         assertEquals(listOf("server", 5), withTimeout(1000) { received.await() })
         assertTrue(reports.any { it is SocketEventMsg && it.event == "push" && it.mocked })
+        wrapped.disconnect() // unregister the push handler so it doesn't leak into other tests
+    }
+
+    @Test
+    fun label_tags_inbound_but_not_outbound_or_listeners() {
+        val reports = captureReports()
+        val socket = FakeSocket()
+        val wrapped = SnifferSocketIO.wrap(socket)
+        var calls = 0
+
+        wrapped.on("message", { args ->
+            args.optJSONObject(0)?.optString("type")?.takeIf { it.isNotEmpty() }
+        }) { calls++ }
+        socket.fire("message", JSONObject("""{"type":"chat"}"""))
+        socket.fire("message", "no-type-here") // labeler returns null → no label
+        wrapped.emit("message", JSONObject("""{"type":"chat"}"""))
+
+        assertEquals(2, calls) // listeners fire under the real event name
+        val inbound = reports.filterIsInstance<SocketEventMsg>().filter { it.direction == "in" }
+        assertEquals(listOf("message", "message"), inbound.map { it.event }) // wire name untouched
+        assertEquals(listOf("chat", null), inbound.map { it.label })
+        assertTrue(reports.any { it is SocketEventMsg && it.direction == "out" && it.event == "message" && it.label == null })
+    }
+
+    @Test
+    fun label_blank_or_throwing_yields_no_label() {
+        val reports = captureReports()
+        val socket = FakeSocket()
+        val wrapped = SnifferSocketIO.wrap(socket)
+
+        wrapped.on("blank", { _ -> " " }) {}
+        wrapped.on("throws", { _ -> error("boom") }) {}
+        socket.fire("blank", 1)
+        socket.fire("throws", 2)
+
+        val inbound = reports.filterIsInstance<SocketEventMsg>().filter { it.direction == "in" }
+        assertEquals(listOf("blank", "throws"), inbound.map { it.event })
+        assertEquals(listOf(null, null), inbound.map { it.label })
+    }
+
+    @Test
+    fun label_applies_to_injected_events() = runBlocking<Unit> {
+        val reports = captureReports()
+        val socket = FakeSocket()
+        val wrapped = SnifferSocketIO.wrap(socket)
+        val received = CompletableDeferred<List<Any?>>()
+        wrapped.on("push", { args -> args.optString(0) }) { args ->
+            received.complete(args.toList())
+        }
+        val before = pushHandlers().keys.toSet()
+        wrapped.connect()
+
+        pushHandlers().entries.single { it.key !in before }.value.invoke("push", """["server",5]""")
+
+        // app listeners still fire under the real event name
+        assertEquals(listOf("server", 5), withTimeout(1000) { received.await() })
+        assertTrue(reports.any { it is SocketEventMsg && it.event == "push" && it.label == "server" && it.mocked })
+        wrapped.disconnect() // unregister the push handler so it doesn't leak into other tests
     }
 
     @Test

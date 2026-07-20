@@ -98,7 +98,7 @@ export function SocketView({ events, query, conns, connUrls, deviceId, onMockAck
                 </td>
                 <td className="mono">
                   {e.mocked && <span className="badge mock">MOCK</span>}
-                  <Highlight text={f ? (f.eventName ?? f.socketLabel ?? f.engineLabel) : e.event} query={query} />
+                  <Highlight text={f ? (f.eventName ?? f.socketLabel ?? f.engineLabel) : (e.label ? `${e.event}(${e.label})` : e.event)} query={query} />
                 </td>
                 <td className="mono dim ellipsis"><Highlight text={f ? (f.data ?? frameLabel(f)) : e.payload} query={query} /></td>
                 <td className="mono dim">
@@ -151,6 +151,7 @@ export function SocketView({ events, query, conns, connUrls, deviceId, onMockAck
             </div>
             <Section title="Event">
               <KV k="Event" v={selectedFrame ? (selectedFrame.eventName ?? frameLabel(selectedFrame)) : selected.event} query={query} />
+              {selected.label && <KV k="Label" v={selected.label} query={query} />}
               {selectedFrame && <KV k="Frame" v={frameLabel(selectedFrame)} />}
               <KV k="Direction" v={selected.direction === 'out' ? 'client → server' : 'server → client'} />
               <KV k="Transport" v={selected.transport} />

@@ -162,7 +162,10 @@ class DemoController {
             DemoAction("Connect") {
                 if (socket != null) return@DemoAction log("already connected", LogKind.INFO)
                 socket = SnifferSocketIO.wrap(IO.socket(BASE), BASE).also { s ->
-                    s.on("chat:new") { args -> log("in chat:new: ${args.joinToString()}", LogKind.EVENT) }
+                    // label: UI lists chat:new(<sender>); only the tag in parens is app-controlled
+                    s.on("chat:new", label = { args ->
+                        args.optJSONObject(0)?.optString("from")?.takeIf { it.isNotEmpty() }
+                    }) { args -> log("in chat:new: ${args.joinToString()}", LogKind.EVENT) }
                     s.connect()
                 }
                 log("socket.io connecting…", LogKind.INFO)

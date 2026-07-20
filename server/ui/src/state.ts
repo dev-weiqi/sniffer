@@ -110,6 +110,8 @@ export interface SocketRow {
   transport: string
   direction: 'in' | 'out'
   event: string
+  /** app-provided display tag, rendered as `event(label)`; `event` stays the real wire name */
+  label?: string
   payload: string
   mocked: boolean
   ackPayload?: string | null
@@ -211,6 +213,7 @@ function applyDeviceMessage(state: State, deviceId: string, m: Msg): State {
       const row: SocketRow = {
         id: m.id, connectionId: m.connectionId, deviceId, ts: m.timestamp,
         transport: m.transport, direction: m.direction, event: m.event,
+        label: m.label ?? undefined,
         payload: m.payload, mocked: m.mocked,
       }
       return { ...state, socketEvents: appendCapped(state.socketEvents, row) }

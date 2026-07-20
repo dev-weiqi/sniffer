@@ -172,6 +172,26 @@ s = dispatch(s, {
   },
 })
 assertEqual(s.socketEvents.length, 1, 'socket-event appends row')
+assertEqual(s.socketEvents[0].label, undefined, 'socket-event without label stays unlabeled')
+
+s = dispatch(s, {
+  type: 'event',
+  deviceId: 'd1',
+  message: {
+    type: 'socket-event',
+    id: 'e-labeled',
+    connectionId: 'c2',
+    timestamp: 21,
+    transport: 'socketio',
+    direction: 'in',
+    event: 'message',
+    label: 'chat',
+    payload: '[{"type":"chat"}]',
+    mocked: false,
+  },
+})
+assertEqual(s.socketEvents[1].event, 'message', 'socket-event keeps wire event name')
+assertEqual(s.socketEvents[1].label, 'chat', 'socket-event carries display tag')
 
 s = dispatch(s, {
   type: 'event',
@@ -229,7 +249,7 @@ assertEqual(afterRelease.pausedHits.some(h => h.deviceId === 'd1'), false, 'brea
 
 let cleared = dispatch(s, { type: 'http-entries-cleared' })
 assertEqual(cleared.http.length, 0, 'http clear removes HTTP rows only')
-assertEqual(cleared.socketEvents.length, 1, 'http clear keeps socket rows')
+assertEqual(cleared.socketEvents.length, 2, 'http clear keeps socket rows')
 
 cleared = dispatch(s, { type: 'socket-entries-cleared' })
 assertEqual(cleared.socketEvents.length, 0, 'socket clear removes socket rows only')
