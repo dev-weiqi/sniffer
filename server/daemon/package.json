@@ -1,6 +1,6 @@
 {
   "name": "@dev-weiqi/sniffer",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Self-hosted Flipper alternative: local daemon + web UI to monitor and mock an app's HTTP & Socket traffic.",
   "license": "MIT",
   "homepage": "https://github.com/dev-weiqi/sniffer",
