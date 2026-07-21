@@ -82,7 +82,7 @@ export function SocketView({ events, query, conns, connUrls, deviceId, onMockAck
               </th>
               <th style={{ width: 36 }}></th>
               <th style={{ width: 160 }}>Event</th>
-              <th>Payload</th>
+              <th>Connection</th>
               <th style={{ width: 80 }}>Ack</th>
             </tr>
           </thead>
@@ -100,7 +100,7 @@ export function SocketView({ events, query, conns, connUrls, deviceId, onMockAck
                   {e.mocked && <span className="badge mock">MOCK</span>}
                   <Highlight text={f ? (f.eventName ?? f.socketLabel ?? f.engineLabel) : (e.label ? `${e.event}(${e.label})` : e.event)} query={query} />
                 </td>
-                <td className="mono dim ellipsis"><Highlight text={f ? (f.data ?? frameLabel(f)) : e.payload} query={query} /></td>
+                <td className="mono dim ellipsis"><Highlight text={connUrls[e.connectionId] || e.connectionId.slice(0, 8)} query={query} /></td>
                 <td className="mono dim">
                   {e.ackPayload !== undefined ? (e.ackMocked ? 'mock ✓' : '✓') : ''}
                 </td>

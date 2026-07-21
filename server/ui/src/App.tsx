@@ -184,8 +184,9 @@ export default function App() {
       r.deviceId === deviceId &&
       (!q || r.event.toLowerCase().includes(q) ||
         (r.label?.toLowerCase().includes(q) ?? false) ||
+        (state.connUrls[r.connectionId]?.toLowerCase().includes(q) ?? false) ||
         r.payload.toLowerCase().includes(q)))
-  }, [state.socketEvents, deviceId, deferredSearch])
+  }, [state.socketEvents, state.connUrls, deviceId, deferredSearch])
 
   const mockFromRequest = (rule: HttpMockRule, targetDeviceId: string) => {
     setDeviceId(targetDeviceId)
