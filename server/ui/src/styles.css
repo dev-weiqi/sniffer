@@ -223,6 +223,7 @@ mark.hl { background: var(--warn); color: var(--bg-panel); border-radius: 2px; p
 
 .dir-out { color: var(--info); font-weight: 700; }
 .dir-in { color: var(--ok); font-weight: 700; }
+.sys-event { color: var(--err); }
 
 .empty { padding: 48px 20px; text-align: center; color: var(--text-dim); }
 

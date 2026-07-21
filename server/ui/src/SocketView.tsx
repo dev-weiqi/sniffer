@@ -6,6 +6,13 @@ import { JsonView } from './JsonView'
 import { CopyButton, Highlight, KV, Section } from './HttpView'
 import { decodeEngineIoFrame, frameLabel } from './engineio'
 
+/** socket.io lifecycle events (io.socket Socket/Manager EVENT_* constants), tinted red in the list */
+const SYS_EVENTS = new Set([
+  'connect', 'connecting', 'disconnect', 'error', 'connect_error', 'connect_timeout',
+  'reconnect', 'reconnect_error', 'reconnect_failed', 'reconnect_attempt', 'reconnecting',
+  'ping', 'pong',
+])
+
 export function SocketView({ events, query, conns, connUrls, deviceId, onMockAck, onPushPrefill, onClear }: {
   events: SocketRow[]
   query: string
@@ -96,7 +103,7 @@ export function SocketView({ events, query, conns, connUrls, deviceId, onMockAck
                 <td className={e.direction === 'out' ? 'dir-out' : 'dir-in'}>
                   {e.direction === 'out' ? '↑' : '↓'}
                 </td>
-                <td className="mono">
+                <td className={e.transport === 'socketio' && SYS_EVENTS.has(e.event) ? 'mono sys-event' : 'mono'}>
                   {e.mocked && <span className="badge mock">MOCK</span>}
                   <Highlight text={f ? (f.eventName ?? f.socketLabel ?? f.engineLabel) : (e.label ? `${e.event}(${e.label})` : e.event)} query={query} />
                 </td>
