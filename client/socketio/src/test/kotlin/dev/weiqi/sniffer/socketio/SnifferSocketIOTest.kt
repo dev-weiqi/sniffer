@@ -48,6 +48,11 @@ class SnifferSocketIOTest {
         assertTrue(reports.any { it is SocketStatusMsg && it.status == "connected" })
         assertTrue(reports.any { it is SocketStatusMsg && it.status == "disconnected" })
         assertTrue(reports.any { it is SocketEventMsg && it.direction == "in" && it.event == "chat:new" })
+        // connect/disconnect also land in the event list so ordering vs data events is visible
+        assertEquals(
+            listOf(Socket.EVENT_CONNECT, "chat:new", Socket.EVENT_DISCONNECT),
+            reports.filterIsInstance<SocketEventMsg>().filter { it.direction == "in" }.map { it.event }
+        )
     }
 
     @Test

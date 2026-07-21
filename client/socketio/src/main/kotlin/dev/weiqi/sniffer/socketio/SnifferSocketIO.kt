@@ -77,27 +77,31 @@ class SnifferSocket internal constructor(
         if (!bridged.add(event)) return
         delegate.on(event) { args ->
             when (event) {
-                // connect/disconnect drive the connection status; every other event the app subscribes
-                // to (reconnect_attempt, connect_error, real data events, …) is an inbound event
+                // connect/disconnect drive the connection status (and, like every other event,
+                // also show up in the event list so ordering is visible)
                 Socket.EVENT_CONNECT -> {
                     // covers auto-reconnect, where the host never calls connect() again
                     registerPushHandler()
                     Sniffer.report(SocketStatusMsg(connectionId, "socketio", url, "connected", now()))
+                    reportInbound(event, args)
                 }
                 Socket.EVENT_DISCONNECT -> {
                     // unregister here too, so the handler dies even when the host used delegate.disconnect()
                     Sniffer.unregisterPushHandler(connectionId)
                     Sniffer.report(SocketStatusMsg(connectionId, "socketio", url, "disconnected", now()))
+                    reportInbound(event, args)
                 }
-                else -> {
-                    val json = toJsonArray(args)
-                    Sniffer.report(
-                        SocketEventMsg(newId(), connectionId, "socketio", "in", event, json.toString(), mocked = false, timestamp = now(), label = labelFor(event, json))
-                    )
-                }
+                else -> reportInbound(event, args)
             }
             super.emit(event, *args)
         }
+    }
+
+    private fun reportInbound(event: String, args: Array<out Any?>) {
+        val json = toJsonArray(args)
+        Sniffer.report(
+            SocketEventMsg(newId(), connectionId, "socketio", "in", event, json.toString(), mocked = false, timestamp = now(), label = labelFor(event, json))
+        )
     }
 
     override fun on(event: String, fn: Listener): Emitter {
