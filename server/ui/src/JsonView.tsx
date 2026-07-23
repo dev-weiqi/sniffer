@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Highlight } from './HttpView'
+import { Highlight, LinkText } from './HttpView'
 
 // Collapsible JSON tree; falls back to raw text when the body isn't JSON.
 export function JsonView({ text, query = '' }: { text: string | null | undefined; query?: string }) {
@@ -9,13 +9,13 @@ export function JsonView({ text, query = '' }: { text: string | null | undefined
   try {
     data = JSON.parse(text)
   } catch {
-    return <pre className="body-pre"><Highlight text={text} query={query} /></pre>
+    return <pre className="body-pre"><LinkText text={text} query={query} /></pre>
   }
   return (
     <div className="json-view">
       <button className="jn-toggle" onClick={() => setRaw(r => !r)}>{raw ? 'Tree' : 'Raw'}</button>
       {raw ? (
-        <pre className="body-pre"><Highlight text={JSON.stringify(data, null, 2)} query={query} /></pre>
+        <pre className="body-pre"><LinkText text={JSON.stringify(data, null, 2)} query={query} /></pre>
       ) : (
         <div className="json-tree body-pre">
           <Node name={null} value={data} depth={0} query={query} />
@@ -86,7 +86,7 @@ function Node({ name, value, depth, query }: { name: string | number | null; val
     <div className="jn-node jn-leaf">
       <span className="jn-chev-spacer" />
       {key}{sep}
-      <span className={'jn-val ' + valClass(value)}><Highlight text={fmt(value)} query={query} /></span>
+      <span className={'jn-val ' + valClass(value)}><LinkText text={fmt(value)} query={query} /></span>
     </div>
   )
 }

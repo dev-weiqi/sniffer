@@ -69,6 +69,23 @@ export function newRuleId(): string {
   return Math.random().toString(36).slice(2, 10)
 }
 
+/** Split text into segments, flagging the http(s) URLs inside it. */
+export function splitLinks(text: string): Array<{ text: string; link: boolean }> {
+  const out: Array<{ text: string; link: boolean }> = []
+  // stop at quotes/brackets so a URL embedded in raw JSON doesn't swallow `",`
+  const re = /https?:\/\/[^\s"'`<>\\)\]}]+/g
+  let from = 0
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    // trailing punctuation is almost always prose, not part of the URL
+    const url = m[0].replace(/[.,;:!?]+$/, '')
+    if (m.index > from) out.push({ text: text.slice(from, m.index), link: false })
+    out.push({ text: url, link: true })
+    from = m.index + url.length
+  }
+  if (from < text.length) out.push({ text: text.slice(from), link: false })
+  return out
+}
+
 /** Split text into segments, flagging which match the query (case-insensitive). Blank query → the whole text as one non-match. */
 export function splitHighlight(text: string, query: string): Array<{ text: string; match: boolean }> {
   const q = query.trim().toLowerCase()

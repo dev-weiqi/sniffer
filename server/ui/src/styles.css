@@ -546,6 +546,8 @@ button.add { margin-top: 2px; }
 .jn-count { color: var(--text-dim); font-size: 12px; padding: 0 5px; }
 .jn-close { padding-left: 0; }
 .jn-string { color: var(--ok); }
+.jn-link { color: var(--info); text-decoration: underline; cursor: pointer; }
+.jn-link:hover { filter: brightness(1.2); }
 .jn-number { color: var(--info); }
 .jn-boolean { color: var(--accent); }
 .jn-null { color: var(--text-dim); }

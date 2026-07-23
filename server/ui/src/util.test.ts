@@ -3,6 +3,7 @@ import {
   fmtDuration,
   fmtSize,
   fmtTime,
+  splitLinks,
   newRuleId,
   prettyJson,
   splitHighlight,
@@ -135,5 +136,13 @@ assertEqual(hl('GET', 'ge'), '[{"text":"GE","match":true},{"text":"T","match":fa
 assertEqual(hl('/users/1', 'ser'), '[{"text":"/u","match":false},{"text":"ser","match":true},{"text":"s/1","match":false}]', 'splitHighlight match in middle')
 assertEqual(hl('chat', 'hat'), '[{"text":"c","match":false},{"text":"hat","match":true}]', 'splitHighlight match at end')
 assertEqual(hl('aXaXa', 'x'), '[{"text":"a","match":false},{"text":"X","match":true},{"text":"a","match":false},{"text":"X","match":true},{"text":"a","match":false}]', 'splitHighlight multiple matches')
+
+const sl = (t: string) => JSON.stringify(splitLinks(t))
+assertEqual(sl('no links'), '[{"text":"no links","link":false}]', 'splitLinks plain text')
+assertEqual(sl(''), '[]', 'splitLinks empty text')
+assertEqual(sl('https://a.com/x'), '[{"text":"https://a.com/x","link":true}]', 'splitLinks whole text is a url')
+assertEqual(sl('"url": "http://a.com/x",'), '[{"text":"\\"url\\": \\"","link":false},{"text":"http://a.com/x","link":true},{"text":"\\",","link":false}]', 'splitLinks stops at the closing quote in raw JSON')
+assertEqual(sl('see https://a.com/x. done'), '[{"text":"see ","link":false},{"text":"https://a.com/x","link":true},{"text":". done","link":false}]', 'splitLinks drops trailing punctuation')
+assertEqual(sl('a http://x.io b https://y.io c'), '[{"text":"a ","link":false},{"text":"http://x.io","link":true},{"text":" b ","link":false},{"text":"https://y.io","link":true},{"text":" c","link":false}]', 'splitLinks multiple urls')
 
 console.log('util.test: all assertions passed')

@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { HttpMockRule, HttpRow, PausedHit } from './state'
-import { copyText, fmtDuration, fmtSize, fmtTime, prettyJson, splitHighlight, statusClass, toCurl, urlParts } from './util'
+import { copyText, fmtDuration, fmtSize, fmtTime, prettyJson, splitHighlight, splitLinks, statusClass, toCurl, urlParts } from './util'
 import { newRuleId } from './util'
 import { useDetailWidth, useListKeys } from './hooks'
 import { JsonView } from './JsonView'
@@ -502,6 +502,13 @@ export function CopyButton({ text }: { text: string }) {
 /** Wraps query matches in <mark> so search hits are visible in place. */
 export function Highlight({ text, query }: { text: string; query: string }) {
   return <>{splitHighlight(text, query).map((s, i) => s.match ? <mark key={i} className="hl">{s.text}</mark> : s.text)}</>
+}
+
+// Same as Highlight, but http(s) URLs inside the text become clickable links.
+export function LinkText({ text, query }: { text: string; query: string }) {
+  return <>{splitLinks(text).map((s, i) => s.link
+    ? <a key={i} className="jn-link" href={s.text} target="_blank" rel="noreferrer noopener"><Highlight text={s.text} query={query} /></a>
+    : <Highlight key={i} text={s.text} query={query} />)}</>
 }
 
 export function KV({ k, v, query = '' }: { k: string; v: string; query?: string }) {
