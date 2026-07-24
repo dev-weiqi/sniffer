@@ -97,6 +97,17 @@ class SnifferSocket internal constructor(
         }
     }
 
+    // deliver a rule's [pushEvent] to the app exactly like a real server→client event
+    private fun injectPush(event: String, payload: String) {
+        val args = parseArgs(payload)
+        val json = toJsonArray(args)
+        Sniffer.report(
+            SocketEventMsg(newId(), connectionId, "socketio", "in", event, json.toString(), mocked = true, timestamp = now(), label = labelFor(event, json))
+        )
+        // host callbacks keep io.socket's EventThread guarantee
+        EventThread.exec { super.emit(event, *args) }
+    }
+
     private fun reportInbound(event: String, args: Array<out Any?>) {
         val json = toJsonArray(args)
         Sniffer.report(
@@ -145,6 +156,14 @@ class SnifferSocket internal constructor(
             Sniffer.report(
                 SocketEventMsg(id, connectionId, "socketio", "out", event, toJsonArrayString(data), mocked = rule != null, timestamp = now())
             )
+            val push = rule?.pushEvent?.takeIf { it.isNotBlank() }
+            if (push != null) {
+                // request/response over two events: the answer is the pushed event, so the rule's
+                // ackPayload is ignored (such APIs are emitted without an ack callback)
+                val payload = expandMockPlaceholders(rule.pushPayload)
+                scheduler.schedule({ injectPush(push, payload) }, rule.delayMs, TimeUnit.MILLISECONDS)
+                return this
+            }
             if (rule != null) {
                 // ack mock hit: do not send to the server, answer with a fake ack locally
                 val ackPayload = expandMockPlaceholders(rule.ackPayload)

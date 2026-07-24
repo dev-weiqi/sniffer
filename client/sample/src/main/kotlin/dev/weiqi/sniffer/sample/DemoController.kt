@@ -166,6 +166,8 @@ class DemoController {
                     s.on("chat:new", label = { args ->
                         args.optJSONObject(0)?.optString("from")?.takeIf { it.isNotEmpty() }
                     }) { args -> log("in chat:new: ${args.joinToString()}", LogKind.EVENT) }
+                    // reply to "Req/Res": this API answers with its own event, not an ack
+                    s.on("user:result") { args -> log("in user:result: ${args.joinToString()}", LogKind.EVENT) }
                     s.connect()
                 }
                 log("socket.io connecting…", LogKind.INFO)
@@ -180,6 +182,12 @@ class DemoController {
                 s.emit("chat:send", "hello from sample", Ack { args ->
                     log("ack: ${args.joinToString()}", LogKind.OK)
                 })
+            },
+            DemoAction("Req/Res") {
+                val s = socket ?: return@DemoAction log("connect first", LogKind.ERROR)
+                // mock it with a "sio event" rule: user:get → user:result
+                s.emit("user:get", "7")
+                log("emit user:get — the answer arrives as user:result", LogKind.INFO)
             },
             DemoAction("Disconnect") {
                 socket?.disconnect() ?: return@DemoAction log("not connected", LogKind.ERROR)

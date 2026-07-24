@@ -182,4 +182,9 @@ data class SocketMockRule(
     val event: String,
     val ackPayload: String = "[]",
     val delayMs: Long = 0,
+    // "socketio" only: a non-blank [pushEvent] answers the emit with a server→client event instead
+    // of an ack — after [delayMs] it is injected with [pushPayload] (JSON array of args,
+    // placeholders expanded) and [ackPayload] is ignored. Ignored for "ktor-ws".
+    val pushEvent: String? = null,
+    val pushPayload: String = "[]",
 )

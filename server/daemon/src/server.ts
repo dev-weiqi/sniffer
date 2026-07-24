@@ -285,6 +285,8 @@ io.on('connection', socket => {
     socket.broadcast.emit('chat:new', { from: socket.id, msg })
   })
   socket.on('echo', (data, ack) => ack?.(data))
+  // request/response without an ack: the answer comes back as its own event
+  socket.on('user:get', id => socket.emit('user:result', { id, name: `user-${id}`, ts: Date.now() }))
 })
 
 // ---------- adb reverse: route device/emulator localhost:9091 to this machine ----------

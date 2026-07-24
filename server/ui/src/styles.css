@@ -357,7 +357,7 @@ tr.bp-row td { background: color-mix(in srgb, var(--err) 10%, var(--bg-panel)); 
 }
 .mocks-column .rule-row select { max-width: 100%; }
 .http-column .rule-row select { width: 92px; }
-.socket-column .rule-row select { width: 112px; }
+.socket-column .rule-row select { width: 170px; }
 .push-column .rule-row select { flex: 1 1 100%; width: 100%; }
 
 .rule-card {
@@ -379,6 +379,7 @@ tr.bp-row td { background: color-mix(in srgb, var(--err) 10%, var(--bg-panel)); 
 .rule-row .grow { flex: 1 1 0; min-width: 0; }
 .w-status { width: 70px; }
 .w-delay { width: 84px; }
+.w-event { width: 220px; }
 .toggle input { accent-color: var(--accent); width: 15px; height: 15px; }
 .hint { font-size: 13px; }
 button.add { margin-top: 2px; }

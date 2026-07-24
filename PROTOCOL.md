@@ -77,8 +77,13 @@ content (`body: null`). Bodies over **1 MB** are truncated and flagged
 //   ${randomId}, ${now} (ISO-8601 UTC), ${randomString(min~max)}
 //   min/max are user-provided whole numbers; the string length is random within [min, max]
 // socket rule, transport "socketio": matched emits are not sent; a fake ack (JSON array of args)
-//   is returned locally. transport "ktor-ws": [event] is a substring matched against outgoing
-//   text frames; matched frames are not sent and [ackPayload] is injected as a fake incoming frame
+//   is returned locally. A non-blank [pushEvent] switches the rule to the event-reply mode: after
+//   [delayMs] the SDK injects [pushEvent] with [pushPayload] (JSON array of args, placeholders
+//   expanded) as a server→client event into the app's listeners and sends no fake ack —
+//   [ackPayload] is ignored — for request/response APIs that answer with a separate event
+//   instead of an ack. transport "ktor-ws": [event] is a substring matched against outgoing
+//   text frames; matched frames are not sent and [ackPayload] is injected as a fake incoming
+//   frame ([pushEvent]/[pushPayload] are ignored — the reply frame already is the injection)
 // UI-only rule fields the daemon strips before sending to the device: "starred" (rule is shared
 //   with every device of the same appId, stored per appId on the daemon and merged in ahead of
 //   the device's own rules), plus "name" / "createdAt" pass through untouched (SDK ignores them)

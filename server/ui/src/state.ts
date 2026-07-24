@@ -41,6 +41,9 @@ export interface SocketMockRule {
   event: string
   ackPayload: string
   delayMs: number
+  /** socketio only: also inject this event (with pushPayload args) back into the app after delayMs */
+  pushEvent?: string
+  pushPayload?: string
 }
 
 export interface Mocks {

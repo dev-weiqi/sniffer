@@ -133,7 +133,7 @@ export function SocketView({ events, query, conns, connUrls, deviceId, onMockAck
                     ackPayload: selected.ackPayload ?? '[{"ok":true}]', delayMs: 0,
                   },
                   selected.deviceId,
-                )}>Mock this event's ack</button>
+                )}>Mock this event</button>
               )}
               {selected.direction === 'out' && selected.transport === 'ktor-ws' && (
                 <button onClick={() => onMockAck(

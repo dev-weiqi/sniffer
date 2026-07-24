@@ -171,7 +171,7 @@ export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingS
     if (!dirty) setDraft(mocks)
   }, [mocks, dirty])
 
-  // prefilled rules coming from the "Mock this request" / "Mock this event's ack" actions
+  // prefilled rules coming from the "Mock this request" / "Mock this event" actions
   useEffect(() => {
     if (pendingRule && deviceId) {
       // click-to-prefill lands on top so it's immediately visible
@@ -307,7 +307,7 @@ export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingS
 
         <section className="mocks-column socket-column">
           <div className="mocks-section-head">
-            <h2><SocketIcon />Socket ack rules</h2>
+            <h2><SocketIcon />Socket rules</h2>
             {draft.socket.length > 0 && (
               <button className="ghost danger"
                 onClick={async () => { if (await confirm('Clear all socket mock rules?', 'Clear all')) update({ ...draft, socket: [] }) }}>Clear all</button>
@@ -360,7 +360,7 @@ function exportCategories(source: ExportRulesSource): ExportCategory[] {
     },
     {
       key: 'socket',
-      title: 'Socket ack rules',
+      title: 'Socket rules',
       count: source.socket.length,
     },
     {
@@ -840,6 +840,8 @@ function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
 }) {
   const confirm = useConfirm()
   const ackRef = useRef<HTMLTextAreaElement>(null)
+  const pushRef = useRef<HTMLTextAreaElement>(null)
+  const mode = rule.transport === 'ktor-ws' ? 'ws' : rule.pushEvent != null ? 'sio-event' : 'sio-ack'
   return (
     <div className="rule-card" data-disabled={!rule.enabled || undefined}>
       <div className="rule-name-row">
@@ -852,9 +854,17 @@ function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
         <label className="toggle">
           <input type="checkbox" checked={rule.enabled} onChange={e => onChange({ ...rule, enabled: e.target.checked })} />
         </label>
-        <select value={rule.transport} onChange={e => onChange({ ...rule, transport: e.target.value as SocketMockRule['transport'] })}>
-          <option value="socketio">sio ack</option>
-          <option value="ktor-ws">ws reply</option>
+        {/* the wire has one socketio transport; the two sio modes differ by how the emit is answered
+            (fake ack vs pushed-back event) — pushEvent present picks the event mode. Switching keeps
+            both payloads so nothing typed is lost; the event mode starts from the ack JSON. */}
+        <select value={mode} onChange={e => onChange(
+          e.target.value === 'ws' ? { ...rule, transport: 'ktor-ws', pushEvent: undefined }
+            : e.target.value === 'sio-event'
+              ? { ...rule, transport: 'socketio', pushEvent: rule.pushEvent ?? '', pushPayload: rule.pushPayload ?? rule.ackPayload }
+              : { ...rule, transport: 'socketio', pushEvent: undefined })}>
+          <option value="sio-ack">socketIO ack</option>
+          <option value="sio-event">socketIO event</option>
+          <option value="ws">ws reply</option>
         </select>
         <input className="grow mono" placeholder={rule.transport === 'socketio' ? 'event name' : 'frame contains…'}
           value={rule.event} onChange={e => onChange({ ...rule, event: e.target.value })} />
@@ -863,24 +873,50 @@ function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
           onClick={async () => { if (await confirm(rule.starred ? 'Delete this shared rule? It disappears for every device of this app.' : 'Delete this rule?', 'Delete')) onDelete() }}><TrashIcon /></button>
       </div>
       {dup && <div className="hint dup-warning">⚠ Another enabled rule has the same matcher — the newest one takes effect.</div>}
-      <div className="rule-tabs">
-        <button type="button" data-active>
-          {rule.transport === 'socketio' ? 'Ack payload' : 'Reply frame'}
-        </button>
-        <span className="spacer" />
-        <label className="field">delay ms
-          <NumberField className="mono w-delay" value={rule.delayMs} fallback={0}
-            onCommit={n => onChange({ ...rule, delayMs: n })} />
-        </label>
-      </div>
-      <textarea ref={ackRef} className="mono" rows={5}
-        placeholder={rule.transport === 'socketio' ? 'ack payload (JSON array = multiple args)' : 'fake reply frame (raw text)'}
-        value={rule.ackPayload} onChange={e => onChange({ ...rule, ackPayload: e.target.value })} />
-      <div className="rule-body-tools">
-        <JsonTool label="Pretty JSON" body={rule.ackPayload} transform={v => JSON.stringify(v, null, 2)}
-          onResult={ackPayload => onChange({ ...rule, ackPayload })} />
-        <PlaceholderTools value={rule.ackPayload} onValue={ackPayload => onChange({ ...rule, ackPayload })} taRef={ackRef} />
-      </div>
+      {mode === 'sio-event' ? (
+        <>
+          <div className="rule-tabs">
+            <button type="button" data-active>Response event</button>
+            <input className="mono w-event" placeholder="event pushed back…"
+              value={rule.pushEvent ?? ''} onChange={e => onChange({ ...rule, pushEvent: e.target.value })} />
+            <span className="spacer" />
+            <label className="field">delay ms
+              <NumberField className="mono w-delay" value={rule.delayMs} fallback={0}
+                onCommit={n => onChange({ ...rule, delayMs: n })} />
+            </label>
+          </div>
+          <textarea ref={pushRef} className="mono" rows={5}
+            placeholder="pushed payload (JSON array = multiple args)"
+            value={rule.pushPayload ?? '[]'}
+            onChange={e => onChange({ ...rule, pushPayload: e.target.value })} />
+          <div className="rule-body-tools">
+            <JsonTool label="Pretty JSON" body={rule.pushPayload ?? '[]'} transform={v => JSON.stringify(v, null, 2)}
+              onResult={pushPayload => onChange({ ...rule, pushPayload })} />
+            <PlaceholderTools value={rule.pushPayload ?? '[]'} onValue={pushPayload => onChange({ ...rule, pushPayload })} taRef={pushRef} />
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="rule-tabs">
+            <button type="button" data-active>
+              {rule.transport === 'socketio' ? 'Ack payload' : 'Reply frame'}
+            </button>
+            <span className="spacer" />
+            <label className="field">delay ms
+              <NumberField className="mono w-delay" value={rule.delayMs} fallback={0}
+                onCommit={n => onChange({ ...rule, delayMs: n })} />
+            </label>
+          </div>
+          <textarea ref={ackRef} className="mono" rows={5}
+            placeholder={rule.transport === 'socketio' ? 'ack payload (JSON array = multiple args)' : 'fake reply frame (raw text)'}
+            value={rule.ackPayload} onChange={e => onChange({ ...rule, ackPayload: e.target.value })} />
+          <div className="rule-body-tools">
+            <JsonTool label="Pretty JSON" body={rule.ackPayload} transform={v => JSON.stringify(v, null, 2)}
+              onResult={ackPayload => onChange({ ...rule, ackPayload })} />
+            <PlaceholderTools value={rule.ackPayload} onValue={ackPayload => onChange({ ...rule, ackPayload })} taRef={ackRef} />
+          </div>
+        </>
+      )}
     </div>
   )
 }

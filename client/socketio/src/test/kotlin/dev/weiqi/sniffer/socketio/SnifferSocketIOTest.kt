@@ -23,6 +23,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kotlin.test.fail
 
 class SnifferSocketIOTest {
     @AfterTest
@@ -134,6 +135,72 @@ class SnifferSocketIOTest {
 
         assertTrue(socket.emitted.isEmpty())
         assertTrue(reports.any { it is SocketAckMsg && it.mocked && it.payload == """["mock"]""" })
+    }
+
+    // request/response over two events: emit is answered by a separate server→client event
+    @Test
+    fun emit_with_push_rule_injects_the_response_event_into_app_listeners() = runBlocking<Unit> {
+        val reports = captureReports()
+        MockRegistry.update(
+            MockRules(
+                socket = listOf(
+                    SocketMockRule(
+                        id = "s1", event = "getUser",
+                        pushEvent = "userResult", pushPayload = """[{"id":7}]""",
+                    )
+                )
+            )
+        )
+        val socket = FakeSocket()
+        val wrapped = SnifferSocketIO.wrap(socket)
+        val pushed = CompletableDeferred<List<Any?>>()
+        wrapped.on("userResult") { args -> pushed.complete(args.toList()) }
+
+        wrapped.emit("getUser", "7")
+
+        assertTrue(socket.emitted.isEmpty())
+        assertEquals("""{"id":7}""", withTimeout(1000) { pushed.await() }.single().toString())
+        assertTrue(reports.any {
+            it is SocketEventMsg && it.direction == "in" && it.event == "userResult" &&
+                it.mocked && it.payload == """[{"id":7}]"""
+        })
+    }
+
+    // the ack payload is dead config in event mode: an emit carrying an Ack must not be answered
+    @Test
+    fun push_rule_ignores_the_ack_payload() = runBlocking<Unit> {
+        val reports = captureReports()
+        MockRegistry.update(
+            MockRules(
+                socket = listOf(
+                    SocketMockRule(
+                        id = "s1", event = "getUser", ackPayload = """["stale"]""",
+                        pushEvent = "userResult", pushPayload = """["fresh"]""",
+                    )
+                )
+            )
+        )
+        val wrapped = SnifferSocketIO.wrap(FakeSocket())
+        val pushed = CompletableDeferred<List<Any?>>()
+        wrapped.on("userResult") { args -> pushed.complete(args.toList()) }
+
+        wrapped.emit("getUser", Ack { fail("event-mode rules must not answer with an ack") })
+
+        assertEquals(listOf("fresh"), withTimeout(1000) { pushed.await() })
+        assertTrue(reports.none { it is SocketAckMsg })
+    }
+
+    @Test
+    fun push_rule_is_skipped_when_pushEvent_is_blank() = runBlocking<Unit> {
+        val reports = captureReports()
+        MockRegistry.update(
+            MockRules(socket = listOf(SocketMockRule(id = "s1", event = "getUser", pushEvent = " ")))
+        )
+        val wrapped = SnifferSocketIO.wrap(FakeSocket())
+
+        wrapped.emit("getUser")
+
+        assertTrue(reports.none { it is SocketEventMsg && it.direction == "in" })
     }
 
     @Test
