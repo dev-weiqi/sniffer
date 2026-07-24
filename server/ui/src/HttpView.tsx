@@ -256,7 +256,7 @@ function HttpDetail({ row, query, onMock, onArm, onClose }: {
       </Section>
 
       {row.reqBody && (
-        <Section title="Request Body">
+        <Section title="Request Body" action={<CopyButton text={row.reqBody} />}>
           <JsonView text={row.reqBody} query={query} />
         </Section>
       )}
