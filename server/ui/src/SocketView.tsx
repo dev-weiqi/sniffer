@@ -133,7 +133,7 @@ export function SocketView({ events, query, conns, connUrls, deviceId, onMockAck
                     ackPayload: selected.ackPayload ?? '[{"ok":true}]', delayMs: 0,
                   },
                   selected.deviceId,
-                )}>Mock this event</button>
+                )}>Mock this ack</button>
               )}
               {selected.direction === 'out' && selected.transport === 'ktor-ws' && (
                 <button onClick={() => onMockAck(
@@ -152,6 +152,18 @@ export function SocketView({ events, query, conns, connUrls, deviceId, onMockAck
                 })}>
                   Prefill push form
                 </button>
+              )}
+              {selected.direction === 'in' && selected.transport === 'socketio' && (
+                // this event is someone's answer; seed an event-reply rule with it and let the
+                // user correct the trigger, which the recorded reply alone cannot tell us
+                <button onClick={() => onMockAck(
+                  {
+                    id: newRuleId(), enabled: true, transport: 'socketio', event: selected.event,
+                    ackPayload: '[]', delayMs: 0,
+                    pushEvent: selected.event, pushPayload: selected.payload,
+                  },
+                  selected.deviceId,
+                )}>Mock this event</button>
               )}
               <span className="spacer" />
               <button className="ghost" onClick={() => setSelectedId(null)}>✕</button>
