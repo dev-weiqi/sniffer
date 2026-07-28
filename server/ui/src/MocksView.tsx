@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { HttpMockRule, Mocks, SocketConn, SocketMockRule } from './state'
 import { api } from './state'
-import { newRuleId } from './util'
+import { newRuleId, prettyJson } from './util'
 import { useConfirm } from './Confirm'
 import { buildExportRules, countSelectedRules, createFullExportSelection, type ExportRuleSelection, type ExportRulesSource, type PushEventRule } from './exportMocks'
 
@@ -52,6 +52,19 @@ function orderForSync(mocks: Mocks): Mocks {
 }
 
 
+
+/** Rules arrive minified from wherever they were captured; show them pretty-printed. Non-JSON
+    (placeholders on their own, raw ws reply frames) is left byte-for-byte alone. */
+function beautified(mocks: Mocks): Mocks {
+  return {
+    http: mocks.http.map(r => ({ ...r, body: prettyJson(r.body) })),
+    socket: mocks.socket.map(r => r.transport === 'ktor-ws' ? r : {
+      ...r,
+      ackPayload: prettyJson(r.ackPayload),
+      ...(r.pushPayload === undefined ? {} : { pushPayload: prettyJson(r.pushPayload) }),
+    }),
+  }
+}
 
 function TagIcon() {
   return (
@@ -156,7 +169,7 @@ export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingS
   const dirtyRef = useRef(dirty); dirtyRef.current = dirty
 
   useEffect(() => {
-    setDraft(mocks)
+    setDraft(beautified(mocks))
     setDirty(false)
     const id = deviceId
     return () => {
@@ -168,7 +181,7 @@ export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingS
 
   // sync from server when rules change and there are no unsaved local edits
   useEffect(() => {
-    if (!dirty) setDraft(mocks)
+    if (!dirty) setDraft(beautified(mocks))
   }, [mocks, dirty])
 
   // prefilled rules coming from the "Mock this request" / "Mock this event" actions
@@ -667,7 +680,7 @@ function PushRecordCard({ record, conns, deviceId, canStar, onChange, onDelete, 
       {!targetMissing && liveOptions.length === 0 && (
         <div className="dim hint">No active socket connections for this device. Connect one to send a push.</div>
       )}
-      <textarea ref={payloadRef} className="mono" rows={3} placeholder="payload (JSON or plain text)" value={record.payload}
+      <textarea ref={payloadRef} className="mono" rows={8} placeholder="payload (JSON or plain text)" value={record.payload}
         onChange={e => onChange({ ...record, payload: e.target.value })} />
       <div className="rule-body-tools">
         <JsonTool label="Pretty JSON" body={record.payload} transform={v => JSON.stringify(v, null, 2)} onResult={p => onChange({ ...record, payload: p })} />
@@ -687,7 +700,14 @@ function HttpRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
   const confirm = useConfirm()
   const [sub, setSub] = useState<'body' | 'headers'>('body')
   const bodyRef = useRef<HTMLTextAreaElement>(null)
+  const urlRef = useRef<HTMLInputElement>(null)
   const headerCount = Object.keys(rule.headers).length
+  // paths share their head (/api/systems/v1/…), so show the tail — but never yank the view
+  // out from under someone editing the field
+  useEffect(() => {
+    const el = urlRef.current
+    if (el && document.activeElement !== el) el.scrollLeft = el.scrollWidth
+  }, [rule.urlPattern])
   return (
     <div className="rule-card" data-disabled={!rule.enabled || undefined}>
       <div className="rule-name-row">
@@ -704,7 +724,7 @@ function HttpRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
           <option value="">ANY</option>
           {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map(m => <option key={m}>{m}</option>)}
         </select>
-        <input className="grow mono" placeholder="exact path, e.g. /api/users/3" value={rule.urlPattern}
+        <input ref={urlRef} className="grow mono" placeholder="exact path, e.g. /api/users/3" value={rule.urlPattern}
           onChange={e => onChange({ ...rule, urlPattern: e.target.value })} />
         <button className="ghost icon-btn" title="Duplicate rule" onClick={onDuplicate}><CopyIcon /></button>
         <button className="ghost icon-btn danger" title="Delete rule"
@@ -743,7 +763,7 @@ function HttpRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
         <>
           {sub === 'body' ? (
             <>
-              <textarea ref={bodyRef} className="mono" rows={5} placeholder="response body" value={rule.body}
+              <textarea ref={bodyRef} className="mono" rows={14} placeholder="response body" value={rule.body}
                 onChange={e => onChange({ ...rule, body: e.target.value })} />
               <div className="rule-body-tools">
                 <JsonTool label="Pretty JSON" body={rule.body} transform={v => JSON.stringify(v, null, 2)}
@@ -885,7 +905,7 @@ function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
                 onCommit={n => onChange({ ...rule, delayMs: n })} />
             </label>
           </div>
-          <textarea ref={pushRef} className="mono" rows={5}
+          <textarea ref={pushRef} className="mono" rows={14}
             placeholder="pushed payload (JSON array = multiple args)"
             value={rule.pushPayload ?? '[]'}
             onChange={e => onChange({ ...rule, pushPayload: e.target.value })} />
@@ -907,7 +927,7 @@ function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
                 onCommit={n => onChange({ ...rule, delayMs: n })} />
             </label>
           </div>
-          <textarea ref={ackRef} className="mono" rows={5}
+          <textarea ref={ackRef} className="mono" rows={14}
             placeholder={rule.transport === 'socketio' ? 'ack payload (JSON array = multiple args)' : 'fake reply frame (raw text)'}
             value={rule.ackPayload} onChange={e => onChange({ ...rule, ackPayload: e.target.value })} />
           <div className="rule-body-tools">
