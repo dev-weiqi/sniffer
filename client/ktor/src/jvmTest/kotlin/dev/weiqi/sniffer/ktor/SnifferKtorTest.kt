@@ -403,13 +403,21 @@ class SnifferKtorTest {
     }
 
     @Test
-    fun custom_validator_exception_uses_status_holder() = runBlocking {
+    fun custom_validator_exception_uses_status_holder_and_captures_the_body() = runBlocking {
         val reports = captureReports()
-        val client = HttpClient(MockEngine { respond("bad", status = HttpStatusCode.BadRequest) }) {
+        // Eden's shape: a 503 with a JSON message, rethrown as a custom exception without a cause
+        val client = HttpClient(
+            MockEngine {
+                respond(
+                    """{"message":"service unavailable"}""", status = HttpStatusCode.ServiceUnavailable,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json; charset=utf-8"),
+                )
+            }
+        ) {
             install(SnifferKtor)
             HttpResponseValidator {
                 validateResponse { response ->
-                    if (response.status == HttpStatusCode.BadRequest) error("custom")
+                    if (response.status.value >= 400) error("custom")
                 }
             }
         }
@@ -418,8 +426,9 @@ class SnifferKtorTest {
             client.get("http://example.test/custom")
         }
         val report = reports.filterIsInstance<HttpResponseMsg>().last()
-        assertEquals(400, report.status)
+        assertEquals(503, report.status)
         assertNull(report.error)
+        assertEquals("""{"message":"service unavailable"}""", report.body)
         client.close()
     }
 

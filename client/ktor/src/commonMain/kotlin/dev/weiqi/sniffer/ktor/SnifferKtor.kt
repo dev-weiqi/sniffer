@@ -63,7 +63,12 @@ private val MockRuleKey = AttributeKey<HttpMockRule>("SnifferMockRule")
 
 // Captured in onResponse so the real status survives even when a downstream validator
 // (e.g. Eden's HttpResponseValidator) rethrows the error as a custom exception without a cause.
-private class ResponseStatusHolder(var status: Int? = null, var headers: Map<String, String> = emptyMap())
+// The response itself is kept too: a saved body is replayable, so the error report can carry it.
+private class ResponseStatusHolder(
+    var status: Int? = null,
+    var headers: Map<String, String> = emptyMap(),
+    var response: io.ktor.client.statement.HttpResponse? = null,
+)
 
 private val StatusHolderKey = AttributeKey<ResponseStatusHolder>("SnifferStatusHolder")
 private val SnifferSseIdKey = AttributeKey<String>("SnifferSseId")
@@ -173,6 +178,7 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
         response.call.attributes.getOrNull(StatusHolderKey)?.let { holder ->
             holder.status = response.status.value
             holder.headers = response.headers.flattenEntries().toMap()
+            holder.response = response
         }
     }
 
@@ -296,10 +302,17 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
             // a validator may have rethrown a real HTTP error as a custom exception; recover the
             // status captured in onResponse. Only a genuine transport failure leaves status null.
             val captured = statusHolder.status
+            // same rule as the ResponseException branch: only a saved body is replayable — reading
+            // an unsaved (streaming) one would consume what the host may still re-read
+            val responseBody = statusHolder.response
+                ?.takeIf { runCatching { it.isSaved }.getOrDefault(false) }
+                ?.let { runCatching { it.bodyAsText() }.getOrNull() }
+            val cappedBody = capBody(responseBody)
             Sniffer.report(
                 HttpResponseMsg(
-                    id = id, status = captured ?: 0, headers = statusHolder.headers, body = null,
-                    bodySize = 0, bodyTruncated = false, durationMs = now() - start,
+                    id = id, status = captured ?: 0, headers = statusHolder.headers,
+                    body = cappedBody.body, bodySize = cappedBody.size, bodyTruncated = cappedBody.truncated,
+                    durationMs = now() - start,
                     mocked = false, error = if (captured == null) e.toString() else null,
                     timestamp = now(),
                     delayedMs = injectedDelayMs,
