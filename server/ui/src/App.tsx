@@ -29,6 +29,9 @@ declare global {
     snifferDesktop?: {
       getConfig: () => Promise<{ port?: number }>
       setPort: (port: number) => Promise<{ port: number; restartRequired: boolean }>
+      checkUpdate?: () => Promise<{ supported: boolean; current?: string | null; latest?: string | null; available?: boolean }>
+      applyUpdate?: (version: string) => Promise<{ ok: boolean; version?: string; error?: string }>
+      onUpdateState?: (callback: (state: { phase: string; version?: string; error?: string }) => void) => () => void
     }
   }
 }
@@ -73,8 +76,41 @@ export default function App() {
   const [portDraft, setPortDraft] = useState(String(Number.isFinite(initialPort) ? initialPort : 9091))
   const [portSaving, setPortSaving] = useState(false)
   const [portNotice, setPortNotice] = useState<string | null>(null)
+  // desktop-only in-app update: offered → downloading → relaunching (window reloads) | failed
+  const [update, setUpdate] = useState<{ version: string; phase: 'offer' | 'downloading' | 'relaunching' | 'failed'; error?: string } | null>(null)
 
   useEffect(() => connectStream(dispatch), [])
+
+  useEffect(() => {
+    const desktop = window.snifferDesktop
+    if (!desktop?.checkUpdate) return
+    let cancelled = false
+    desktop.checkUpdate()
+      .then(result => {
+        if (!cancelled && result.supported && result.available && result.latest) {
+          setUpdate({ version: result.latest, phase: 'offer' })
+        }
+      })
+      .catch(() => {})
+    const unsubscribe = desktop.onUpdateState?.(state => {
+      if (state.phase === 'downloading' || state.phase === 'relaunching') {
+        setUpdate({ version: state.version ?? '', phase: state.phase })
+      } else if (state.phase === 'failed') {
+        setUpdate({ version: state.version ?? '', phase: 'failed', error: state.error })
+      }
+    })
+    return () => { cancelled = true; unsubscribe?.() }
+  }, [])
+
+  const applyUpdateNow = (version: string) => {
+    setUpdate({ version, phase: 'downloading' })
+    // on success the main process restarts the daemon and reloads this window
+    window.snifferDesktop?.applyUpdate?.(version)
+      .then(result => {
+        if (result && !result.ok) setUpdate({ version, phase: 'failed', error: result.error })
+      })
+      .catch(e => setUpdate({ version, phase: 'failed', error: e instanceof Error ? e.message : String(e) }))
+  }
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -391,6 +427,29 @@ export default function App() {
           )}
         </div>
       </header>
+
+      {update && (
+        <div className="update-banner" role="status">
+          {update.phase === 'offer' && (
+            <>
+              <span>Sniffer <b>{update.version}</b> is currently the newest version available.</span>
+              <span className="spacer" />
+              <button className="ghost" onClick={() => setUpdate(null)}>Later</button>
+              <button className="update-go" onClick={() => applyUpdateNow(update.version)}>Update and relaunch</button>
+            </>
+          )}
+          {update.phase === 'downloading' && <span>Downloading {update.version}…</span>}
+          {update.phase === 'relaunching' && <span>Relaunching…</span>}
+          {update.phase === 'failed' && (
+            <>
+              <span>Update to {update.version} failed: {update.error}</span>
+              <span className="spacer" />
+              <button className="ghost" onClick={() => setUpdate(null)}>Dismiss</button>
+              <button className="update-go" onClick={() => applyUpdateNow(update.version)}>Retry</button>
+            </>
+          )}
+        </div>
+      )}
 
       <main className="content">
         {tab === 'http' && (

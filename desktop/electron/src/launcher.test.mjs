@@ -7,6 +7,7 @@ import {
   normalizePort,
   isSnifferState,
   repoRootFrom,
+  waitForExit,
 } from './launcher.mjs'
 
 function assert(condition, message) {
@@ -67,5 +68,38 @@ assert(packagedEnv.SNIFFER_DESKTOP === '1', 'packaged daemon should report deskt
 assert(isSnifferState({ devices: [], entryCount: 0, mocksByDevice: {} }), 'recognizes daemon state')
 assert(!isSnifferState({ ok: true }), 'rejects unrelated JSON')
 assert(!isSnifferState(null), 'rejects null')
+
+// an in-app update points the packaged launch at the userData install instead of the bundle
+const updatedLaunch = daemonLaunchConfig({
+  repoRoot: '/repo',
+  platform: 'darwin',
+  isPackaged: true,
+  resourcesPath: '/Applications/Sniffer.app/Contents/Resources',
+  electronExecPath: '/Applications/Sniffer.app/Contents/MacOS/Sniffer',
+  daemonDir: '/userData/daemon/node_modules/@dev-weiqi/sniffer',
+})
+assert(updatedLaunch.cwd === '/userData/daemon/node_modules/@dev-weiqi/sniffer',
+  `daemonDir overrides the bundled cwd, got ${updatedLaunch.cwd}`)
+assert(updatedLaunch.args[0] === '/userData/daemon/node_modules/@dev-weiqi/sniffer/bin/sniffer.js',
+  `daemonDir launch script, got ${updatedLaunch.args[0]}`)
+const devIgnoresOverride = daemonLaunchConfig({ repoRoot: '/repo', platform: 'darwin', isPackaged: false, daemonDir: '/x' })
+assert(devIgnoresOverride.cwd.endsWith('/repo/server/daemon'), 'dev launch ignores daemonDir')
+
+// waitForExit resolves on the child's exit event, times out otherwise, and
+// treats an already-exited (or absent) child as done
+{
+  const listeners = {}
+  const child = { exitCode: null, signalCode: null, once: (event, fn) => { listeners[event] = fn } }
+  const pending = waitForExit(child, { timeoutMs: 60_000, delayFn: () => new Promise(() => {}) })
+  listeners.exit()
+  assert(await pending === true, 'resolves true when the child exits')
+}
+{
+  const child = { exitCode: null, signalCode: null, once: () => {} }
+  assert(await waitForExit(child, { timeoutMs: 1, delayFn: () => Promise.resolve() }) === false, 'times out as false')
+}
+assert(await waitForExit({ exitCode: 0, signalCode: null, once: () => { throw new Error('must not subscribe') } }) === true,
+  'already-exited child resolves immediately')
+assert(await waitForExit(null) === true, 'no child is already stopped')
 
 console.log('launcher.test: all assertions passed')

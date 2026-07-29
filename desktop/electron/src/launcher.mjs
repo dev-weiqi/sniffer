@@ -41,9 +41,11 @@ export function daemonLaunchConfig({
   isPackaged = false,
   resourcesPath = process.resourcesPath,
   electronExecPath = process.execPath,
+  daemonDir = null,
 }) {
   if (isPackaged) {
-    const cwd = bundledDaemonCwd(resourcesPath)
+    // daemonDir: an in-app update installed under userData outranks the bundled snapshot
+    const cwd = daemonDir ?? bundledDaemonCwd(resourcesPath)
     return {
       file: electronExecPath,
       args: [join(cwd, 'bin', 'sniffer.js')],
@@ -90,8 +92,9 @@ export function startDaemon({
   isPackaged = false,
   resourcesPath = process.resourcesPath,
   electronExecPath = process.execPath,
+  daemonDir = null,
 }) {
-  const command = daemonLaunchConfig({ repoRoot, platform, isPackaged, resourcesPath, electronExecPath })
+  const command = daemonLaunchConfig({ repoRoot, platform, isPackaged, resourcesPath, electronExecPath, daemonDir })
   const child = spawnFn(command.file, command.args, {
     cwd: command.cwd,
     env: createDaemonEnv(env, port, { isPackaged }),
@@ -120,4 +123,19 @@ export async function waitForDaemon({ url, fetchFn = fetch, timeoutMs = 15000, i
 export function stopDaemon(child) {
   if (!child || child.killed) return
   child.kill()
+}
+
+/** Resolve once the child has really exited — restarting before then races it for the port. */
+export function waitForExit(child, { timeoutMs = 5000, delayFn = delay } = {}) {
+  if (!child || child.exitCode !== null || child.signalCode) return Promise.resolve(true)
+  return new Promise(resolve => {
+    let settled = false
+    const done = ok => {
+      if (settled) return
+      settled = true
+      resolve(ok)
+    }
+    child.once('exit', () => done(true))
+    delayFn(timeoutMs).then(() => done(false))
+  })
 }

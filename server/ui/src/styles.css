@@ -153,6 +153,25 @@ button.danger:hover { color: var(--err); border-color: color-mix(in srgb, var(--
 
 /* ---------- layout ---------- */
 
+/* desktop in-app update offer; sits between the topbar and the content */
+.update-banner {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 16px; font-size: 13px;
+  background: var(--accent-soft); border-bottom: 1px solid var(--border);
+}
+.update-banner b { font-weight: 650; }
+.update-banner .spacer { flex: 1; }
+.update-banner button { font-size: 12px; padding: 5px 12px; border-radius: 6px; }
+.update-banner button.ghost {
+  background: var(--bg-panel); color: var(--text);
+  border: 1px solid var(--border);
+}
+.update-banner button.ghost:hover { border-color: var(--text-dim); background: var(--hover); }
+.update-banner .update-go {
+  background: var(--accent); color: #fff; border: 1px solid var(--accent);
+}
+.update-banner .update-go:hover { filter: brightness(1.08); }
+
 .content { flex: 1; min-height: 0; display: flex; }
 .split { display: flex; flex: 1; min-width: 0; }
 
