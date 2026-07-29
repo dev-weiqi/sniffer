@@ -12,6 +12,8 @@ import {
   type SocketMockRule,
 } from './state'
 import { parsePortInput } from './desktopPort'
+import { filterActive, loadFilter, passesFilter, saveFilter, type TrafficFilter } from './trafficFilter'
+import { displayEventName } from './engineio'
 import { useConfirm } from './Confirm'
 import { newRuleId } from './util'
 import { HttpView } from './HttpView'
@@ -109,6 +111,24 @@ export default function App() {
     const timer = setTimeout(() => setUpdatedTo(null), 6000)
     return () => clearTimeout(timer)
   }, [])
+
+  // per-column noise filters (URL / socket event) — per device like mocks, remembered across
+  // sessions. Saved through the setters (not an effect) so a device switch can never write one
+  // device's filter under another's key.
+  const [httpFilter, setHttpFilterState] = useState(() => loadFilter(`sniffer-filter-http:${deviceId}`, localStorage))
+  const [socketFilter, setSocketFilterState] = useState(() => loadFilter(`sniffer-filter-socket:${deviceId}`, localStorage))
+  useEffect(() => {
+    setHttpFilterState(loadFilter(`sniffer-filter-http:${deviceId}`, localStorage))
+    setSocketFilterState(loadFilter(`sniffer-filter-socket:${deviceId}`, localStorage))
+  }, [deviceId])
+  const setHttpFilter = (filter: TrafficFilter) => {
+    setHttpFilterState(filter)
+    saveFilter(`sniffer-filter-http:${deviceId}`, filter, localStorage)
+  }
+  const setSocketFilter = (filter: TrafficFilter) => {
+    setSocketFilterState(filter)
+    saveFilter(`sniffer-filter-socket:${deviceId}`, filter, localStorage)
+  }
 
   useEffect(() => connectStream(dispatch), [])
 
@@ -245,23 +265,27 @@ export default function App() {
     const searchBodies = q.length >= 2
     return state.http.filter(r =>
       r.deviceId === deviceId &&
+      passesFilter(httpFilter, r.url) &&
       (!q || r.url.toLowerCase().includes(q) || r.method.toLowerCase().includes(q) ||
         String(r.status ?? '').includes(q) ||
         (searchBodies && (
           (r.reqBody?.toLowerCase().includes(q) ?? false) ||
           (!r.respBase64 && (r.respBody?.toLowerCase().includes(q) ?? false))
         ))))
-  }, [state.http, deviceId, deferredSearch])
+  }, [state.http, deviceId, deferredSearch, httpFilter])
 
   const filteredSocketEvents = useMemo(() => {
     const q = deferredSearch.trim().toLowerCase()
+    // match what the row displays: ktor-ws rows show the decoded frame label, not r.event
+    const filterOn = filterActive(socketFilter)
     return state.socketEvents.filter(r =>
       r.deviceId === deviceId &&
+      (!filterOn || passesFilter(socketFilter, displayEventName(r.transport, r.event, r.payload))) &&
       (!q || r.event.toLowerCase().includes(q) ||
         (r.label?.toLowerCase().includes(q) ?? false) ||
         (state.connUrls[r.connectionId]?.toLowerCase().includes(q) ?? false) ||
         r.payload.toLowerCase().includes(q)))
-  }, [state.socketEvents, state.connUrls, deviceId, deferredSearch])
+  }, [state.socketEvents, state.connUrls, deviceId, deferredSearch, socketFilter])
 
   const mockFromRequest = (rule: HttpMockRule, targetDeviceId: string) => {
     setDeviceId(targetDeviceId)
@@ -523,6 +547,7 @@ export default function App() {
       <main className="content">
         {tab === 'http' && (
           <HttpView rows={filteredHttp} query={deferredSearch} pausedHits={devicePausedHits}
+            urlFilter={httpFilter} onUrlFilterChange={setHttpFilter}
             armedCount={deviceBreakpoints.filter(r => r.enabled).length}
             onMock={mockFromRequest} onArm={armBreakpoint} onResolve={resolvePausedHit}
             onDisarmAll={disarmAllBreakpoints}
@@ -530,6 +555,7 @@ export default function App() {
         )}
         {tab === 'socket' && (
           <SocketView events={filteredSocketEvents} query={deferredSearch} conns={state.socketConns} connUrls={state.connUrls} deviceId={deviceId}
+            eventFilter={socketFilter} onEventFilterChange={setSocketFilter}
             onMockAck={mockFromSocketEvent} onPushPrefill={pushFromEvent}
             onClear={async () => { if (await confirm('Clear socket events?', 'Clear')) api.clearSocketEntries() }} />
         )}

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SocketConn, SocketMockRule, SocketRow } from './state'
+import { FilterMenu } from './FilterMenu'
+import type { TrafficFilter } from './trafficFilter'
 import { fmtTime, newRuleId } from './util'
 import { useDetailWidth, useListKeys } from './hooks'
 import { JsonView } from './JsonView'
 import { CopyButton, Highlight, KV, Section } from './HttpView'
-import { decodeEngineIoFrame, frameLabel } from './engineio'
+import { decodeEngineIoFrame, displayEventName, frameLabel } from './engineio'
 
 /** socket.io lifecycle events (io.socket Socket/Manager EVENT_* constants), tinted red in the list */
 const SYS_EVENTS = new Set([
@@ -13,9 +15,11 @@ const SYS_EVENTS = new Set([
   'ping', 'pong',
 ])
 
-export function SocketView({ events, query, conns, connUrls, deviceId, onMockAck, onPushPrefill, onClear }: {
+export function SocketView({ events, query, conns, connUrls, deviceId, eventFilter, onEventFilterChange, onMockAck, onPushPrefill, onClear }: {
   events: SocketRow[]
   query: string
+  eventFilter: TrafficFilter
+  onEventFilterChange: (filter: TrafficFilter) => void
   conns: SocketConn[]
   connUrls: Record<string, string>
   deviceId: string
@@ -88,7 +92,8 @@ export function SocketView({ events, query, conns, connUrls, deviceId, onMockAck
                 Time {sortDesc ? '↓' : '↑'}
               </th>
               <th style={{ width: 36 }}></th>
-              <th style={{ width: 160 }}>Event</th>
+              <th style={{ width: 160 }}>Event <FilterMenu filter={eventFilter} onChange={onEventFilterChange} placeholder="exact event name…"
+                selectionValue={selected ? displayEventName(selected.transport, selected.event, selected.payload) : null} /></th>
               <th>Connection</th>
               <th style={{ width: 80 }}>Ack</th>
             </tr>
@@ -105,7 +110,7 @@ export function SocketView({ events, query, conns, connUrls, deviceId, onMockAck
                 </td>
                 <td className={e.transport === 'socketio' && SYS_EVENTS.has(e.event) ? 'mono sys-event' : 'mono'}>
                   {e.mocked && <span className="badge mock">MOCK</span>}
-                  <Highlight text={f ? (f.eventName ?? f.socketLabel ?? f.engineLabel) : (e.label ? `${e.event}(${e.label})` : e.event)} query={query} />
+                  <Highlight text={f ? displayEventName(e.transport, e.event, e.payload) : (e.label ? `${e.event}(${e.label})` : e.event)} query={query} />
                 </td>
                 <td className="mono dim ellipsis"><Highlight text={connUrls[e.connectionId] || e.connectionId.slice(0, 8)} query={query} /></td>
                 <td className="mono dim">

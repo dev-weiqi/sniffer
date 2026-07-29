@@ -1,5 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { HttpMockRule, HttpRow, PausedHit } from './state'
+import { FilterMenu } from './FilterMenu'
+import type { TrafficFilter } from './trafficFilter'
 import { copyText, fmtDuration, fmtSize, fmtTime, prettyJson, splitHighlight, splitLinks, statusClass, toCurl, urlParts } from './util'
 import { newRuleId } from './util'
 import { useDetailWidth, useListKeys } from './hooks'
@@ -32,10 +34,12 @@ function sniffImageMime(base64: string): string {
   return 'image/png'
 }
 
-export function HttpView({ rows, query, pausedHits, armedCount, onMock, onArm, onResolve, onDisarmAll, onClear }: {
+export function HttpView({ rows, query, pausedHits, urlFilter, onUrlFilterChange, armedCount, onMock, onArm, onResolve, onDisarmAll, onClear }: {
   rows: HttpRow[]
   query: string
   pausedHits: PausedHit[]
+  urlFilter: TrafficFilter
+  onUrlFilterChange: (filter: TrafficFilter) => void
   armedCount: number
   onMock: (rule: HttpMockRule, deviceId: string) => void
   onArm: (row: HttpRow) => void
@@ -116,7 +120,7 @@ export function HttpView({ rows, query, pausedHits, armedCount, onMock, onArm, o
               </th>
               <th style={{ width: 62 }}>Method</th>
               <th style={{ width: 52 }}>Status</th>
-              <th>URL</th>
+              <th>URL <FilterMenu filter={urlFilter} onChange={onUrlFilterChange} placeholder="exact URL…" selectionValue={selected?.url ?? null} /></th>
               <th style={{ width: 66 }} className="num">Size</th>
               <th style={{ width: 70 }} className="num">Time</th>
             </tr>

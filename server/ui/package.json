@@ -6,9 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "test:unit": "tsc -p tsconfig.test.json && node build/test/exportMocks.test.js && node build/test/engineio.test.js && node build/test/desktopPort.test.js && node build/test/state.test.js && node build/test/util.test.js && node build/test/webp.test.js",
+    "test:unit": "tsc -p tsconfig.test.json && node build/test/exportMocks.test.js && node build/test/engineio.test.js && node build/test/desktopPort.test.js && node build/test/state.test.js && node build/test/util.test.js && node build/test/webp.test.js && node build/test/trafficFilter.test.js",
     "typecheck": "tsc --noEmit",
-    "coverage": "tsc -p tsconfig.test.json && c8 --all --src build/test --include \"build/test/**/*.js\" --exclude \"build/test/**/*.test.js\" --check-coverage --lines 100 --statements 100 --functions 100 --reporter=text --reporter=json-summary --reporter=lcov --reports-dir coverage node --input-type=module -e \"await import('./build/test/exportMocks.test.js'); await import('./build/test/engineio.test.js'); await import('./build/test/desktopPort.test.js'); await import('./build/test/state.test.js'); await import('./build/test/util.test.js'); await import('./build/test/webp.test.js')\""
+    "coverage": "tsc -p tsconfig.test.json && c8 --all --src build/test --include \"build/test/**/*.js\" --exclude \"build/test/**/*.test.js\" --check-coverage --lines 100 --statements 100 --functions 100 --reporter=text --reporter=json-summary --reporter=lcov --reports-dir coverage node --input-type=module -e \"await import('./build/test/exportMocks.test.js'); await import('./build/test/engineio.test.js'); await import('./build/test/desktopPort.test.js'); await import('./build/test/state.test.js'); await import('./build/test/util.test.js'); await import('./build/test/webp.test.js'); await import('./build/test/trafficFilter.test.js')\""
   },
   "dependencies": {
     "react": "^18.3.1",

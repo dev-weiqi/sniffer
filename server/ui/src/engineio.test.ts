@@ -1,4 +1,4 @@
-import { decodeEngineIoFrame, frameLabel } from './engineio.js'
+import { decodeEngineIoFrame, displayEventName, frameLabel } from './engineio.js'
 
 function assert(condition: unknown, message: string) {
   if (!condition) throw new Error(message)
@@ -51,5 +51,12 @@ assert(decodeEngineIoFrame('hello world') === null, 'plain text -> null')
 assert(decodeEngineIoFrame('9x') === null, 'unknown engine type -> null')
 assert(decodeEngineIoFrame('4x') === null, 'unknown socket type -> null')
 assert(decodeEngineIoFrame('') === null, 'empty -> null')
+
+// displayEventName: what a list row shows — decoded label for ktor-ws, raw event otherwise
+assert(displayEventName('socketio', 'chat:new', '[{"x":1}]') === 'chat:new', 'socketio rows keep the event')
+assert(displayEventName('ktor-ws', '', '42["ping",1]') === 'ping', 'ktor-ws event frame shows its name')
+assert(displayEventName('ktor-ws', '', '2') === 'ping', 'ktor-ws engine frame shows the engine label')
+assert(displayEventName('ktor-ws', '', '40') === 'CONNECT', 'ktor-ws socket frame shows the socket label')
+assert(displayEventName('ktor-ws', 'raw', 'hello world') === 'raw', 'undecodable frame falls back to the event')
 
 console.log('engineio.test: all assertions passed')
