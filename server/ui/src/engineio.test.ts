@@ -54,6 +54,9 @@ assert(decodeEngineIoFrame('') === null, 'empty -> null')
 
 // displayEventName: what a list row shows — decoded label for ktor-ws, raw event otherwise
 assert(displayEventName('socketio', 'chat:new', '[{"x":1}]') === 'chat:new', 'socketio rows keep the event')
+assert(displayEventName('socketio', 'site_customize', '[]', 'icon_h5') === 'site_customize(icon_h5)', 'labeled rows show event(label)')
+assert(displayEventName('socketio', 'chat:new', '[]', null) === 'chat:new', 'null label means no parentheses')
+assert(displayEventName('ktor-ws', '', '42["ping",1]', 'ignored') === 'ping', 'ktor-ws ignores labels')
 assert(displayEventName('ktor-ws', '', '42["ping",1]') === 'ping', 'ktor-ws event frame shows its name')
 assert(displayEventName('ktor-ws', '', '2') === 'ping', 'ktor-ws engine frame shows the engine label')
 assert(displayEventName('ktor-ws', '', '40') === 'CONNECT', 'ktor-ws socket frame shows the socket label')

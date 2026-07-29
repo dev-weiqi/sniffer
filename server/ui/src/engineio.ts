@@ -76,12 +76,14 @@ export function decodeEngineIoFrame(raw: string | null | undefined): EngineFrame
 }
 
 // One-line summary for the list, e.g. "EVENT /chat", "CONNECT /chat", "ping".
-/** The event name a row displays — ktor-ws rows show the decoded frame label, not the raw event. */
-export function displayEventName(transport: string, event: string, payload: string): string {
-  if (transport !== 'ktor-ws') return event
+/** The event name a row displays — ktor-ws rows show the decoded frame label, and an
+    app-labeled socketio row shows `event(label)`. */
+export function displayEventName(transport: string, event: string, payload: string, label?: string | null): string {
+  if (transport !== 'ktor-ws') return label ? `${event}(${label})` : event
   const f = decodeEngineIoFrame(payload)
   return f ? (f.eventName ?? f.socketLabel ?? f.engineLabel) : event
 }
+
 
 export function frameLabel(f: EngineFrame): string {
   const parts = [f.socketLabel ?? f.engineLabel]

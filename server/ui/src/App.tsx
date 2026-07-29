@@ -280,7 +280,7 @@ export default function App() {
     const filterOn = filterActive(socketFilter)
     return state.socketEvents.filter(r =>
       r.deviceId === deviceId &&
-      (!filterOn || passesFilter(socketFilter, displayEventName(r.transport, r.event, r.payload))) &&
+      (!filterOn || passesFilter(socketFilter, displayEventName(r.transport, r.event, r.payload, r.label))) &&
       (!q || r.event.toLowerCase().includes(q) ||
         (r.label?.toLowerCase().includes(q) ?? false) ||
         (state.connUrls[r.connectionId]?.toLowerCase().includes(q) ?? false) ||

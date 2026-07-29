@@ -93,7 +93,7 @@ export function SocketView({ events, query, conns, connUrls, deviceId, eventFilt
               </th>
               <th style={{ width: 36 }}></th>
               <th style={{ width: 160 }}>Event <FilterMenu filter={eventFilter} onChange={onEventFilterChange} placeholder="exact event name…"
-                selectionValue={selected ? displayEventName(selected.transport, selected.event, selected.payload) : null} /></th>
+                selectionValue={selected ? displayEventName(selected.transport, selected.event, selected.payload, selected.label) : null} /></th>
               <th>Connection</th>
               <th style={{ width: 80 }}>Ack</th>
             </tr>
@@ -110,7 +110,7 @@ export function SocketView({ events, query, conns, connUrls, deviceId, eventFilt
                 </td>
                 <td className={e.transport === 'socketio' && SYS_EVENTS.has(e.event) ? 'mono sys-event' : 'mono'}>
                   {e.mocked && <span className="badge mock">MOCK</span>}
-                  <Highlight text={f ? displayEventName(e.transport, e.event, e.payload) : (e.label ? `${e.event}(${e.label})` : e.event)} query={query} />
+                  <Highlight text={displayEventName(e.transport, e.event, e.payload, e.label)} query={query} />
                 </td>
                 <td className="mono dim ellipsis"><Highlight text={connUrls[e.connectionId] || e.connectionId.slice(0, 8)} query={query} /></td>
                 <td className="mono dim">

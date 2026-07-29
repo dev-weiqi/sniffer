@@ -11,7 +11,7 @@ export function filterActive(filter: TrafficFilter): boolean {
   return filter.items.some(i => i.enabled)
 }
 
-/** case-insensitive exact match against every enabled value */
+/** case-insensitive exact match against the row's displayed name */
 export function passesFilter(filter: TrafficFilter, text: string): boolean {
   const enabled = filter.items.filter(i => i.enabled)
   if (enabled.length === 0) return true
