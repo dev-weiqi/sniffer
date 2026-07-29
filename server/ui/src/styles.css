@@ -172,6 +172,49 @@ button.danger:hover { color: var(--err); border-color: color-mix(in srgb, var(--
 }
 .update-banner .update-go:hover { filter: brightness(1.08); }
 
+/* indeterminate progress while npm downloads (no byte-level events to report) */
+.update-track {
+  width: 160px; height: 4px; border-radius: 99px; overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg-panel));
+}
+.update-track i {
+  display: block; height: 100%; width: 40%; border-radius: 99px;
+  background: var(--accent);
+  animation: update-slide 1.1s ease-in-out infinite;
+}
+@keyframes update-slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+@media (prefers-reduced-motion: reduce) { .update-track i { animation: none; width: 100%; } }
+
+/* full-window veil while the update downloads and the daemon relaunches */
+.update-veil {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  backdrop-filter: blur(2px);
+  font-size: 14px; color: var(--text);
+}
+.update-spinner {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 2.5px solid var(--border); border-top-color: var(--accent);
+  animation: update-spin .8s linear infinite;
+}
+@keyframes update-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .update-spinner { animation: none; } }
+
+/* post-relaunch confirmation, fades in bottom-right and auto-dismisses */
+.update-toast {
+  position: fixed; right: 16px; bottom: 16px; z-index: 100;
+  padding: 8px 14px; border-radius: 8px; font-size: 13px;
+  background: var(--bg-panel); color: var(--ok);
+  border: 1px solid var(--ok);
+  animation: update-toast-in .25s ease;
+}
+@keyframes update-toast-in { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .update-toast { animation: none; } }
+
 .content { flex: 1; min-height: 0; display: flex; }
 .split { display: flex; flex: 1; min-width: 0; }
 

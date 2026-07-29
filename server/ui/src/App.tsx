@@ -24,6 +24,25 @@ type PushPrefill = { connectionId: string; event: string; payload: string }
 declare const __APP_VERSION__: string
 const APP_VERSION = __APP_VERSION__
 
+// ?demo-update fakes the desktop bridge so the update UX (banner → veil → relaunch toast)
+// can be previewed in a plain browser; inert whenever the real bridge exists
+if (new URLSearchParams(window.location.search).has('demo-update') && !window.snifferDesktop) {
+  let pushState: ((state: { phase: string; version?: string; error?: string }) => void) | null = null
+  window.snifferDesktop = {
+    getConfig: async () => ({}),
+    setPort: async (port: number) => ({ port, restartRequired: false }),
+    checkUpdate: async () => ({ supported: true, current: APP_VERSION, latest: '9.9.9', available: true }),
+    applyUpdate: (version: string) => new Promise(() => {
+      setTimeout(() => pushState?.({ phase: 'relaunching', version }), 2200)
+      setTimeout(() => window.location.reload(), 4000)
+    }),
+    onUpdateState: callback => {
+      pushState = callback
+      return () => { pushState = null }
+    },
+  }
+}
+
 declare global {
   interface Window {
     snifferDesktop?: {
@@ -78,6 +97,18 @@ export default function App() {
   const [portNotice, setPortNotice] = useState<string | null>(null)
   // desktop-only in-app update: offered → downloading → relaunching (window reloads) | failed
   const [update, setUpdate] = useState<{ version: string; phase: 'offer' | 'downloading' | 'relaunching' | 'failed'; error?: string } | null>(null)
+  // set by the post-update reload (?updated=<v>): greet once, then clean the URL
+  const [updatedTo, setUpdatedTo] = useState<string | null>(null)
+
+  useEffect(() => {
+    // applyUpdateNow stashes the version; finding it after a reload means the update landed
+    const version = localStorage.getItem('sniffer-updated-to')
+    if (!version) return
+    localStorage.removeItem('sniffer-updated-to')
+    setUpdatedTo(version)
+    const timer = setTimeout(() => setUpdatedTo(null), 6000)
+    return () => clearTimeout(timer)
+  }, [])
 
   useEffect(() => connectStream(dispatch), [])
 
@@ -104,12 +135,20 @@ export default function App() {
 
   const applyUpdateNow = (version: string) => {
     setUpdate({ version, phase: 'downloading' })
+    // stash the version so the post-relaunch reload can greet with a toast; a failure clears it
+    localStorage.setItem('sniffer-updated-to', version)
     // on success the main process restarts the daemon and reloads this window
     window.snifferDesktop?.applyUpdate?.(version)
       .then(result => {
-        if (result && !result.ok) setUpdate({ version, phase: 'failed', error: result.error })
+        if (result && !result.ok) {
+          localStorage.removeItem('sniffer-updated-to')
+          setUpdate({ version, phase: 'failed', error: result.error })
+        }
       })
-      .catch(e => setUpdate({ version, phase: 'failed', error: e instanceof Error ? e.message : String(e) }))
+      .catch(e => {
+        localStorage.removeItem('sniffer-updated-to')
+        setUpdate({ version, phase: 'failed', error: e instanceof Error ? e.message : String(e) })
+      })
   }
 
   useEffect(() => {
@@ -450,8 +489,22 @@ export default function App() {
               <button className="update-go" onClick={() => applyUpdateNow(update.version)}>Update and relaunch</button>
             </>
           )}
-          {update.phase === 'downloading' && <span>Downloading {update.version}…</span>}
-          {update.phase === 'relaunching' && <span>Relaunching…</span>}
+          {update.phase === 'downloading' && (
+            <>
+              <span>Downloading {update.version}…</span>
+              <span className="spacer" />
+              <span className="update-track" aria-hidden><i /></span>
+            </>
+          )}
+          {update.phase === 'relaunching' && (
+            <>
+              <span>Relaunching…</span>
+              <div className="update-veil">
+                <span className="update-spinner" aria-hidden />
+                <span>Relaunching…</span>
+              </div>
+            </>
+          )}
           {update.phase === 'failed' && (
             <>
               <span>Update to {update.version} failed: {update.error}</span>
@@ -461,6 +514,10 @@ export default function App() {
             </>
           )}
         </div>
+      )}
+
+      {updatedTo && (
+        <div className="update-toast" role="status">✓ Updated to {updatedTo}</div>
       )}
 
       <main className="content">
