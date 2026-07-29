@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useState, useDeferredValue } from 'react'
+import { useEffect, useMemo, useReducer, useRef, useState, useDeferredValue } from 'react'
 import {
   connectStream,
   initialState,
@@ -265,6 +265,18 @@ export default function App() {
     if (!devices.some(d => d.deviceId === deviceId)) {
       setDeviceId((devices.find(d => d.connected) ?? devices[0]).deviceId)
     }
+  }, [deviceId, devices])
+
+  // everything was offline and a device just came online → follow it. Only on that
+  // transition: a deliberately selected offline device is never yanked away otherwise.
+  const prevConnectedCount = useRef<number | null>(null)
+  useEffect(() => {
+    const connected = devices.filter(d => d.connected)
+    const wasAllOffline = prevConnectedCount.current === 0
+    prevConnectedCount.current = connected.length
+    if (!wasAllOffline || connected.length === 0) return
+    const selected = devices.find(d => d.deviceId === deviceId)
+    if (!selected?.connected) setDeviceId(connected[0].deviceId)
   }, [deviceId, devices])
 
   const deleteDevices = async () => {
