@@ -130,6 +130,7 @@ function createWindow() {
       sandbox: true,
     },
   })
+  win.maximize()
   win.loadURL(url)
   return win
 }
