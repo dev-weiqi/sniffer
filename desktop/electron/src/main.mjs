@@ -86,10 +86,15 @@ function installIpc() {
       const dir = await installUpdate({ userDataDir: app.getPath('userData'), version })
 
       pushUpdateState({ phase: 'relaunching', version })
+      const veilShownAt = Date.now()
       stopDaemon(daemon)
       await waitForExit(daemon)
       activeDaemonDir = dir
       await startCurrentDaemon(repoRootFrom(import.meta.url), { interactive: false })
+      // a fast daemon restart can finish in well under a second; hold the veil long enough
+      // that the relaunch reads as an event instead of a flicker
+      const veilLeft = 1500 - (Date.now() - veilShownAt)
+      if (veilLeft > 0) await new Promise(resolve => setTimeout(resolve, veilLeft))
       mainWindow?.loadURL(url)
       return { ok: true, version }
     } catch (error) {
