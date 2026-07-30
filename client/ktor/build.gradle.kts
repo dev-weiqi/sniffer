@@ -16,6 +16,7 @@ kotlin {
         jvmTest.dependencies {
             implementation(kotlin("test"))
             implementation(libs.ktor.client.mock)
+            implementation("io.ktor:ktor-client-auth:${libs.versions.ktor.get()}")
         }
     }
 }

@@ -197,9 +197,16 @@ Ktor client:
 import dev.weiqi.sniffer.ktor.SnifferKtor
 
 val ktor = HttpClient(CIO) {
-    install(SnifferKtor)
+    install(Auth) { /* ... */ }
+    install(SnifferKtor) // install LAST — see below
 }
 ```
+
+> **Install `SnifferKtor` after every plugin that reacts to responses**
+> (`Auth`, retry, ...). ktor runs first-installed send interceptors outermost,
+> and a matched mock rule short-circuits the send chain — plugins installed
+> after Sniffer never see the mocked response. Installed last, a mocked 401
+> flows back through `Auth` and triggers its token refresh like a real one.
 
 Socket.IO:
 
