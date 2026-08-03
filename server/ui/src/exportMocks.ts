@@ -3,6 +3,8 @@ import type { Mocks } from './state.js'
 export type PushEventRule = {
   id: string
   target: string
+  /** endpoint of the target connection, so the record survives a reconnect (see pushTarget.ts) */
+  targetEndpoint?: string
   event: string
   payload: string
   name?: string

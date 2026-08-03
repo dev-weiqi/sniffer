@@ -3,6 +3,7 @@ import type { HttpMockRule, Mocks, SocketConn, SocketMockRule } from './state'
 import { api } from './state'
 import { newRuleId, prettyJson } from './util'
 import { useConfirm } from './Confirm'
+import { pointAt, resolvePushTarget } from './pushTarget'
 import { buildExportRules, countImportedRules, countSelectedRules, createFullExportSelection, importedCopies, parseImportedRules, type ExportRuleSelection, type ExportRulesSource, type PushEventRule } from './exportMocks'
 
 type PushPrefill = { connectionId: string; event: string; payload: string }
@@ -552,10 +553,11 @@ function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed, onRecords
 
   useEffect(() => {
     if (prefill) {
-      setRecords(rs => [{ id: newRuleId(), target: prefill.connectionId, event: prefill.event, payload: prefill.payload }, ...rs])
+      const conn = conns.find(c => c.connectionId === prefill.connectionId)
+      setRecords(rs => [pointAt({ id: newRuleId(), target: '', event: prefill.event, payload: prefill.payload }, conn), ...rs])
       onConsumed()
     }
-  }, [prefill, onConsumed])
+  }, [prefill, onConsumed, conns])
 
   useEffect(() => {
     if (!imported) return
@@ -647,23 +649,26 @@ function PushRecordCard({ record, conns, deviceId, canStar, onChange, onDelete, 
   const [status, setStatus] = useState<'sent' | 'error' | null>(null)
   const payloadRef = useRef<HTMLTextAreaElement>(null)
 
-  const liveOptions = conns.filter(c => c.deviceId === deviceId && c.status === 'connected').map(c => ({
+  const live = conns.filter(c => c.deviceId === deviceId && c.status === 'connected')
+  const liveOptions = live.map(c => ({
     key: c.connectionId,
     label: `${c.transport} · ${c.url || c.connectionId.slice(0, 8)}`,
     disabled: false,
   }))
-  const targetMissing = Boolean(record.target && !liveOptions.some(o => o.key === record.target))
+  // reconnects hand out a new connectionId; the record re-binds by endpoint on its own
+  const target = resolvePushTarget(record, live)
+  const targetMissing = Boolean(record.target) && target === ''
   const options = [
     { key: '', label: 'Select a connection…', disabled: true },
     ...liveOptions,
     ...(targetMissing ? [{ key: record.target, label: 'Original connection is not active', disabled: true }] : []),
   ]
   // a push must target a specific live connection — no broadcast to all
-  const canSend = Boolean(record.event) && record.target !== '' && !targetMissing
+  const canSend = Boolean(record.event) && target !== ''
 
   const send = async () => {
     if (!canSend) return
-    const res = await api.pushEvent(deviceId, record.target, record.event, record.payload)
+    const res = await api.pushEvent(deviceId, target, record.event, record.payload)
     setStatus(res.ok ? 'sent' : 'error')
     setTimeout(() => setStatus(null), 1600)
   }
@@ -677,7 +682,8 @@ function PushRecordCard({ record, conns, deviceId, canStar, onChange, onDelete, 
         {canStar && <StarButton starred={record.starred} onToggle={() => onChange({ ...record, starred: !record.starred || undefined })} />}
       </div>
       <div className="rule-row">
-        <select value={record.target} onChange={e => onChange({ ...record, target: e.target.value })}>
+        <select value={target || record.target}
+          onChange={e => onChange(pointAt(record, live.find(c => c.connectionId === e.target.value)))}>
           {options.map(o => <option key={o.key} value={o.key} disabled={o.disabled}>{o.label}</option>)}
         </select>
         <input className="grow mono" placeholder="event name (e.g. chat:new)" value={record.event}
