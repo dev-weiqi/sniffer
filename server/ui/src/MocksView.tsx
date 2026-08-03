@@ -658,11 +658,7 @@ function PushRecordCard({ record, conns, deviceId, canStar, onChange, onDelete, 
   // reconnects hand out a new connectionId; the record re-binds by endpoint on its own
   const target = resolvePushTarget(record, live)
   const targetMissing = Boolean(record.target) && target === ''
-  const options = [
-    { key: '', label: 'Select a connection…', disabled: true },
-    ...liveOptions,
-    ...(targetMissing ? [{ key: record.target, label: 'Original connection is not active', disabled: true }] : []),
-  ]
+  const options = [{ key: '', label: 'Select a connection…', disabled: true }, ...liveOptions]
   // a push must target a specific live connection — no broadcast to all
   const canSend = Boolean(record.event) && target !== ''
 
@@ -682,7 +678,7 @@ function PushRecordCard({ record, conns, deviceId, canStar, onChange, onDelete, 
         {canStar && <StarButton starred={record.starred} onToggle={() => onChange({ ...record, starred: !record.starred || undefined })} />}
       </div>
       <div className="rule-row">
-        <select value={target || record.target}
+        <select value={target}
           onChange={e => onChange(pointAt(record, live.find(c => c.connectionId === e.target.value)))}>
           {options.map(o => <option key={o.key} value={o.key} disabled={o.disabled}>{o.label}</option>)}
         </select>
@@ -696,7 +692,7 @@ function PushRecordCard({ record, conns, deviceId, canStar, onChange, onDelete, 
         </button>
       </div>
       {targetMissing && (
-        <div className="dim hint">The original connection is no longer active. Choose a live connection.</div>
+        <div className="hint warn">⚠ The connection this push was pointed at is gone. Choose a live one.</div>
       )}
       {!targetMissing && liveOptions.length === 0 && (
         <div className="dim hint">No active socket connections for this device. Connect one to send a push.</div>

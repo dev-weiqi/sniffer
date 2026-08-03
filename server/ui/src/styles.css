@@ -507,6 +507,7 @@ tr.bp-row td { background: color-mix(in srgb, var(--err) 10%, var(--bg-panel)); 
 .w-event { width: 220px; }
 .toggle input { accent-color: var(--accent); width: 15px; height: 15px; }
 .hint { font-size: 13px; }
+.hint.warn { color: var(--warn); }
 button.add { margin-top: 2px; }
 .field {
   display: inline-flex; align-items: center; gap: 5px;
