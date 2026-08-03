@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { HttpMockRule, Mocks, SocketConn, SocketMockRule } from './state'
 import { api } from './state'
 import { newRuleId, prettyJson } from './util'
 import { useConfirm } from './Confirm'
-import { buildExportRules, countSelectedRules, createFullExportSelection, type ExportRuleSelection, type ExportRulesSource, type PushEventRule } from './exportMocks'
+import { buildExportRules, countImportedRules, countSelectedRules, createFullExportSelection, importedCopies, parseImportedRules, type ExportRuleSelection, type ExportRulesSource, type PushEventRule } from './exportMocks'
 
 type PushPrefill = { connectionId: string; event: string; payload: string }
 
@@ -223,6 +223,8 @@ export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingS
   }, [draft, dirty, deviceId])
 
   const importRef = useRef<HTMLInputElement>(null)
+  const [pushImport, setPushImport] = useState<PushRecord[] | null>(null)
+  const onPushImported = useCallback(() => setPushImport(null), [])
 
   const exportSource: ExportRulesSource = { ...draft, push: exportPushRecords }
 
@@ -244,15 +246,18 @@ export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingS
   // Clear all first for replace semantics
   const importRules = (file: File) => {
     file.text().then(text => {
-      const v = JSON.parse(text) as Partial<Mocks>
-      const http = Array.isArray(v.http) ? v.http : []
-      const socket = Array.isArray(v.socket) ? v.socket : []
-      if (http.length + socket.length === 0) return
-      update({
-        ...draft,
-        http: [...draft.http, ...http.map(r => ({ ...r, id: newRuleId() }))],
-        socket: [...draft.socket, ...socket.map(r => ({ ...r, id: newRuleId() }))],
-      })
+      const v = parseImportedRules(text)
+      if (!v) return alert('Not a valid mock rules JSON file')
+      if (countImportedRules(v) === 0) return alert('No rules found in this file')
+      if (v.http.length + v.socket.length > 0) {
+        update({
+          ...draft,
+          http: [...draft.http, ...importedCopies(v.http, newRuleId)],
+          socket: [...draft.socket, ...importedCopies(v.socket, newRuleId)],
+        })
+      }
+      // push records live in the panel's localStorage, not in the synced mock store
+      if (v.push.length > 0) setPushImport(importedCopies(v.push, newRuleId))
     }).catch(() => alert('Not a valid mock rules JSON file'))
   }
 
@@ -351,6 +356,8 @@ export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingS
             prefill={pushPrefill}
             onConsumed={onPendingConsumed}
             onRecordsSnapshot={setExportPushRecords}
+            imported={pushImport}
+            onImported={onPushImported}
           />
         </section>
       </div>
@@ -520,13 +527,15 @@ function ExportRulesModal({ source, onCancel, onExport }: {
 
 type PushRecord = PushEventRule
 
-function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed, onRecordsSnapshot }: {
+function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed, onRecordsSnapshot, imported, onImported }: {
   conns: SocketConn[]
   deviceId: string
   appId: string | null
   prefill: PushPrefill | null
   onConsumed: () => void
   onRecordsSnapshot: (records: PushRecord[]) => void
+  imported: PushRecord[] | null
+  onImported: () => void
 }) {
   // ponytail: push records are a UI convenience, persisted in localStorage; starred ones
   // live in a per-appId bucket so every device of the app (current and future) sees them
@@ -547,6 +556,12 @@ function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed, onRecords
       onConsumed()
     }
   }, [prefill, onConsumed])
+
+  useEffect(() => {
+    if (!imported) return
+    setRecords(rs => [...imported, ...rs])
+    onImported()
+  }, [imported, onImported])
 
   const all = [...sharedRecords, ...records]
 
