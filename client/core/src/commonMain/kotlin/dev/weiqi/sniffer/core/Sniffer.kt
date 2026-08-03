@@ -52,6 +52,10 @@ object Sniffer {
     @Volatile
     private var pushHandlers: Map<String, (event: String, payload: String) -> Unit> = emptyMap()
 
+    // sockets the app currently holds open, kept so a reconnect can re-announce them
+    @Volatile
+    private var liveConnections: Map<String, SocketStatusMsg> = emptyMap()
+
     // ponytail: Volatile narrows but does not eliminate the double-start race; atomics if it ever matters
     @Volatile
     private var scope: CoroutineScope? = null
@@ -94,9 +98,23 @@ object Sniffer {
 
     /** Reports one message. While disconnected, up to 1000 messages are buffered (oldest dropped). */
     fun report(msg: DeviceMessage) {
+        if (msg is SocketStatusMsg) {
+            liveConnections =
+                if (msg.status == "connected") liveConnections + (msg.connectionId to msg)
+                else liveConnections - msg.connectionId
+        }
         reportSinkForTests?.invoke(msg)
         queue.trySend(msg)
     }
+
+    /**
+     * What the daemon is told on every (re)connect. Unplugging the device or restarting the
+     * daemon kills our link while the app's own sockets stay open, and the daemon only ever
+     * hears about a socket when it connects or disconnects -- so without replaying them here it
+     * stays blind to those sockets until the app restarts, and saved push events lose their target.
+     */
+    internal fun handshakeMessages(hello: Hello): List<DeviceMessage> =
+        listOf(hello.copy(capabilities = capabilities.toList())) + liveConnections.values
 
     /**
      * Pauses the calling response until the daemon resolves breakpoint [hit], returning how to
@@ -127,7 +145,7 @@ object Sniffer {
         while (currentCoroutineContext().isActive) {
             try {
                 client.webSocket(host = host, port = port, path = "/device") {
-                    send(SnifferJson.encodeToString<DeviceMessage>(hello.copy(capabilities = capabilities.toList())))
+                    for (msg in handshakeMessages(hello)) send(SnifferJson.encodeToString(msg))
                     Breakpoints.connected = true
                     val sender = launch {
                         for (msg in queue) send(SnifferJson.encodeToString<DeviceMessage>(msg))
