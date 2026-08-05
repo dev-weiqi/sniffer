@@ -34,10 +34,12 @@ function sniffImageMime(base64: string): string {
   return 'image/png'
 }
 
-export function HttpView({ rows, query, pausedHits, urlFilter, onUrlFilterChange, armedCount, onMock, onArm, onResolve, onDisarmAll, onClear }: {
+export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlFilter, onUrlFilterChange, armedCount, onMock, onArm, onResolve, onDisarmAll, onClear }: {
   rows: HttpRow[]
   query: string
   pausedHits: PausedHit[]
+  mockCount: number
+  onOpenMocks?: () => void
   urlFilter: TrafficFilter
   onUrlFilterChange: (filter: TrafficFilter) => void
   armedCount: number
@@ -102,6 +104,9 @@ export function HttpView({ rows, query, pausedHits, urlFilter, onUrlFilterChange
             </button>
           )}
           <span className="spacer" />
+          <button className="pill-btn mocks-btn" disabled={!onOpenMocks} onClick={onOpenMocks}>
+            Mocks{mockCount > 0 && <span className="count accent">{mockCount}</span>}
+          </button>
           <button className="clear-btn" disabled={rows.length === 0} onClick={onClear}>Clear API</button>
         </div>
         <div

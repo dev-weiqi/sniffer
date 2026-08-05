@@ -20,7 +20,7 @@ import { HttpView } from './HttpView'
 import { SocketView } from './SocketView'
 import { MocksView } from './MocksView'
 
-type Tab = 'http' | 'socket' | 'mocks'
+type Tab = 'http' | 'socket'
 type PushPrefill = { connectionId: string; event: string; payload: string }
 
 declare const __APP_VERSION__: string
@@ -80,7 +80,10 @@ function SunIcon() {
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState)
   const confirm = useConfirm()
-  const [tab, setTab] = useState<Tab>(() => (localStorage.getItem('sniffer-tab') as Tab) || 'http')
+  const [tab, setTab] = useState<Tab>(() =>
+    localStorage.getItem('sniffer-tab') === 'socket' ? 'socket' : 'http')
+  // the mock rules moved out of the tab bar into a modal each panel opens for its own rules
+  const [mocksOpen, setMocksOpen] = useState<null | 'http' | 'socket'>(null)
   const [deviceId, setDeviceId] = useState<string>(() => localStorage.getItem('sniffer-device') ?? '')
   const [search, setSearch] = useState('')
   const [pendingRule, setPendingRule] = useState<HttpMockRule | null>(null)
@@ -218,7 +221,7 @@ export default function App() {
 
   // ←/→ cycle the tabs (↑/↓ walk list rows inside a view); form fields keep their arrows
   useEffect(() => {
-    const TABS: Tab[] = ['http', 'socket', 'mocks']
+    const TABS: Tab[] = ['http', 'socket']
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
@@ -290,18 +293,21 @@ export default function App() {
   const mockFromRequest = (rule: HttpMockRule, targetDeviceId: string) => {
     setDeviceId(targetDeviceId)
     setPendingRule(rule)
-    setTab('mocks')
+    setTab('http')
+    setMocksOpen('http')
   }
 
   const mockFromSocketEvent = (rule: SocketMockRule, targetDeviceId: string) => {
     setDeviceId(targetDeviceId)
     setPendingSocketRule(rule)
-    setTab('mocks')
+    setTab('socket')
+    setMocksOpen('socket')
   }
 
   const pushFromEvent = (prefill: PushPrefill) => {
     setPendingPush(prefill)
-    setTab('mocks')
+    setTab('socket')
+    setMocksOpen('socket')
   }
 
   // arm a response-phase breakpoint on a request's path (exact-path match, like mocks)
@@ -430,9 +436,6 @@ export default function App() {
           <button data-active={tab === 'socket' || undefined} onClick={() => setTab('socket')}>
             Socket <span className="count">{filteredSocketEvents.length}</span>
           </button>
-          <button data-active={tab === 'mocks' || undefined} onClick={() => setTab('mocks')}>
-            Mocks {activeMockCount > 0 && <span className="count accent">{activeMockCount}</span>}
-          </button>
         </nav>
 
         <span className="spacer" />
@@ -547,6 +550,8 @@ export default function App() {
       <main className="content">
         {tab === 'http' && (
           <HttpView rows={filteredHttp} query={deferredSearch} pausedHits={devicePausedHits}
+            mockCount={selectedMocks.http.filter(r => r.enabled).length}
+            onOpenMocks={selectedDevice ? () => setMocksOpen('http') : undefined}
             urlFilter={httpFilter} onUrlFilterChange={setHttpFilter}
             armedCount={deviceBreakpoints.filter(r => r.enabled).length}
             onMock={mockFromRequest} onArm={armBreakpoint} onResolve={resolvePausedHit}
@@ -555,21 +560,26 @@ export default function App() {
         )}
         {tab === 'socket' && (
           <SocketView events={filteredSocketEvents} query={deferredSearch} conns={state.socketConns} connUrls={state.connUrls} deviceId={deviceId}
+            mockCount={selectedMocks.socket.filter(r => r.enabled).length}
+            onOpenMocks={selectedDevice ? () => setMocksOpen('socket') : undefined}
             eventFilter={socketFilter} onEventFilterChange={setSocketFilter}
             onMockAck={mockFromSocketEvent} onPushPrefill={pushFromEvent}
             onClear={async () => { if (await confirm('Clear socket events?', 'Clear')) api.clearSocketEntries() }} />
         )}
-        {tab === 'mocks' && (
-          <MocksView deviceId={selectedDevice ? deviceId : null}
-            appId={selectedDevice?.appId ?? null}
-            mocks={selectedMocks}
-            conns={state.socketConns}
-            pendingRule={pendingRule}
-            pendingSocketRule={pendingSocketRule}
-            pushPrefill={pendingPush}
-            onPendingConsumed={() => { setPendingRule(null); setPendingSocketRule(null); setPendingPush(null) }} />
-        )}
       </main>
+
+      {mocksOpen && selectedDevice && (
+        <MocksView scope={mocksOpen}
+          deviceId={deviceId}
+          appId={selectedDevice.appId ?? null}
+          mocks={selectedMocks}
+          conns={state.socketConns}
+          pendingRule={pendingRule}
+          pendingSocketRule={pendingSocketRule}
+          pushPrefill={pendingPush}
+          onPendingConsumed={() => { setPendingRule(null); setPendingSocketRule(null); setPendingPush(null) }}
+          onClose={() => setMocksOpen(null)} />
+      )}
 
     </div>
   )

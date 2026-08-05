@@ -3,6 +3,7 @@ import type { HttpMockRule, Mocks, SocketConn, SocketMockRule } from './state'
 import { api } from './state'
 import { newRuleId, prettyJson } from './util'
 import { useConfirm } from './Confirm'
+import { applyOrder, byOrder, loadIds, loadOrder, orderOf, saveIds, saveOrder } from './mockOrder'
 import { pointAt, resolvePushTarget } from './pushTarget'
 import { buildExportRules, countImportedRules, countSelectedRules, createFullExportSelection, importedCopies, parseImportedRules, type ExportRuleSelection, type ExportRulesSource, type PushEventRule } from './exportMocks'
 
@@ -13,7 +14,6 @@ const PlaceholderTokens = [
   { key: 'now', syntax: '${now}', label: 'current time, ISO-8601 UTC' },
   { key: 'randomString', syntax: '${randomString(min~max)}', label: 'lorem string, random length in the range you enter' },
 ]
-
 
 const httpSig = (r: HttpMockRule) => `${r.method ?? 'ANY'}|${r.urlPattern}`
 const socketSig = (r: SocketMockRule) => `${r.transport}|${r.event}`
@@ -51,7 +51,6 @@ function orderForSync(mocks: Mocks): Mocks {
     socket: reorder(mocks.socket as (SocketMockRule & { enabled: boolean })[], socketSig as never),
   }
 }
-
 
 
 /** Rules arrive minified from wherever they were captured; show them pretty-printed. Non-JSON
@@ -106,6 +105,26 @@ function StarButton({ starred, onToggle }: { starred?: boolean; onToggle: () => 
   )
 }
 
+function PlusIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
+  )
+}
+
+function CloseIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M18 6 6 18" />
+      <path d="M6 6l12 12" />
+    </svg>
+  )
+}
+
 function TrashIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -137,17 +156,10 @@ function SocketIcon() {
     </svg>
   )
 }
-function PushIcon() {
-  return (
-    <svg className="section-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M22 2 11 13" />
-      <path d="M22 2 15 22 11 13 2 9z" />
-    </svg>
-  )
-}
 
-export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingSocketRule, pushPrefill, onPendingConsumed }: {
+export function MocksView({ scope, deviceId, appId, mocks, conns, pendingRule, pendingSocketRule, pushPrefill, onPendingConsumed, onClose }: {
+  /** which panel opened it: the API panel manages HTTP rules, the Socket panel the socket ones */
+  scope: 'http' | 'socket'
   deviceId: string | null
   appId: string | null
   mocks: Mocks
@@ -156,6 +168,7 @@ export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingS
   pendingSocketRule: SocketMockRule | null
   pushPrefill: PushPrefill | null
   onPendingConsumed: () => void
+  onClose: () => void
 }) {
   const confirm = useConfirm()
   const [draft, setDraft] = useState<Mocks>(mocks)
@@ -164,13 +177,25 @@ export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingS
   const [showPlaceholders, setShowPlaceholders] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [exportPushRecords, setExportPushRecords] = useState<PushRecord[]>([])
+  const [selHttp, setSelHttp] = useState<string | null>(null)
+  const [selSocket, setSelSocket] = useState<string | null>(null)
+  const [socketTab, setSocketTab] = useState<'rules' | 'push'>('rules')
+  const [pushCount, setPushCount] = useState(0)
 
   // refs so the flush below sees the latest values without re-running the effect
   const draftRef = useRef(draft); draftRef.current = draft
   const dirtyRef = useRef(dirty); dirtyRef.current = dirty
 
   useEffect(() => {
-    setDraft(beautified(mocks))
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const orderKey = `sniffer-mock-order:${deviceId}`
+
+  useEffect(() => {
+    setDraft(beautified(applyOrder(loadOrder(orderKey, localStorage), mocks)))
     setDirty(false)
     const id = deviceId
     return () => {
@@ -180,16 +205,27 @@ export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingS
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deviceId])
 
-  // sync from server when rules change and there are no unsaved local edits
+  // sync from server when rules change and there are no unsaved local edits. Starring moves a
+  // rule into the daemon's shared bucket, which merges ahead of the device's own — re-applying
+  // the order already on screen is what keeps the rule from teleporting to the top.
   useEffect(() => {
-    if (!dirty) setDraft(beautified(mocks))
+    if (!dirty) setDraft(d => beautified(applyOrder(orderOf(d), mocks)))
   }, [mocks, dirty])
+
+  // Keyed on the order's contents, not on orderKey: switching device changes the key one render
+  // before the draft catches up, and saving then would file the old device's order under the new
+  // device's key.
+  const draftOrder = orderOf(draft)
+  const draftOrderId = `${draftOrder.http.join()}|${draftOrder.socket.join()}`
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { saveOrder(orderKey, draftOrder, localStorage) }, [draftOrderId])
 
   // prefilled rules coming from the "Mock this request" / "Mock this event" actions
   useEffect(() => {
     if (pendingRule && deviceId) {
       // click-to-prefill lands on top so it's immediately visible
       setDraft(d => ({ ...d, http: [{ ...pendingRule, createdAt: Date.now() }, ...d.http] }))
+      setSelHttp(pendingRule.id)
       setDirty(true)
       onPendingConsumed()
     }
@@ -198,10 +234,15 @@ export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingS
   useEffect(() => {
     if (pendingSocketRule && deviceId) {
       setDraft(d => ({ ...d, socket: [{ ...pendingSocketRule, createdAt: Date.now() }, ...d.socket] }))
+      setSelSocket(pendingSocketRule.id)
+      setSocketTab('rules')
       setDirty(true)
       onPendingConsumed()
     }
   }, [deviceId, pendingSocketRule, onPendingConsumed])
+
+  // a push prefill has to land on the push tab, not behind it
+  useEffect(() => { if (pushPrefill) setSocketTab('push') }, [pushPrefill])
 
   const update = (next: Mocks) => {
     setDraft(next)
@@ -266,90 +307,136 @@ export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingS
   const socketDups = duplicateIds(draft.socket, socketSig)
 
   if (!deviceId) {
-    return <div className="empty">Connect a device to manage mocks</div>
+    return null
   }
 
+  const httpRows: MockRow[] = draft.http.map(r => ({
+    id: r.id,
+    badge: r.method ?? 'ANY',
+    label: r.name || r.urlPattern || '(no path)',
+    sub: r.name ? r.urlPattern : undefined,
+    enabled: r.enabled,
+    starred: r.starred,
+    dup: httpDups.has(r.id),
+  }))
+  const socketRows: MockRow[] = draft.socket.map(r => ({
+    id: r.id,
+    badge: r.transport === 'ktor-ws' ? 'WS' : 'SIO',
+    label: r.name || r.event || '(no event)',
+    sub: r.name ? r.event : undefined,
+    enabled: r.enabled,
+    starred: r.starred,
+    dup: socketDups.has(r.id),
+  }))
+
+  const httpIndex = draft.http.findIndex(r => r.id === selHttp)
+  const httpAt = httpIndex >= 0 ? httpIndex : (draft.http.length ? 0 : -1)
+  const socketIndex = draft.socket.findIndex(r => r.id === selSocket)
+  const socketAt = socketIndex >= 0 ? socketIndex : (draft.socket.length ? 0 : -1)
+
+  const addHttp = () => {
+    const rule: HttpMockRule = {
+      id: newRuleId(), createdAt: Date.now(), enabled: true, method: null, urlPattern: '',
+      status: 200, headers: { 'content-type': 'application/json' }, body: '{}', delayMs: 0, delayOnly: false,
+    }
+    update({ ...draft, http: [...draft.http, rule] })
+    setSelHttp(rule.id)
+  }
+  const addSocket = () => {
+    const rule: SocketMockRule = {
+      id: newRuleId(), createdAt: Date.now(), enabled: true, transport: 'socketio',
+      event: '', ackPayload: '[{"ok":true}]', delayMs: 0,
+    }
+    update({ ...draft, socket: [...draft.socket, rule] })
+    setSelSocket(rule.id)
+  }
+
+  const title = scope === 'http' ? 'HTTP mock rules' : 'Socket mocks'
+  const enabledCount = scope === 'http'
+    ? draft.http.filter(r => r.enabled).length
+    : draft.socket.filter(r => r.enabled).length
+  const totalCount = scope === 'http' ? draft.http.length : draft.socket.length
+
   return (
-    <div className="mocks-pane">
-      <div className="mocks-toolbar">
-        <button className="pill-btn" onClick={() => setShowPlaceholders(v => !v)}>
-          {showPlaceholders ? 'Hide placeholders' : 'Placeholders'}
-        </button>
-        <button className="pill-btn" onClick={() => setExportOpen(true)}>Export</button>
-        <button className="pill-btn" onClick={() => importRef.current?.click()}>Import</button>
-        <input ref={importRef} type="file" accept="application/json,.json" style={{ display: 'none' }}
-          onChange={e => {
-            const f = e.target.files?.[0]
-            if (f) importRules(f)
-            e.target.value = ''
-          }} />
-        <span className="spacer" />
-        <span className="dim">{dirty ? 'Saving…' : saved ? 'Saved ✓' : 'Synced'}</span>
-      </div>
-      {exportOpen && (
-        <ExportRulesModal
-          source={exportSource}
-          onCancel={() => setExportOpen(false)}
-          onExport={exportRules}
-        />
-      )}
-      {showPlaceholders && <PlaceholderGuide />}
+    <div className="modal-backdrop" onMouseDown={onClose}>
+      <div className="modal mocks-modal" role="dialog" aria-modal="true" aria-label={title}
+        onMouseDown={e => e.stopPropagation()}>
+        <div className="mocks-modal-head">
+          {scope === 'http' ? <HttpIcon /> : <SocketIcon />}
+          <h2>{title}</h2>
+          <span className="dim">
+            {totalCount} {totalCount === 1 ? 'rule' : 'rules'} · {enabledCount} enabled
+          </span>
+          <span className="spacer" />
+          <button className="ghost icon-btn" title="Close" onClick={onClose}><CloseIcon /></button>
+        </div>
 
-      <div className="mocks-columns">
-        <section className="mocks-column http-column">
-          <div className="mocks-section-head">
-            <h2><HttpIcon />HTTP rules</h2>
-            {draft.http.length > 0 && (
-              <button className="ghost danger"
-                onClick={async () => { if (await confirm('Clear all HTTP mock rules?', 'Clear all')) update({ ...draft, http: [] }) }}>Clear all</button>
-            )}
+        {scope === 'socket' && (
+          <div className="mocks-modal-tabs">
+            <button data-active={socketTab === 'rules' || undefined} onClick={() => setSocketTab('rules')}>
+              Socket rules{draft.socket.length > 0 && <span className="tab-count">{draft.socket.length}</span>}
+            </button>
+            <button data-active={socketTab === 'push' || undefined} onClick={() => setSocketTab('push')}>
+              Server push events{pushCount > 0 && <span className="tab-count">{pushCount}</span>}
+            </button>
           </div>
-          {draft.http.map((r, i) => (
-            <HttpRuleEditor key={r.id} rule={r} dup={httpDups.has(r.id)}
-              onDuplicate={() => update({ ...draft, http: [
-                ...draft.http.slice(0, i + 1),
-                { ...r, id: newRuleId(), createdAt: Date.now() },
-                ...draft.http.slice(i + 1),
-              ] })}
-              onChange={next => update({ ...draft, http: draft.http.map((x, j) => j === i ? next : x) })}
-              onDelete={() => update({ ...draft, http: draft.http.filter((_, j) => j !== i) })}
-            />
-          ))}
-          <button className="ghost add" onClick={() => update({
-            ...draft,
-            http: [...draft.http, {
-              id: newRuleId(), createdAt: Date.now(), enabled: true, method: null, urlPattern: '',
-              status: 200, headers: { 'content-type': 'application/json' }, body: '{}', delayMs: 0, delayOnly: false,
-            }],
-          })}>+ Add HTTP rule</button>
-        </section>
+        )}
 
-        <section className="mocks-column socket-column">
-          <div className="mocks-section-head">
-            <h2><SocketIcon />Socket rules</h2>
-            {draft.socket.length > 0 && (
-              <button className="ghost danger"
-                onClick={async () => { if (await confirm('Clear all socket mock rules?', 'Clear all')) update({ ...draft, socket: [] }) }}>Clear all</button>
-            )}
+        {showPlaceholders && <PlaceholderGuide />}
+
+        {scope === 'http' && (
+          <div className="mocks-md">
+            <MockList rows={httpRows} selectedId={httpRows[httpAt]?.id ?? null}
+              onSelect={setSelHttp} onAdd={addHttp} addLabel="Add HTTP rule"
+              onToggle={id => update({ ...draft, http: draft.http.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r) })}
+              onClearAll={draft.http.length > 0 ? async () => {
+                if (await confirm('Clear all HTTP mock rules?', 'Clear all')) update({ ...draft, http: [] })
+              } : undefined}
+              placeholdersOn={showPlaceholders} onPlaceholders={() => setShowPlaceholders(v => !v)}
+            />
+            <div className="mocks-detail">
+              {httpAt < 0 ? <div className="empty">No HTTP rules yet — add one to start mocking</div> : (
+                <HttpRuleEditor key={draft.http[httpAt].id} rule={draft.http[httpAt]} dup={httpDups.has(draft.http[httpAt].id)}
+                  onDuplicate={() => {
+                    const copy = { ...draft.http[httpAt], id: newRuleId(), createdAt: Date.now() }
+                    update({ ...draft, http: [...draft.http.slice(0, httpAt + 1), copy, ...draft.http.slice(httpAt + 1)] })
+                    setSelHttp(copy.id)
+                  }}
+                  onChange={next => update({ ...draft, http: draft.http.map((x, j) => j === httpAt ? next : x) })}
+                  onDelete={() => update({ ...draft, http: draft.http.filter((_, j) => j !== httpAt) })}
+                />
+              )}
+            </div>
           </div>
-          {draft.socket.map((r, i) => (
-            <SocketRuleEditor key={r.id} rule={r} dup={socketDups.has(r.id)}
-              onDuplicate={() => update({ ...draft, socket: [
-                ...draft.socket.slice(0, i + 1),
-                { ...r, id: newRuleId(), createdAt: Date.now() },
-                ...draft.socket.slice(i + 1),
-              ] })}
-              onChange={next => update({ ...draft, socket: draft.socket.map((x, j) => j === i ? next : x) })}
-              onDelete={() => update({ ...draft, socket: draft.socket.filter((_, j) => j !== i) })}
-            />
-          ))}
-          <button className="ghost add" onClick={() => update({
-            ...draft,
-            socket: [...draft.socket, { id: newRuleId(), createdAt: Date.now(), enabled: true, transport: 'socketio' as const, event: '', ackPayload: '[{"ok":true}]', delayMs: 0 }],
-          })}>+ Add socket rule</button>
-        </section>
+        )}
 
-        <section className="mocks-column push-column">
+        {scope === 'socket' && socketTab === 'rules' && (
+          <div className="mocks-md">
+            <MockList rows={socketRows} selectedId={socketRows[socketAt]?.id ?? null}
+              onSelect={setSelSocket} onAdd={addSocket} addLabel="Add socket rule"
+              onToggle={id => update({ ...draft, socket: draft.socket.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r) })}
+              onClearAll={draft.socket.length > 0 ? async () => {
+                if (await confirm('Clear all socket mock rules?', 'Clear all')) update({ ...draft, socket: [] })
+              } : undefined}
+              placeholdersOn={showPlaceholders} onPlaceholders={() => setShowPlaceholders(v => !v)}
+            />
+            <div className="mocks-detail">
+              {socketAt < 0 ? <div className="empty">No socket rules yet — add one to start mocking</div> : (
+                <SocketRuleEditor key={draft.socket[socketAt].id} rule={draft.socket[socketAt]} dup={socketDups.has(draft.socket[socketAt].id)}
+                  onDuplicate={() => {
+                    const copy = { ...draft.socket[socketAt], id: newRuleId(), createdAt: Date.now() }
+                    update({ ...draft, socket: [...draft.socket.slice(0, socketAt + 1), copy, ...draft.socket.slice(socketAt + 1)] })
+                    setSelSocket(copy.id)
+                  }}
+                  onChange={next => update({ ...draft, socket: draft.socket.map((x, j) => j === socketAt ? next : x) })}
+                  onDelete={() => update({ ...draft, socket: draft.socket.filter((_, j) => j !== socketAt) })}
+                />
+              )}
+            </div>
+          </div>
+        )}
+
+        {scope === 'socket' && socketTab === 'push' && (
           <PushEventPanel
             conns={conns}
             deviceId={deviceId}
@@ -357,10 +444,89 @@ export function MocksView({ deviceId, appId, mocks, conns, pendingRule, pendingS
             prefill={pushPrefill}
             onConsumed={onPendingConsumed}
             onRecordsSnapshot={setExportPushRecords}
+            onCountChange={setPushCount}
             imported={pushImport}
             onImported={onPushImported}
           />
-        </section>
+        )}
+
+        <div className="mocks-modal-foot">
+          <span className="dim">{dirty ? 'Saving…' : saved ? 'Saved ✓' : 'Synced'}</span>
+          <span className="spacer" />
+          <button className="pill-btn" onClick={() => importRef.current?.click()}>Import</button>
+          <button className="pill-btn" onClick={() => setExportOpen(true)}>Export</button>
+          <input ref={importRef} type="file" accept="application/json,.json" style={{ display: 'none' }}
+            onChange={e => {
+              const f = e.target.files?.[0]
+              if (f) importRules(f)
+              e.target.value = ''
+            }} />
+        </div>
+      </div>
+
+      {exportOpen && (
+        <ExportRulesModal
+          source={exportSource}
+          onCancel={() => setExportOpen(false)}
+          onExport={exportRules}
+        />
+      )}
+    </div>
+  )
+}
+
+export interface MockRow {
+  id: string
+  badge: string
+  label: string
+  /** shown under the label when the rule has a name, so the path is never hidden behind it */
+  sub?: string
+  enabled?: boolean
+  starred?: boolean
+  dup?: boolean
+}
+
+/** Master list of the modal: never truncates a label -- long paths and names wrap instead. */
+function MockList({ rows, selectedId, onSelect, onToggle, onAdd, addLabel, onClearAll, placeholdersOn, onPlaceholders }: {
+  rows: MockRow[]
+  selectedId: string | null
+  onSelect: (id: string) => void
+  onToggle?: (id: string) => void
+  onAdd: () => void
+  addLabel: string
+  onClearAll?: () => void
+  placeholdersOn?: boolean
+  onPlaceholders?: () => void
+}) {
+  return (
+    <div className="mocks-list">
+      <div className="mocks-list-tools">
+        <button className="ghost icon-btn" title={addLabel} onClick={onAdd}><PlusIcon /></button>
+        {onClearAll && <button className="ghost icon-btn danger" title="Clear all" onClick={onClearAll}><TrashIcon /></button>}
+        <span className="spacer" />
+        {onPlaceholders && (
+          <button className="pill-btn" data-on={placeholdersOn || undefined} onClick={onPlaceholders}>Placeholders</button>
+        )}
+      </div>
+      <div className="mocks-list-scroll">
+        {rows.map(row => (
+          <div key={row.id} className="mocks-list-row" data-selected={row.id === selectedId || undefined}
+            data-off={row.enabled === false || undefined} onClick={() => onSelect(row.id)}>
+            {onToggle && (
+              <label className="toggle" onClick={e => e.stopPropagation()}>
+                <input type="checkbox" checked={row.enabled !== false} onChange={() => onToggle(row.id)} />
+              </label>
+            )}
+            <span className="mocks-list-badge">{row.badge}</span>
+            <span className="mocks-list-name">
+              <span className="mocks-list-label">{row.label}</span>
+              {row.sub && <span className="mocks-list-sub mono">{row.sub}</span>}
+            </span>
+            {row.dup && <span className="badge dup-badge" title="Another enabled rule matches the same thing">dup</span>}
+            {row.starred && <span className="mocks-list-star"><StarIcon filled /></span>}
+          </div>
+        ))}
+        {rows.length === 0 && <div className="dim hint mocks-list-empty">Nothing here yet</div>}
       </div>
     </div>
   )
@@ -528,13 +694,14 @@ function ExportRulesModal({ source, onCancel, onExport }: {
 
 type PushRecord = PushEventRule
 
-function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed, onRecordsSnapshot, imported, onImported }: {
+function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed, onRecordsSnapshot, onCountChange, imported, onImported }: {
   conns: SocketConn[]
   deviceId: string
   appId: string | null
   prefill: PushPrefill | null
   onConsumed: () => void
   onRecordsSnapshot: (records: PushRecord[]) => void
+  onCountChange: (count: number) => void
   imported: PushRecord[] | null
   onImported: () => void
 }) {
@@ -542,9 +709,11 @@ function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed, onRecords
   // live in a per-appId bucket so every device of the app (current and future) sees them
   const confirm = useConfirm()
   const storageKey = `sniffer-push-${deviceId}`
+  const pushOrderKey = `sniffer-push-order:${deviceId}`
   const sharedKey = appId ? `sniffer-push-shared-${appId}` : null
   const [records, setRecords] = useState<PushRecord[]>(() => loadRecords(storageKey))
   const [sharedRecords, setSharedRecords] = useState<PushRecord[]>(() => loadShared(sharedKey))
+  const [selected, setSelected] = useState<string | null>(null)
 
   useEffect(() => { setRecords(loadRecords(storageKey)) }, [storageKey])
   useEffect(() => { localStorage.setItem(storageKey, JSON.stringify(records)) }, [records, storageKey])
@@ -554,7 +723,9 @@ function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed, onRecords
   useEffect(() => {
     if (prefill) {
       const conn = conns.find(c => c.connectionId === prefill.connectionId)
-      setRecords(rs => [pointAt({ id: newRuleId(), target: '', event: prefill.event, payload: prefill.payload }, conn), ...rs])
+      const record = pointAt({ id: newRuleId(), target: '', event: prefill.event, payload: prefill.payload }, conn)
+      setRecords(rs => [record, ...rs])
+      setSelected(record.id)
       onConsumed()
     }
   }, [prefill, onConsumed, conns])
@@ -565,9 +736,23 @@ function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed, onRecords
     onImported()
   }, [imported, onImported])
 
-  const all = [...sharedRecords, ...records]
+  // starred records live in the shared bucket, which lists first — the remembered order
+  // (same idea as the mock rules above) is what keeps a card where the user left it
+  const [pushOrder, setPushOrder] = useState<string[]>(() => loadIds(pushOrderKey, localStorage))
+  useEffect(() => { setPushOrder(loadIds(pushOrderKey, localStorage)) }, [pushOrderKey])
+  const all = byOrder(pushOrder, [...sharedRecords, ...records])
 
   useEffect(() => { onRecordsSnapshot(all) }, [records, sharedRecords, onRecordsSnapshot])
+  useEffect(() => { onCountChange(all.length) }, [records, sharedRecords, onCountChange])
+
+  const displayedIds = all.map(r => r.id).join()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!displayedIds) return
+    const ids = displayedIds.split(',')
+    saveIds(pushOrderKey, ids, localStorage)
+    setPushOrder(ids) // absorbs records added since the load, so starring one keeps its place
+  }, [displayedIds])
 
   // a starred record moves to the shared bucket (and back); other edits stay in place
   const changeRecord = (next: PushRecord) => {
@@ -578,10 +763,10 @@ function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed, onRecords
       set(rs => rs.map(x => x.id === next.id ? next : x))
     } else if (nowShared) {
       setRecords(rs => rs.filter(x => x.id !== next.id))
-      setSharedRecords(rs => [next, ...rs])
+      setSharedRecords(rs => [...rs, next])
     } else {
       setSharedRecords(rs => rs.filter(x => x.id !== next.id))
-      setRecords(rs => [{ ...next, starred: undefined }, ...rs])
+      setRecords(rs => [...rs, { ...next, starred: undefined }])
     }
   }
   const deleteRecord = (id: string) => {
@@ -596,29 +781,42 @@ function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed, onRecords
     })
   }
 
+  const at = all.findIndex(r => r.id === selected)
+  const current = at >= 0 ? all[at] : all[0]
+
+  const rows: MockRow[] = all.map(r => ({
+    id: r.id,
+    badge: 'SIO',
+    label: r.name || r.event || '(no event)',
+    sub: r.name ? r.event : undefined,
+    starred: r.starred,
+  }))
+
+  const addRecord = () => {
+    const record = { id: newRuleId(), target: '', event: '', payload: '{}' }
+    setRecords(rs => [...rs, record])
+    setSelected(record.id)
+  }
+
   return (
-    <>
-      <div className="mocks-section-head">
-        <h2><PushIcon />Server push events</h2>
-        {all.length > 0 && (
-          <button className="ghost danger"
-            onClick={async () => {
-              const note = sharedRecords.length > 0 ? ' Starred ones disappear for every device of this app.' : ''
-              if (await confirm(`Clear all push events?${note}`, 'Clear all')) { setRecords([]); setSharedRecords([]) }
-            }}>Clear all</button>
+    <div className="mocks-md">
+      <MockList rows={rows} selectedId={current?.id ?? null} onSelect={setSelected}
+        onAdd={addRecord} addLabel="Add push event"
+        onClearAll={all.length > 0 ? async () => {
+          const note = sharedRecords.length > 0 ? ' Starred ones disappear for every device of this app.' : ''
+          if (await confirm(`Clear all push events?${note}`, 'Clear all')) { setRecords([]); setSharedRecords([]) }
+        } : undefined}
+      />
+      <div className="mocks-detail">
+        {!current ? <div className="empty">No push events yet — add one to send a server event</div> : (
+          <PushRecordCard key={current.id} record={current} conns={conns} deviceId={deviceId} canStar={sharedKey !== null}
+            onChange={changeRecord}
+            onDelete={() => deleteRecord(current.id)}
+            onDuplicate={() => duplicateRecord(current)}
+          />
         )}
       </div>
-      {all.map(r => (
-        <PushRecordCard key={r.id} record={r} conns={conns} deviceId={deviceId} canStar={sharedKey !== null}
-          onChange={changeRecord}
-          onDelete={() => deleteRecord(r.id)}
-          onDuplicate={() => duplicateRecord(r)}
-        />
-      ))}
-      <button className="ghost add" onClick={() =>
-        setRecords(rs => [...rs, { id: newRuleId(), target: '', event: '', payload: '{}' }])
-      }>+ Add push event</button>
-    </>
+    </div>
   )
 }
 

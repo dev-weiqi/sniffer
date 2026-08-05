@@ -15,7 +15,7 @@ const SYS_EVENTS = new Set([
   'ping', 'pong',
 ])
 
-export function SocketView({ events, query, conns, connUrls, deviceId, eventFilter, onEventFilterChange, onMockAck, onPushPrefill, onClear }: {
+export function SocketView({ mockCount, onOpenMocks, events, query, conns, connUrls, deviceId, eventFilter, onEventFilterChange, onMockAck, onPushPrefill, onClear }: {
   events: SocketRow[]
   query: string
   eventFilter: TrafficFilter
@@ -23,6 +23,8 @@ export function SocketView({ events, query, conns, connUrls, deviceId, eventFilt
   conns: SocketConn[]
   connUrls: Record<string, string>
   deviceId: string
+  mockCount: number
+  onOpenMocks?: () => void
   onMockAck: (rule: SocketMockRule, deviceId: string) => void
   onPushPrefill: (prefill: { connectionId: string; event: string; payload: string }) => void
   onClear: () => void
@@ -59,6 +61,9 @@ export function SocketView({ events, query, conns, connUrls, deviceId, eventFilt
         <div className="panel-toolbar">
           <span className="dim">Socket events</span>
           <span className="spacer" />
+          <button className="pill-btn mocks-btn" disabled={!onOpenMocks} onClick={onOpenMocks}>
+            Mocks{mockCount > 0 && <span className="count accent">{mockCount}</span>}
+          </button>
           <button className="clear-btn" disabled={events.length === 0} onClick={onClear}>Clear Socket</button>
         </div>
         <div
