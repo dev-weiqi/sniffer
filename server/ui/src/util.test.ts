@@ -9,7 +9,9 @@ import {
   splitHighlight,
   statusClass,
   toCurl,
+  unwrapJsonString,
   urlParts,
+  wrapJsonString,
 } from './util.js'
 import type { HttpRow } from './state.js'
 
@@ -146,3 +148,40 @@ assertEqual(sl('see https://a.com/x. done'), '[{"text":"see ","link":false},{"te
 assertEqual(sl('a http://x.io b https://y.io c'), '[{"text":"a ","link":false},{"text":"http://x.io","link":true},{"text":" b ","link":false},{"text":"https://y.io","link":true},{"text":" c","link":false}]', 'splitLinks multiple urls')
 
 console.log('util.test: all assertions passed')
+
+// ---- unwrapJsonString / wrapJsonString ----
+// The shape a socket.io backend produces with emit(event, JSON.stringify(payload)):
+// an argument list holding one JSON string, which Pretty JSON cannot reach inside.
+{
+  const inner = { code: 0, msg: 'ok', data: { id: 7 } }
+  const wire = JSON.stringify([JSON.stringify(inner)])
+
+  const opened = unwrapJsonString(wire)
+  assert(opened !== null, 'a wrapped payload can be unwrapped')
+  assert(JSON.stringify(JSON.parse(opened!)) === JSON.stringify(inner), 'unwrapping keeps the value')
+  assert(opened!.includes('\n'), 'the unwrapped value comes back pretty-printed')
+
+  const closed = wrapJsonString(opened!)
+  assert(closed !== null, 'an unwrapped payload can be wrapped back')
+  assert(JSON.stringify(JSON.parse(closed!)) === JSON.stringify(JSON.parse(wire)),
+    'the round trip lands on the same wire value')
+  assert(JSON.parse(JSON.parse(closed!)[0]).code === 0, 'the app still receives one JSON string')
+
+  // placeholders live inside string values, so they survive the round trip untouched
+  const withToken = JSON.stringify([JSON.stringify({ at: '${now}', id: '${randomId}' })])
+  assert(unwrapJsonString(withToken)!.includes('${now}'), 'placeholders survive unwrapping')
+  assert(wrapJsonString(unwrapJsonString(withToken)!)!.includes('${randomId}'), 'and survive wrapping back')
+
+  // anything that is not "one JSON string in an array" is left alone -- the caller hides the action
+  assert(unwrapJsonString('[{"a":1}]') === null, 'an array of objects is not double-encoded')
+  assert(unwrapJsonString('{"a":1}') === null, 'a plain object is not double-encoded')
+  assert(unwrapJsonString('["plain text"]') === null, 'a string that is not JSON stays a string')
+  assert(unwrapJsonString('["{}", "{}"]') === null, 'two arguments are ambiguous, so no action')
+  assert(unwrapJsonString('["3"]') === null, 'a JSON scalar in a string is not worth unwrapping')
+  assert(unwrapJsonString('not json') === null, 'invalid JSON offers nothing')
+  assert(unwrapJsonString('') === null, 'empty offers nothing')
+
+  assert(wrapJsonString('not json') === null, 'invalid JSON cannot be wrapped')
+  assert(wrapJsonString('42') === null, 'a scalar cannot be wrapped')
+  assert(wrapJsonString('"already a string"') === null, 'a bare string cannot be wrapped')
+}

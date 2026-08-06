@@ -562,8 +562,28 @@ button.add { margin-top: 2px; }
   min-height: 32px;
   font-size: 13px; color: var(--text-dim); white-space: nowrap;
 }
-.rule-body-tools { display: flex; flex-wrap: wrap; gap: 6px; }
-.rule-body-tools button { font-size: 13px; padding: 2px 8px; }
+.rule-body-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+/* two kinds of control live here: actions that rewrite the whole payload, and tokens you drop
+   at the cursor. The tokens are literal text, so they are styled as code rather than as buttons. */
+.rule-body-tools .tool-btn {
+  font-size: 13px; padding: 3px 10px; border-radius: 6px; cursor: pointer;
+  background: var(--bg-alt); border: 1px solid var(--border); color: var(--text);
+}
+.rule-body-tools .tool-btn:hover { border-color: var(--accent); }
+.rule-body-tools .tool-btn[data-on] {
+  background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  color: var(--accent); font-weight: 600;
+}
+.rule-body-tools .token-btn {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  font-size: 12px; padding: 2px 8px; border-radius: 5px; cursor: pointer;
+  background: transparent; color: var(--accent);
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.rule-body-tools .token-btn:hover { background: var(--accent-soft); border-style: solid; }
+.rule-body-tools .tools-sep {
+  width: 1px; align-self: stretch; margin: 1px 4px; background: var(--border);
+}
 .placeholder-guide { gap: 10px; }
 .placeholder-list { display: flex; flex-direction: column; gap: 6px; }
 .placeholder-item { display: flex; align-items: center; gap: 10px; }
@@ -856,7 +876,12 @@ table.grid tbody tr.export-category-row[data-selected] td {
 .export-empty-row td {
   background: color-mix(in srgb, var(--bg-alt) 34%, var(--bg-panel));
 }
-.dup-warning { color: var(--warn); padding: 0 12px; }
+.dup-warning {
+  color: var(--warn); padding: 0 12px;
+  display: flex; align-items: center; gap: 6px;
+}
+.dup-warning svg { flex: none; }
+.mocks-list-dup { color: var(--warn); margin-top: 2px; display: flex; }
 
 .rule-name-row {
   display: flex; align-items: center; gap: 7px;

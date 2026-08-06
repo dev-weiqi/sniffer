@@ -36,6 +36,40 @@ export function prettyJson(text: string | null | undefined): string {
   }
 }
 
+/** socket.io backends commonly emit `JSON.stringify(payload)`, so the recorded argument list is
+    an array holding one JSON *string*: `["{\"a\":1}"]`. JSON has no way to format inside a
+    string, which is why Pretty JSON leaves those unreadable. Returns the inner value formatted,
+    or null when the text is not that shape -- the caller uses null to hide the action. */
+export function unwrapJsonString(text: string): string | null {
+  let outer: unknown
+  try {
+    outer = JSON.parse(text)
+  } catch {
+    return null
+  }
+  if (!Array.isArray(outer) || outer.length !== 1 || typeof outer[0] !== 'string') return null
+  try {
+    const inner: unknown = JSON.parse(outer[0])
+    if (inner === null || typeof inner !== 'object') return null
+    return JSON.stringify(inner, null, 2)
+  } catch {
+    return null
+  }
+}
+
+/** Inverse of [unwrapJsonString]: back to the single-string argument the app parses. The inner
+    JSON is re-serialized, so whitespace and key order come from the editor, not the original
+    capture -- the parsed value is the same, the bytes need not be. */
+export function wrapJsonString(text: string): string | null {
+  try {
+    const value: unknown = JSON.parse(text)
+    if (value === null || typeof value !== 'object') return null
+    return JSON.stringify([JSON.stringify(value)])
+  } catch {
+    return null
+  }
+}
+
 export function statusClass(status: number | undefined, error?: string | null): string {
   if (error) return 'st-err'
   if (status === undefined) return 'st-pending'

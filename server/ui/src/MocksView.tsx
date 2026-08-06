@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { HttpMockRule, Mocks, SocketConn, SocketMockRule } from './state'
 import { api } from './state'
-import { newRuleId, prettyJson } from './util'
+import { newRuleId, prettyJson, unwrapJsonString, wrapJsonString } from './util'
 import { useConfirm } from './Confirm'
 import { applyOrder, byOrder, loadIds, loadOrder, orderOf, saveIds, saveOrder } from './mockOrder'
 import { pointAt, resolvePushTarget } from './pushTarget'
@@ -121,6 +121,32 @@ function CloseIcon() {
       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M18 6 6 18" />
       <path d="M6 6l12 12" />
+    </svg>
+  )
+}
+
+/** Clearing the whole list is a different act from deleting one rule, so it must not wear the
+    same trash can: a list with an X reads as "empty this list", not "delete this item". */
+function ClearListIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M13 6H3" />
+      <path d="M13 12H3" />
+      <path d="M13 18H3" />
+      <path d="m16 9 5 5" />
+      <path d="m21 9-5 5" />
+    </svg>
+  )
+}
+
+function WarningIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
     </svg>
   )
 }
@@ -502,7 +528,9 @@ function MockList({ rows, selectedId, onSelect, onToggle, onAdd, addLabel, onCle
     <div className="mocks-list">
       <div className="mocks-list-tools">
         <button className="ghost icon-btn" title={addLabel} onClick={onAdd}><PlusIcon /></button>
-        {onClearAll && <button className="ghost icon-btn danger" title="Clear all" onClick={onClearAll}><TrashIcon /></button>}
+        {onClearAll && (
+          <button className="ghost icon-btn danger" title="Clear all" onClick={onClearAll}><ClearListIcon /></button>
+        )}
         <span className="spacer" />
         {onPlaceholders && (
           <button className="pill-btn" data-on={placeholdersOn || undefined} onClick={onPlaceholders}>Placeholders</button>
@@ -522,7 +550,11 @@ function MockList({ rows, selectedId, onSelect, onToggle, onAdd, addLabel, onCle
               <span className="mocks-list-label">{row.label}</span>
               {row.sub && <span className="mocks-list-sub mono">{row.sub}</span>}
             </span>
-            {row.dup && <span className="badge dup-badge" title="Another enabled rule matches the same thing">dup</span>}
+            {row.dup && (
+              <span className="mocks-list-dup" title="Another enabled rule has the same matcher — the newest one takes effect">
+                <WarningIcon />
+              </span>
+            )}
             {row.starred && <span className="mocks-list-star"><StarIcon filled /></span>}
           </div>
         ))}
@@ -846,6 +878,7 @@ function PushRecordCard({ record, conns, deviceId, canStar, onChange, onDelete, 
   const confirm = useConfirm()
   const [status, setStatus] = useState<'sent' | 'error' | null>(null)
   const payloadRef = useRef<HTMLTextAreaElement>(null)
+  const payloadView = useJsonStringView(record.payload, payload => onChange({ ...record, payload }), 'args')
 
   const live = conns.filter(c => c.deviceId === deviceId && c.status === 'connected')
   const liveOptions = live.map(c => ({
@@ -895,11 +928,12 @@ function PushRecordCard({ record, conns, deviceId, canStar, onChange, onDelete, 
       {!targetMissing && liveOptions.length === 0 && (
         <div className="dim hint">No active socket connections for this device. Connect one to send a push.</div>
       )}
-      <textarea ref={payloadRef} className="mono" rows={8} placeholder="payload (JSON or plain text)" value={record.payload}
-        onChange={e => onChange({ ...record, payload: e.target.value })} />
+      <textarea ref={payloadRef} className="mono" rows={8} placeholder="payload (JSON or plain text)"
+        value={payloadView.text} onChange={e => payloadView.onText(e.target.value)} />
       <div className="rule-body-tools">
-        <JsonTool label="Pretty JSON" body={record.payload} transform={v => JSON.stringify(v, null, 2)} onResult={p => onChange({ ...record, payload: p })} />
-        <PlaceholderTools value={record.payload} onValue={payload => onChange({ ...record, payload })} taRef={payloadRef} />
+        <JsonTool label="Pretty JSON" body={payloadView.text} transform={v => JSON.stringify(v, null, 2)} onResult={payloadView.onText} />
+        <JsonStringToggle view={payloadView} />
+        <PlaceholderTools value={payloadView.text} onValue={payloadView.onText} taRef={payloadRef} />
       </div>
     </div>
   )
@@ -916,6 +950,7 @@ function HttpRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
   const [sub, setSub] = useState<'body' | 'headers'>('body')
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const urlRef = useRef<HTMLInputElement>(null)
+  const bodyView = useJsonStringView(rule.body, body => onChange({ ...rule, body }))
   const headerCount = Object.keys(rule.headers).length
   // paths share their head (/api/systems/v1/…), so show the tail — but never yank the view
   // out from under someone editing the field
@@ -945,7 +980,9 @@ function HttpRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
         <button className="ghost icon-btn danger" title="Delete rule"
           onClick={async () => { if (await confirm(rule.starred ? 'Delete this shared rule? It disappears for every device of this app.' : 'Delete this rule?', 'Delete')) onDelete() }}><TrashIcon /></button>
       </div>
-      {dup && <div className="hint dup-warning">⚠ Another enabled rule has the same matcher — the newest one takes effect.</div>}
+      {dup && (
+        <div className="hint dup-warning"><WarningIcon />Another enabled rule has the same matcher — the newest one takes effect.</div>
+      )}
       <div className="rule-tabs">
         {!rule.delayOnly && (
           <>
@@ -978,12 +1015,13 @@ function HttpRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
         <>
           {sub === 'body' ? (
             <>
-              <textarea ref={bodyRef} className="mono" rows={14} placeholder="response body" value={rule.body}
-                onChange={e => onChange({ ...rule, body: e.target.value })} />
+              <textarea ref={bodyRef} className="mono" rows={14} placeholder="response body"
+                value={bodyView.text} onChange={e => bodyView.onText(e.target.value)} />
               <div className="rule-body-tools">
-                <JsonTool label="Pretty JSON" body={rule.body} transform={v => JSON.stringify(v, null, 2)}
-                  onResult={body => onChange({ ...rule, body })} />
-                <PlaceholderTools value={rule.body} onValue={body => onChange({ ...rule, body })} taRef={bodyRef} />
+                <JsonTool label="Pretty JSON" body={bodyView.text} transform={v => JSON.stringify(v, null, 2)}
+                  onResult={bodyView.onText} />
+                <JsonStringToggle view={bodyView} />
+                <PlaceholderTools value={bodyView.text} onValue={bodyView.onText} taRef={bodyRef} />
               </div>
             </>
           ) : (
@@ -1063,7 +1101,97 @@ function JsonTool({ label, body, transform, onResult }: {
       setTimeout(() => setBad(false), 1200)
     }
   }
-  return <button className="pill-btn" onClick={run}>{bad ? 'Invalid JSON' : label}</button>
+  return <button className="tool-btn" onClick={run}>{bad ? 'Invalid JSON' : label}</button>
+}
+
+/** Two jobs behind one control, because they are the same question asked from opposite sides:
+    "this payload is JSON inside a string — let me read it" and "this payload should go out as a
+    string like the server sends".
+
+    Expanding is presentation only: the value handed back stays the wire string, so how you look
+    at it can never change what the app receives. Wrapping is a deliberate conversion — it is the
+    only way to turn a plain payload into the single string an app expects to JSON.parse, so it
+    says so on the button. Edits made while expanded are re-encoded on the way out; text that is
+    not valid JSON yet is simply not written back, and the toggle says so. */
+function useJsonStringView(value: string, onValue: (next: string) => void, kind: 'args' | 'body' = 'body') {
+  const [open, setOpen] = useState(false)
+  // holds exactly what the user typed, so re-encoding never reformats under their cursor
+  const [buffer, setBuffer] = useState<string | null>(null)
+
+  const inner = unwrapJsonString(value)
+  const showing = open && inner !== null
+  const text = showing ? buffer ?? inner : value
+  const invalid = showing && buffer !== null && wrapJsonString(buffer) === null
+
+  const onText = (next: string) => {
+    if (!showing) return onValue(next)
+    // Pasting a whole wire payload into the expanded view means "replace the payload", not
+    // "this is the inner value" -- re-encoding it here would wrap an already-wrapped payload.
+    if (unwrapJsonString(next) !== null) {
+      setBuffer(null)
+      return onValue(next)
+    }
+    setBuffer(next)
+    const wrapped = wrapJsonString(next)
+    if (wrapped !== null) onValue(wrapped)
+  }
+
+  return {
+    text,
+    onText,
+    invalid,
+    /** already a JSON string: the toggle only changes the view */
+    isString: inner !== null,
+    showing,
+    // Offered narrowly on purpose. Socket payloads are an argument list, so a bare object means
+    // "one object argument" -- the shape you get by pasting the inner JSON of a server that
+    // stringifies its payloads, and the only case where wrapping is what you meant. An argument
+    // list that is already an array, or an HTTP body, is left alone: a Wrap button there is noise
+    // on every payload and quietly corrupts the one you press it on.
+    canWrap: kind === 'args' && inner === null && isBareObject(value),
+    toggle: () => { setBuffer(null); setOpen(o => !o) },
+    // One-shot conversion, and it stays one-shot: opening the expanded view here would leave the
+    // editor in a mode that re-encodes whatever you paste next, wrapping it a second time.
+    wrap: () => {
+      const wrapped = wrapJsonString(value)
+      if (wrapped === null) return
+      setBuffer(null)
+      onValue(wrapped)
+    },
+  }
+}
+
+function isBareObject(text: string): boolean {
+  try {
+    const value: unknown = JSON.parse(text)
+    return value !== null && typeof value === 'object' && !Array.isArray(value)
+  } catch {
+    return false
+  }
+}
+
+type JsonStringView = ReturnType<typeof useJsonStringView>
+
+function JsonStringToggle({ view }: { view: JsonStringView }) {
+  if (view.isString) {
+    return (
+      <>
+        <button className="tool-btn" data-on={view.showing || undefined}
+          title="JSON inside a string. Expanding only changes the view — the payload stays a string."
+          onClick={view.toggle}>
+          {view.showing ? 'Show as string' : 'Expand string'}
+        </button>
+        {view.invalid && <span className="hint warn">Invalid JSON — not saved yet</span>}
+      </>
+    )
+  }
+  if (!view.canWrap) return null
+  return (
+    <button className="tool-btn" onClick={view.wrap}
+      title="Send this as one JSON string, the way a server that emits JSON.stringify(payload) does">
+      Wrap as string
+    </button>
+  )
 }
 
 function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
@@ -1076,6 +1204,8 @@ function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
   const confirm = useConfirm()
   const ackRef = useRef<HTMLTextAreaElement>(null)
   const pushRef = useRef<HTMLTextAreaElement>(null)
+  const ackView = useJsonStringView(rule.ackPayload, ackPayload => onChange({ ...rule, ackPayload }), 'args')
+  const pushView = useJsonStringView(rule.pushPayload ?? '[]', pushPayload => onChange({ ...rule, pushPayload }), 'args')
   const mode = rule.transport === 'ktor-ws' ? 'ws' : rule.pushEvent != null ? 'sio-event' : 'sio-ack'
   return (
     <div className="rule-card" data-disabled={!rule.enabled || undefined}>
@@ -1107,7 +1237,9 @@ function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
         <button className="ghost icon-btn danger" title="Delete rule"
           onClick={async () => { if (await confirm(rule.starred ? 'Delete this shared rule? It disappears for every device of this app.' : 'Delete this rule?', 'Delete')) onDelete() }}><TrashIcon /></button>
       </div>
-      {dup && <div className="hint dup-warning">⚠ Another enabled rule has the same matcher — the newest one takes effect.</div>}
+      {dup && (
+        <div className="hint dup-warning"><WarningIcon />Another enabled rule has the same matcher — the newest one takes effect.</div>
+      )}
       {mode === 'sio-event' ? (
         <>
           <div className="rule-tabs">
@@ -1122,12 +1254,12 @@ function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
           </div>
           <textarea ref={pushRef} className="mono" rows={14}
             placeholder="pushed payload (JSON array = multiple args)"
-            value={rule.pushPayload ?? '[]'}
-            onChange={e => onChange({ ...rule, pushPayload: e.target.value })} />
+            value={pushView.text} onChange={e => pushView.onText(e.target.value)} />
           <div className="rule-body-tools">
-            <JsonTool label="Pretty JSON" body={rule.pushPayload ?? '[]'} transform={v => JSON.stringify(v, null, 2)}
-              onResult={pushPayload => onChange({ ...rule, pushPayload })} />
-            <PlaceholderTools value={rule.pushPayload ?? '[]'} onValue={pushPayload => onChange({ ...rule, pushPayload })} taRef={pushRef} />
+            <JsonTool label="Pretty JSON" body={pushView.text} transform={v => JSON.stringify(v, null, 2)}
+              onResult={pushView.onText} />
+            <JsonStringToggle view={pushView} />
+            <PlaceholderTools value={pushView.text} onValue={pushView.onText} taRef={pushRef} />
           </div>
         </>
       ) : (
@@ -1144,11 +1276,12 @@ function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
           </div>
           <textarea ref={ackRef} className="mono" rows={14}
             placeholder={rule.transport === 'socketio' ? 'ack payload (JSON array = multiple args)' : 'fake reply frame (raw text)'}
-            value={rule.ackPayload} onChange={e => onChange({ ...rule, ackPayload: e.target.value })} />
+            value={ackView.text} onChange={e => ackView.onText(e.target.value)} />
           <div className="rule-body-tools">
-            <JsonTool label="Pretty JSON" body={rule.ackPayload} transform={v => JSON.stringify(v, null, 2)}
-              onResult={ackPayload => onChange({ ...rule, ackPayload })} />
-            <PlaceholderTools value={rule.ackPayload} onValue={ackPayload => onChange({ ...rule, ackPayload })} taRef={ackRef} />
+            <JsonTool label="Pretty JSON" body={ackView.text} transform={v => JSON.stringify(v, null, 2)}
+              onResult={ackView.onText} />
+            <JsonStringToggle view={ackView} />
+            <PlaceholderTools value={ackView.text} onValue={ackView.onText} taRef={ackRef} />
           </div>
         </>
       )}
@@ -1191,8 +1324,9 @@ function PlaceholderTools({ value, onValue, taRef }: {
   }
   return (
     <>
+      <span className="tools-sep" aria-hidden />
       {PlaceholderTokens.map(item => (
-        <button key={item.key} className="pill-btn" title={item.label} onClick={() => {
+        <button key={item.key} className="token-btn" title={`Insert ${item.syntax} — ${item.label}`} onClick={() => {
           const token = buildPlaceholderToken(item.key)
           if (token) insert(token)
         }}>
