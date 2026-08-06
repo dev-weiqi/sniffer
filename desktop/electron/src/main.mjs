@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -131,6 +131,21 @@ function createWindow() {
     },
   })
   win.maximize()
+  // Links come out of captured traffic, so they belong to the user's browser. Without this
+  // Electron answers target=_blank with a bare BrowserWindow of its own, and a plain href would
+  // navigate the app away from the UI entirely. Only http(s) is handed to the OS.
+  const openExternally = candidate => {
+    if (/^https?:\/\//i.test(candidate)) shell.openExternal(candidate)
+  }
+  win.webContents.setWindowOpenHandler(({ url: target }) => {
+    openExternally(target)
+    return { action: 'deny' }
+  })
+  win.webContents.on('will-navigate', (event, target) => {
+    if (target.startsWith(url)) return // our own UI: reloads and in-app navigation
+    event.preventDefault()
+    openExternally(target)
+  })
   win.loadURL(url)
   return win
 }
