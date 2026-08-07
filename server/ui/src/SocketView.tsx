@@ -5,7 +5,7 @@ import type { TrafficFilter } from './trafficFilter'
 import { fmtTime, newRuleId } from './util'
 import { useDetailWidth, useListKeys } from './hooks'
 import { JsonView } from './JsonView'
-import { CopyButton, Highlight, KV, Section } from './HttpView'
+import { CopyButton, Highlight, KV, Section, SlidersIcon } from './HttpView'
 import { decodeEngineIoFrame, displayEventName, frameLabel } from './engineio'
 
 /** socket.io lifecycle events (io.socket Socket/Manager EVENT_* constants), tinted red in the list */
@@ -62,7 +62,7 @@ export function SocketView({ mockCount, onOpenMocks, events, query, conns, connU
           <span className="dim">Socket events</span>
           <span className="spacer" />
           <button className="pill-btn mocks-btn" disabled={!onOpenMocks} onClick={onOpenMocks}>
-            Mocks{mockCount > 0 && <span className="count accent">{mockCount}</span>}
+            <SlidersIcon />Mocks{mockCount > 0 && <span className="count accent">{mockCount}</span>}
           </button>
           <button className="clear-btn" disabled={events.length === 0} onClick={onClear}>Clear Socket</button>
         </div>

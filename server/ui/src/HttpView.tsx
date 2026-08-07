@@ -34,6 +34,19 @@ function sniffImageMime(base64: string): string {
   return 'image/png'
 }
 
+/** Leading icon of the Mocks entry buttons (both panels) — matches the modal's control theme. */
+export function SlidersIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 21v-7" /><path d="M4 10V3" />
+      <path d="M12 21v-9" /><path d="M12 8V3" />
+      <path d="M20 21v-5" /><path d="M20 12V3" />
+      <path d="M1 14h6" /><path d="M9 8h6" /><path d="M17 16h6" />
+    </svg>
+  )
+}
+
 export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlFilter, onUrlFilterChange, armedCount, onMock, onArm, onResolve, onDisarmAll, onClear }: {
   rows: HttpRow[]
   query: string
@@ -105,7 +118,7 @@ export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlF
           )}
           <span className="spacer" />
           <button className="pill-btn mocks-btn" disabled={!onOpenMocks} onClick={onOpenMocks}>
-            Mocks{mockCount > 0 && <span className="count accent">{mockCount}</span>}
+            <SlidersIcon />Mocks{mockCount > 0 && <span className="count accent">{mockCount}</span>}
           </button>
           <button className="clear-btn" disabled={rows.length === 0} onClick={onClear}>Clear API</button>
         </div>
