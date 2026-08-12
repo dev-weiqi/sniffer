@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -16,6 +16,18 @@ if (!existsSync(sourceSvg)) {
 
 rmSync(iconset, { recursive: true, force: true })
 mkdirSync(iconset, { recursive: true })
+
+// macOS icons keep a transparent margin: the rounded square fills 824 of a 1024 canvas
+// (Apple's icon grid). Rendering the artwork full-bleed makes the Dock icon visibly larger
+// than every neighbour on macOS 15 and earlier — 26 (Tahoe) normalizes icons itself, which
+// is why the oversize only shows on older systems. The margin is baked here so the icns is
+// right everywhere, leaving the source svg untouched for the web UI favicon.
+const ART = 824 / 1024
+const inner = readFileSync(sourceSvg, 'utf8').replace(/^<\?xml[^>]*\?>\s*/, '')
+const inset = (1 - ART) / 2 * 1024
+const paddedSvg = join(outDir, 'sniffer-padded.svg')
+writeFileSync(paddedSvg, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">` +
+  `<svg x="${inset}" y="${inset}" width="${ART * 1024}" height="${ART * 1024}">${inner}</svg></svg>`)
 
 const variants = [
   ['icon_16x16.png', 16],
@@ -35,7 +47,7 @@ for (const [name, size] of variants) {
     '--width', String(size),
     '--height', String(size),
     '--output', join(iconset, name),
-    sourceSvg,
+    paddedSvg,
   ])
 }
 
