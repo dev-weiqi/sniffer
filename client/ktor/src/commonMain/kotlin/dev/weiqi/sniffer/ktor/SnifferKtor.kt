@@ -50,6 +50,7 @@ import io.ktor.http.charset
 import io.ktor.http.content.ByteArrayContent
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.content.TextContent
+import io.ktor.http.contentLength
 import io.ktor.http.contentType
 import io.ktor.sse.ServerSentEvent
 import io.ktor.util.AttributeKey
@@ -167,6 +168,27 @@ private fun isTextual(contentType: ContentType?): Boolean =
             contentType.contentSubtype.contains("json", true) ||
             contentType.contentSubtype.contains("xml", true) ||
             contentType.contentSubtype.contains("x-www-form-urlencoded", true)
+
+/**
+ * Deliberately far below MAX_BODY_CHARS. Buffering an unsaved response changes when the host
+ * reads it, so the bar is "short enough that no one streams it on purpose" — error payloads and
+ * small JSON — not "as much as we could store". A streamed download stays streamed.
+ */
+internal const val MAX_STREAMED_BUFFER_CHARS = 64 * 1024
+
+/**
+ * Whether an unsaved (streaming) response can be buffered without the risk that branch guards
+ * against. A length the server declared, within [MAX_STREAMED_BUFFER_CHARS], is bounded by
+ * definition — reading it is a small fixed cost, not the unbounded read that save() must never
+ * perform on a live stream. An unknown length (-1/null, i.e. chunked or open-ended) stays
+ * untouched; so does anything non-textual, which we would not report as text anyway.
+ */
+internal fun boundedTextBody(contentType: ContentType?, contentLength: Long?): Boolean =
+    contentLength != null &&
+            contentLength >= 0 &&
+            contentLength <= MAX_STREAMED_BUFFER_CHARS.toLong() &&
+            isTextual(contentType) &&
+            contentType?.contentSubtype?.contains("event-stream", true) != true
 
 /** HttpClient { install(SnifferKtor) } */
 val SnifferKtor = createClientPlugin("SnifferKtor") {
@@ -347,8 +369,12 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
             }
             // a streaming call (prepareGet().execute { ... }) is not saved by ktor's SaveBody
             // plugin; save() here would read the ENTIRE body into memory (no cap) before the app
-            // sees it. Report headers only and hand the call back untouched.
-            if (!isUpgrade && !call.response.isSaved) {
+            // sees it. Report headers only and hand the call back untouched -- unless the server
+            // declared a length within the cap, which bounds the read and is the only reason this
+            // branch refuses (a short error payload on a streaming endpoint is the common case).
+            val bounded = runCatching { boundedTextBody(ct, call.response.contentLength()) }
+                .getOrDefault(false)
+            if (!isUpgrade && !call.response.isSaved && !bounded) {
                 Sniffer.report(
                     HttpResponseMsg(
                         id = id, status = call.response.status.value,

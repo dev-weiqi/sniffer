@@ -49,6 +49,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -476,6 +477,22 @@ class SnifferKtorTest {
             client.get("http://example.test/cancel-response")
         }
         client.close()
+    }
+
+    @Test
+    fun bounded_text_body_only_accepts_a_declared_length_within_the_cap() {
+        val json = ContentType.Application.Json
+        assertTrue(boundedTextBody(json, 61))
+        assertTrue(boundedTextBody(json, 0)) // empty but declared
+        assertTrue(boundedTextBody(null, 10)) // no content-type is treated as textual elsewhere too
+        assertTrue(boundedTextBody(json, MAX_STREAMED_BUFFER_CHARS.toLong()))
+        assertFalse(boundedTextBody(json, null)) // no content-length header
+        assertFalse(boundedTextBody(json, -1)) // chunked / unknown length: the unbounded read
+        assertFalse(boundedTextBody(json, MAX_STREAMED_BUFFER_CHARS.toLong() + 1)) // over the streaming cap
+        // deliberately much tighter than the report cap: buffering shifts when the host reads
+        assertFalse(boundedTextBody(json, MAX_BODY_CHARS.toLong()))
+        assertFalse(boundedTextBody(ContentType.Image.PNG, 61)) // not textual
+        assertFalse(boundedTextBody(ContentType.Text.EventStream, 61)) // never buffer a stream
     }
 
     private fun captureReports(): MutableList<DeviceMessage> {
