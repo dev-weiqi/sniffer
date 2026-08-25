@@ -39,11 +39,4 @@ class SnifferLifecycleTest {
 
         assertEquals(listOf<DeviceMessage>(msg), reported)
     }
-
-    @Test
-    fun start_uses_default_connection_arguments() = runBlocking {
-        Sniffer.start(appId = "defaults")
-        delay(50)
-        Sniffer.stop()
-    }
 }

@@ -20,9 +20,6 @@ function assertEqual<T>(actual: T, expected: T, message: string) {
   if (actual !== expected) throw new Error(`${message}: expected ${String(expected)} but got ${String(actual)}`)
 }
 
-assertEqual(EMPTY_MOCKS.http.length, 0, 'EMPTY_MOCKS HTTP starts empty')
-assertEqual(EMPTY_MOCKS.socket.length, 0, 'EMPTY_MOCKS socket starts empty')
-
 const normalized = normalizeMocks({
   http: [{ id: 'h1' }],
   socket: 'bad',

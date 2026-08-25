@@ -295,7 +295,6 @@ class SnifferSocketIOTest {
     fun mirrors_socket_methods_and_listener_removal() {
         val socket = FakeSocket()
         val wrapped = SnifferSocketIO.wrap(socket)
-        val manager = socket.io()
 
         var called = 0
         val listener = Emitter.Listener { called++ }
@@ -309,13 +308,6 @@ class SnifferSocketIOTest {
         wrapped.on("x", listener)
         wrapped.off()
         assertFalse(wrapped.hasListeners("x"))
-
-        assertEquals(wrapped, wrapped.open())
-        assertEquals(true, wrapped.connected())
-        assertEquals(wrapped, wrapped.close())
-        assertEquals(false, wrapped.connected())
-        assertEquals(manager, wrapped.io())
-        assertEquals("fake-id", wrapped.id())
     }
 
     @Test

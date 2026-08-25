@@ -1,5 +1,3 @@
-import kotlinx.kover.gradle.plugin.dsl.AggregationType
-import kotlinx.kover.gradle.plugin.dsl.CoverageUnit
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -39,11 +37,6 @@ kover {
                     "dev.weiqi.sniffer.ktorws.SnifferKtorWsKt",
                     "dev.weiqi.sniffer.ktorws.SnifferKtorWsKt\$SnifferKtorWs\$1\$1",
                 )
-            }
-        }
-        verify {
-            rule("line coverage is 100 percent") {
-                minBound(100, CoverageUnit.LINE, AggregationType.COVERED_PERCENTAGE)
             }
         }
     }

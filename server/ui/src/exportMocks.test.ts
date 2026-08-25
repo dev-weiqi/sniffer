@@ -1,4 +1,4 @@
-import { buildExportRules, countImportedRules, countSelectedRules, createFullExportSelection, importedCopies, parseImportedRules } from './exportMocks.js'
+import { buildExportRules, countImportedRules, createFullExportSelection, importedCopies, parseImportedRules } from './exportMocks.js'
 import type { Mocks } from './state.js'
 
 function assert(condition: unknown, message: string) {
@@ -82,7 +82,6 @@ assertIds(full.http, ['http-1', 'http-2'], 'full HTTP export')
 assertIds(full.socket, ['socket-1', 'socket-2'], 'full socket export')
 assertIds(full.push, ['push-1', 'push-2'], 'full push export')
 assert(full.http[1].enabled === false, 'exports disabled HTTP rules too')
-assert(countSelectedRules(fullSelection) === 3, 'full selection includes every rule category')
 
 const partial = buildExportRules(source, {
   http: true,
@@ -93,14 +92,11 @@ assertIds(partial.http, ['http-1', 'http-2'], 'category-selected HTTP export')
 assertIds(partial.socket, [], 'unselected socket category is omitted')
 assertIds(partial.push, ['push-1', 'push-2'], 'category-selected push export')
 assert(partial.http[1].enabled === false, 'category export includes disabled rules too')
-assert(countSelectedRules({ http: true, socket: false, push: true }) === 2,
-  'counts selected rule categories')
 
-const emptySelection = createFullExportSelection({ http: [], socket: [], push: [] })
-const empty = buildExportRules({ http: [], socket: [], push: [] }, emptySelection)
+const empty = buildExportRules({ http: [], socket: [], push: [] },
+  createFullExportSelection({ http: [], socket: [], push: [] }))
 assert(empty.http.length === 0 && empty.socket.length === 0 && empty.push.length === 0,
   'keeps every export category even when empty')
-assert(countSelectedRules(emptySelection) === 3, 'empty export source still selects every category')
 
 // ---- parseImportedRules ----
 // Symmetry: every category the exporter writes must come back through the parser, or

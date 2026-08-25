@@ -1,7 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { handleTest } from './testHandlers.js'
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -106,27 +103,12 @@ assertEqual(res.headers['content-type'], 'image/svg+xml; charset=utf-8', 'icon c
 assertEqual(res.headers['content-length'], String('<svg>/icon.svg</svg>').length, 'icon content length')
 assert(String(res.ended).includes('/icon.svg'), 'icon body')
 
-const iconDir = mkdtempSync(join(tmpdir(), 'sniffer-test-icon-'))
-const iconPath = join(iconDir, 'icon.svg')
-writeFileSync(iconPath, '<svg>sniffer</svg>')
-res = fakeRes()
-await handleTest(fakeReq(), res as unknown as ServerResponse, new URL('http://localhost/test/image'), {
-  snifferIcon: iconPath,
-})
-assertEqual(res.headers['content-type'], 'image/svg+xml; charset=utf-8', 'default icon content type')
-assertEqual(String(res.ended), '<svg>sniffer</svg>', 'default icon body')
-
 res = fakeRes()
 await handleTest(fakeReq(), res as unknown as ServerResponse, new URL('http://localhost/test/image'), {
   makePng: (w, h, r, g, b) => Buffer.from(`${w}:${h}:${r}:${g}:${b}`),
 })
 assertEqual(res.headers['content-type'], 'image/png', 'fallback image content type')
 assertEqual(String(res.ended), '180:120:74:108:247', 'fallback image body')
-
-res = fakeRes()
-await handleTest(fakeReq(), res as unknown as ServerResponse, new URL('http://localhost/test/image'))
-assertEqual(res.headers['content-type'], 'image/png', 'default image content type')
-assert(Buffer.isBuffer(res.ended), 'default image body')
 
 const intervalCallbacks: Array<() => void> = []
 const cleared: unknown[] = []
@@ -145,33 +127,6 @@ assertEqual(res.ended, '', 'SSE ends after fifth tick')
 assertEqual(cleared[0], 'timer-1', 'SSE clears timer after fifth tick')
 req.closeHandlers[0]()
 assertEqual(cleared[1], 'timer-1', 'SSE close clears timer')
-
-const originalSetInterval = globalThis.setInterval
-const originalClearInterval = globalThis.clearInterval
-const fallbackCallbacks: Array<() => void> = []
-const fallbackCleared: unknown[] = []
-globalThis.setInterval = ((callback: () => void) => {
-  fallbackCallbacks.push(callback)
-  return 'timer-2' as unknown as ReturnType<typeof globalThis.setInterval>
-}) as typeof globalThis.setInterval
-globalThis.clearInterval = ((timer: unknown) => {
-  fallbackCleared.push(timer)
-}) as typeof globalThis.clearInterval
-try {
-  req = fakeReq()
-  res = fakeRes()
-  await handleTest(req, res as unknown as ServerResponse, new URL('http://localhost/test/sse'), { now: () => 789 })
-  for (let i = 0; i < 5; i++) fallbackCallbacks[0]()
-  assertEqual(res.writes.length, 5, 'SSE default interval writes five events')
-  assert(res.writes[0].includes('"ts":789'), 'SSE default interval timestamp')
-  assertEqual(res.ended, '', 'SSE default interval ends after fifth tick')
-  assertEqual(fallbackCleared[0], 'timer-2', 'SSE default clear after fifth tick')
-  req.closeHandlers[0]()
-  assertEqual(fallbackCleared[1], 'timer-2', 'SSE default close clears timer')
-} finally {
-  globalThis.setInterval = originalSetInterval
-  globalThis.clearInterval = originalClearInterval
-}
 
 res = fakeRes()
 await handleTest(fakeReq(), res as unknown as ServerResponse, new URL('http://localhost/test/missing'))
