@@ -64,6 +64,7 @@ export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlF
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [sortDesc, setSortDesc] = useState(false)
+  const [menu, setMenu] = useState<{ x: number; y: number; row: HttpRow } | null>(null)
   const selectedHit = pausedHits.find(h => h.id === selectedId) ?? null
   const selected = rows.find(r => r.id === selectedId) ?? null
   const listRef = useRef<HTMLDivElement>(null)
@@ -149,13 +150,15 @@ export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlF
             ))}
             {sorted.map(r => (
               <HttpRowItem key={r.id} row={r} query={query} paused={pausedById.has(r.id)}
-                selected={r.id === selectedId} onSelect={setSelectedId} />
+                selected={r.id === selectedId} onSelect={setSelectedId} onMenu={setMenu} />
             ))}
           </tbody>
         </table>
         {rows.length === 0 && pausedHits.length === 0 && <div className="empty">No requests yet — traffic appears live once the app starts</div>}
         </div>
       </div>
+
+      {menu && <RowMenu {...menu} onClose={() => setMenu(null)} />}
 
       {(selected || selectedHit) && <div className="pane-resizer" onMouseDown={startDetailDrag} />}
       {selectedHit
@@ -190,17 +193,23 @@ const PausedRowItem = memo(function PausedRowItem({ hit, selected, onSelect }: {
 })
 
 // memoized: only the rows whose data or selection changed re-render as traffic streams in
-const HttpRowItem = memo(function HttpRowItem({ row: r, query, paused, selected, onSelect }: {
+const HttpRowItem = memo(function HttpRowItem({ row: r, query, paused, selected, onSelect, onMenu }: {
   row: HttpRow
   query: string
   paused: boolean
   selected: boolean
   onSelect: (id: string | null) => void
+  onMenu: (menu: { x: number; y: number; row: HttpRow }) => void
 }) {
   const { domain, path } = urlParts(r.url)
   return (
     <tr className={paused ? 'bp-row' : undefined} data-selected={selected || undefined}
-      onClick={() => onSelect(selected ? null : r.id)}>
+      onClick={() => onSelect(selected ? null : r.id)}
+      onContextMenu={e => {
+        e.preventDefault()
+        onSelect(r.id)
+        onMenu({ x: e.clientX, y: e.clientY, row: r })
+      }}>
       <td className="mono dim">{fmtTime(r.ts)}</td>
       <td className="mono method"><Highlight text={r.method} query={query} /></td>
       <td className={`mono ${statusClass(r.status, r.error)}`}>
@@ -219,6 +228,55 @@ const HttpRowItem = memo(function HttpRowItem({ row: r, query, paused, selected,
   )
 })
 
+/** Right-click menu on a traffic row — the copy actions live here, not in the detail pane. */
+function RowMenu({ x, y, row, onClose }: { x: number; y: number; row: HttpRow; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [copied, setCopied] = useState<string | null>(null)
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) onClose()
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('scroll', onClose, true)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('scroll', onClose, true)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [onClose])
+
+  const copy = (label: string, text: string) => {
+    copyText(text)
+    setCopied(label)
+    setTimeout(onClose, 600)
+  }
+
+  return (
+    <div className="ctx-menu" ref={ref}
+      style={{ top: Math.min(y + 4, window.innerHeight - 76), left: Math.min(x, window.innerWidth - 190) }}>
+      <div className="ctx-item" onClick={() => copy('curl', toCurl(row))}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
+        </svg>
+        {copied === 'curl' ? 'Copied ✓' : 'Copy cURL'}
+      </div>
+      <div className="ctx-item" onClick={() => copy('url', row.url)}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </svg>
+        {copied === 'url' ? 'Copied ✓' : 'Copy URL'}
+      </div>
+    </div>
+  )
+}
+
 function HttpDetail({ row, query, onMock, onArm, onClose }: {
   row: HttpRow
   query: string
@@ -227,13 +285,6 @@ function HttpDetail({ row, query, onMock, onArm, onClose }: {
   onClose: () => void
 }) {
   const { query: queryParams } = urlParts(row.url)
-  const [copied, setCopied] = useState(false)
-
-  const copyCurl = () => {
-    copyText(toCurl(row))
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1200)
-  }
 
   const mockThis = () => onMock(
     {
@@ -249,7 +300,6 @@ function HttpDetail({ row, query, onMock, onArm, onClose }: {
   return (
     <aside className="detail-pane">
       <div className="detail-toolbar">
-        <button onClick={copyCurl}>{copied ? 'Copied ✓' : 'Copy cURL'}</button>
         <button onClick={mockThis}>Mock this request</button>
         <button title="Pause future responses to this path so you can edit them before the app sees them"
           onClick={() => onArm(row)}>⏸ Break on this</button>
