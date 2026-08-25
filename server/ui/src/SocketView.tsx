@@ -62,7 +62,7 @@ export function SocketView({ mockCount, onOpenMocks, events, query, conns, connU
           <span className="dim">Socket events</span>
           <span className="spacer" />
           <button className="pill-btn mocks-btn" disabled={!onOpenMocks} onClick={onOpenMocks}>
-            <SlidersIcon />Mocks{mockCount > 0 && <span className="count accent">{mockCount}</span>}
+            <SlidersIcon />Socket Mocks{mockCount > 0 && <span className="count accent">{mockCount}</span>}
           </button>
           <button className="clear-btn" disabled={events.length === 0} onClick={onClear}>Clear Socket</button>
         </div>

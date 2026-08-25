@@ -18,7 +18,7 @@ import { useConfirm } from './Confirm'
 import { newRuleId } from './util'
 import { HttpView } from './HttpView'
 import { SocketView } from './SocketView'
-import { MocksView } from './MocksView'
+import { HttpIcon, MocksView, SocketIcon } from './MocksView'
 
 type Tab = 'http' | 'socket'
 type PushPrefill = { connectionId: string; event: string; payload: string }
@@ -431,10 +431,10 @@ export default function App() {
 
         <nav className="tabs">
           <button data-active={tab === 'http' || undefined} onClick={() => setTab('http')}>
-            API <span className="count">{filteredHttp.length}</span>
+            <HttpIcon /> API <span className="count">{filteredHttp.length}</span>
           </button>
           <button data-active={tab === 'socket' || undefined} onClick={() => setTab('socket')}>
-            Socket <span className="count">{filteredSocketEvents.length}</span>
+            <SocketIcon /> Socket <span className="count">{filteredSocketEvents.length}</span>
           </button>
         </nav>
 

@@ -162,8 +162,8 @@ function TrashIcon() {
   )
 }
 
-// Small section-title icons (match TrashIcon's 16px stroke style)
-function HttpIcon() {
+// Small section-title icons (match TrashIcon's 16px stroke style); also used on the main tabs
+export function HttpIcon() {
   return (
     <svg className="section-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -173,7 +173,7 @@ function HttpIcon() {
     </svg>
   )
 }
-function SocketIcon() {
+export function SocketIcon() {
   return (
     <svg className="section-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -181,6 +181,15 @@ function SocketIcon() {
       <path d="M20 15H9l3 3" />
     </svg>
   )
+}
+
+type MockSelection = { http?: string; socket?: string; tab?: 'rules' | 'push' }
+const selectionKey = 'sniffer-mock-selection'
+function loadSelection(): MockSelection {
+  try { return JSON.parse(localStorage.getItem(selectionKey) ?? '{}') as MockSelection } catch { return {} }
+}
+function saveSelection(sel: MockSelection) {
+  try { localStorage.setItem(selectionKey, JSON.stringify(sel)) } catch { /* private mode */ }
 }
 
 export function MocksView({ scope, deviceId, appId, mocks, conns, pendingRule, pendingSocketRule, pushPrefill, onPendingConsumed, onClose }: {
@@ -203,9 +212,13 @@ export function MocksView({ scope, deviceId, appId, mocks, conns, pendingRule, p
   const [showPlaceholders, setShowPlaceholders] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [exportPushRecords, setExportPushRecords] = useState<PushRecord[]>([])
-  const [selHttp, setSelHttp] = useState<string | null>(null)
-  const [selSocket, setSelSocket] = useState<string | null>(null)
-  const [socketTab, setSocketTab] = useState<'rules' | 'push'>('rules')
+  // reopening the panel restores the last selection; a stale rule id resolves to "nothing selected"
+  const [selHttp, setSelHttp] = useState<string | null>(() => loadSelection().http ?? null)
+  const [selSocket, setSelSocket] = useState<string | null>(() => loadSelection().socket ?? null)
+  const [socketTab, setSocketTab] = useState<'rules' | 'push'>(() => loadSelection().tab ?? 'rules')
+  useEffect(() => {
+    saveSelection({ http: selHttp ?? undefined, socket: selSocket ?? undefined, tab: socketTab })
+  }, [selHttp, selSocket, socketTab])
   const [pushCount, setPushCount] = useState(0)
 
   // refs so the flush below sees the latest values without re-running the effect
@@ -388,7 +401,6 @@ export function MocksView({ scope, deviceId, appId, mocks, conns, pendingRule, p
       <div className="modal mocks-modal" role="dialog" aria-modal="true" aria-label={title}
         onMouseDown={e => e.stopPropagation()}>
         <div className="mocks-modal-head">
-          {scope === 'http' ? <HttpIcon /> : <SocketIcon />}
           <h2>{title}</h2>
           <span className="dim">
             {totalCount} {totalCount === 1 ? 'rule' : 'rules'} · {enabledCount} enabled
@@ -875,7 +887,6 @@ function PushRecordCard({ record, conns, deviceId, canStar, onChange, onDelete, 
   onDelete: () => void
   onDuplicate: () => void
 }) {
-  const confirm = useConfirm()
   const [status, setStatus] = useState<'sent' | 'error' | null>(null)
   const payloadRef = useRef<HTMLTextAreaElement>(null)
   const payloadView = useJsonStringView(record.payload, payload => onChange({ ...record, payload }), 'args')
@@ -916,8 +927,7 @@ function PushRecordCard({ record, conns, deviceId, canStar, onChange, onDelete, 
         <input className="grow mono" placeholder="event name (e.g. chat:new)" value={record.event}
           onChange={e => onChange({ ...record, event: e.target.value })} />
         <button className="ghost icon-btn" title="Duplicate" onClick={onDuplicate}><CopyIcon /></button>
-        <button className="ghost icon-btn danger" title="Delete"
-          onClick={async () => { if (await confirm(record.starred ? 'Delete this shared push event? It disappears for every device of this app.' : 'Delete this push event?', 'Delete')) onDelete() }}><TrashIcon /></button>
+        <button className="ghost icon-btn danger" title="Delete" onClick={onDelete}><TrashIcon /></button>
         <button disabled={!canSend} onClick={send}>
           {status === 'sent' ? 'Sent ✓' : status === 'error' ? 'Failed' : 'Send'}
         </button>
@@ -946,7 +956,6 @@ function HttpRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
   onDelete: () => void
   onDuplicate: () => void
 }) {
-  const confirm = useConfirm()
   const [sub, setSub] = useState<'body' | 'headers'>('body')
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const urlRef = useRef<HTMLInputElement>(null)
@@ -977,8 +986,7 @@ function HttpRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
         <input ref={urlRef} className="grow mono" placeholder="exact path, e.g. /api/users/3" value={rule.urlPattern}
           onChange={e => onChange({ ...rule, urlPattern: e.target.value })} />
         <button className="ghost icon-btn" title="Duplicate rule" onClick={onDuplicate}><CopyIcon /></button>
-        <button className="ghost icon-btn danger" title="Delete rule"
-          onClick={async () => { if (await confirm(rule.starred ? 'Delete this shared rule? It disappears for every device of this app.' : 'Delete this rule?', 'Delete')) onDelete() }}><TrashIcon /></button>
+        <button className="ghost icon-btn danger" title="Delete rule" onClick={onDelete}><TrashIcon /></button>
       </div>
       {dup && (
         <div className="hint dup-warning"><WarningIcon />Another enabled rule has the same matcher — the newest one takes effect.</div>
@@ -1201,7 +1209,6 @@ function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
   onDelete: () => void
   onDuplicate: () => void
 }) {
-  const confirm = useConfirm()
   const ackRef = useRef<HTMLTextAreaElement>(null)
   const pushRef = useRef<HTMLTextAreaElement>(null)
   const ackView = useJsonStringView(rule.ackPayload, ackPayload => onChange({ ...rule, ackPayload }), 'args')
@@ -1234,8 +1241,7 @@ function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
         <input className="grow mono" placeholder={rule.transport === 'socketio' ? 'event name' : 'frame contains…'}
           value={rule.event} onChange={e => onChange({ ...rule, event: e.target.value })} />
         <button className="ghost icon-btn" title="Duplicate rule" onClick={onDuplicate}><CopyIcon /></button>
-        <button className="ghost icon-btn danger" title="Delete rule"
-          onClick={async () => { if (await confirm(rule.starred ? 'Delete this shared rule? It disappears for every device of this app.' : 'Delete this rule?', 'Delete')) onDelete() }}><TrashIcon /></button>
+        <button className="ghost icon-btn danger" title="Delete rule" onClick={onDelete}><TrashIcon /></button>
       </div>
       {dup && (
         <div className="hint dup-warning"><WarningIcon />Another enabled rule has the same matcher — the newest one takes effect.</div>
@@ -1265,9 +1271,6 @@ function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
       ) : (
         <>
           <div className="rule-tabs">
-            <button type="button" data-active>
-              {rule.transport === 'socketio' ? 'Ack payload' : 'Reply frame'}
-            </button>
             <span className="spacer" />
             <label className="field">delay ms
               <NumberField className="mono w-delay" value={rule.delayMs} fallback={0}

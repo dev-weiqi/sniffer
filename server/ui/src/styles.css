@@ -911,3 +911,7 @@ table.grid tbody tr.export-category-row[data-selected] td {
 .ctx-item svg { flex: none; color: var(--text-dim); }
 .ctx-item:hover { background: var(--accent); color: #fff; }
 .ctx-item:hover svg { color: #fff; }
+
+/* Main-tab leading icons (HttpIcon / SocketIcon reused from the mocks modal) */
+.tabs button { display: inline-flex; align-items: center; gap: 6px; }
+.tabs button .section-icon { width: 15px; height: 15px; color: currentColor; }
