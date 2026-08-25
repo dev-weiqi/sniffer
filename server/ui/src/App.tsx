@@ -19,6 +19,7 @@ import { newRuleId } from './util'
 import { HttpView } from './HttpView'
 import { SocketView } from './SocketView'
 import { HttpIcon, MocksView, SocketIcon } from './MocksView'
+import { FindBar } from './FindBar'
 
 type Tab = 'http' | 'socket'
 type PushPrefill = { connectionId: string; event: string; payload: string }
@@ -53,6 +54,9 @@ declare global {
       checkUpdate?: () => Promise<{ supported: boolean; current?: string | null; latest?: string | null; available?: boolean }>
       applyUpdate?: (version: string) => Promise<{ ok: boolean; version?: string; error?: string }>
       onUpdateState?: (callback: (state: { phase: string; version?: string; error?: string }) => void) => () => void
+      find?: (text: string, opts?: { first?: boolean; forward?: boolean }) => void
+      stopFind?: () => void
+      onFindResult?: (callback: (result: { active: number; matches: number }) => void) => () => void
     }
   }
 }
@@ -396,6 +400,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <FindBar />
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark">

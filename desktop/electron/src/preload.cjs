@@ -10,4 +10,11 @@ contextBridge.exposeInMainWorld('snifferDesktop', {
     ipcRenderer.on('sniffer:update-state', listener)
     return () => ipcRenderer.removeListener('sniffer:update-state', listener)
   },
+  find: (text, opts) => ipcRenderer.send('sniffer:find', text, opts),
+  stopFind: () => ipcRenderer.send('sniffer:find-stop'),
+  onFindResult: callback => {
+    const listener = (_event, result) => callback(result)
+    ipcRenderer.on('sniffer:find-result', listener)
+    return () => ipcRenderer.removeListener('sniffer:find-result', listener)
+  },
 })

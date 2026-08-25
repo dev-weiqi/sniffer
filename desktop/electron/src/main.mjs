@@ -55,6 +55,17 @@ function pushUpdateState(state) {
 }
 
 function installIpc() {
+  // find-in-page: the renderer owns the find-bar UI, the main process owns the Chromium finder
+  ipcMain.on('sniffer:find', (_event, text, opts) => {
+    if (typeof text !== 'string' || text === '') return
+    mainWindow?.webContents.findInPage(text, {
+      forward: opts?.forward !== false,
+      findNext: opts?.first === true,
+    })
+  })
+  ipcMain.on('sniffer:find-stop', () => {
+    mainWindow?.webContents.stopFindInPage('clearSelection')
+  })
   ipcMain.handle('sniffer:get-config', async () => ({ port }))
   ipcMain.handle('sniffer:set-port', async (_event, value) => {
     const nextPort = normalizePort(value, port)
@@ -140,6 +151,9 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(({ url: target }) => {
     openExternally(target)
     return { action: 'deny' }
+  })
+  win.webContents.on('found-in-page', (_event, result) => {
+    win.webContents.send('sniffer:find-result', { active: result.activeMatchOrdinal, matches: result.matches })
   })
   win.webContents.on('will-navigate', (event, target) => {
     if (target.startsWith(url)) return // our own UI: reloads and in-app navigation
