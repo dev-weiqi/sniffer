@@ -252,7 +252,7 @@ function RowMenu({ x, y, row, onClose }: { x: number; y: number; row: HttpRow; o
   const copy = (label: string, text: string) => {
     copyText(text)
     setCopied(label)
-    setTimeout(onClose, 600)
+    setTimeout(onClose, 300)
   }
 
   return (
