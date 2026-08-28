@@ -1122,7 +1122,7 @@ function JsonTool({ label, body, transform, onResult }: {
     says so on the button. Edits made while expanded are re-encoded on the way out; text that is
     not valid JSON yet is simply not written back, and the toggle says so. */
 function useJsonStringView(value: string, onValue: (next: string) => void, kind: 'args' | 'body' = 'body') {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(() => unwrapJsonString(value) !== null)
   // holds exactly what the user typed, so re-encoding never reformats under their cursor
   const [buffer, setBuffer] = useState<string | null>(null)
 
@@ -1158,12 +1158,12 @@ function useJsonStringView(value: string, onValue: (next: string) => void, kind:
     // on every payload and quietly corrupts the one you press it on.
     canWrap: kind === 'args' && inner === null && isBareObject(value),
     toggle: () => { setBuffer(null); setOpen(o => !o) },
-    // One-shot conversion, and it stays one-shot: opening the expanded view here would leave the
-    // editor in a mode that re-encodes whatever you paste next, wrapping it a second time.
+    // The wrapped value itself restores this view when switching away and back to the rule.
     wrap: () => {
       const wrapped = wrapJsonString(value)
       if (wrapped === null) return
       setBuffer(null)
+      setOpen(true)
       onValue(wrapped)
     },
   }
