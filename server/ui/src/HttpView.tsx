@@ -64,6 +64,7 @@ export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlF
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [sortDesc, setSortDesc] = useState(false)
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false)
   const [menu, setMenu] = useState<{ x: number; y: number; row: HttpRow } | null>(null)
   const selectedHit = pausedHits.find(h => h.id === selectedId) ?? null
   const selected = rows.find(r => r.id === selectedId) ?? null
@@ -84,6 +85,7 @@ export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlF
   useEffect(() => {
     const el = listRef.current
     if (el && !sortDesc && stickBottom.current && !selectedId) el.scrollTop = el.scrollHeight
+    if (el) setShowScrollToBottom(el.scrollHeight - el.scrollTop - el.clientHeight > 1)
   }, [rows.length, selectedId, sortDesc])
 
   // debugger-style focus: jump to a freshly paused response, and after resolving the selected one
@@ -128,7 +130,9 @@ export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlF
           ref={listRef}
           onScroll={e => {
             const el = e.currentTarget
-            stickBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+            const distance = el.scrollHeight - el.scrollTop - el.clientHeight
+            stickBottom.current = distance < 40
+            setShowScrollToBottom(distance > 1)
           }}
         >
         <table className="grid">
@@ -156,6 +160,17 @@ export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlF
         </table>
         {rows.length === 0 && pausedHits.length === 0 && <div className="empty">No requests yet — traffic appears live once the app starts</div>}
         </div>
+        {showScrollToBottom && (
+          <button className="scroll-bottom-fab" title="Scroll to bottom" aria-label="Scroll to bottom" onClick={() => {
+            const el = listRef.current
+            if (el) el.scrollTo({ top: el.scrollHeight, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+          }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M12 4v14m-5-5 5 5 5-5" /><path d="M6 21h12" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {menu && <RowMenu {...menu} onClose={() => setMenu(null)} />}
