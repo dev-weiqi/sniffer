@@ -252,7 +252,7 @@ table.grid th {
   color: var(--text-dim);
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
-  padding: 7px 8px;
+  padding: 7px 8px; white-space: nowrap;
 }
 table.grid td {
   padding: 5px 8px;

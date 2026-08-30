@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { HttpMockRule, HttpRow, PausedHit } from './state'
 import { FilterMenu } from './FilterMenu'
 import type { TrafficFilter } from './trafficFilter'
-import { copyText, fmtDuration, fmtSize, fmtTime, prettyJson, splitHighlight, splitLinks, statusClass, toCurl, urlParts } from './util'
+import { copyText, fmtDuration, fmtSize, fmtTime, prettyJson, splitHighlight, splitLinks, statusClass, statusLabel, toCurl, urlParts } from './util'
 import { newRuleId } from './util'
 import { useDetailWidth, useListKeys } from './hooks'
 import { JsonView } from './JsonView'
@@ -138,7 +138,7 @@ export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlF
                 Time {sortDesc ? '↓' : '↑'}
               </th>
               <th style={{ width: 62 }}>Method</th>
-              <th style={{ width: 52 }}>Status</th>
+              <th style={{ width: 72 }}>Status</th>
               <th>URL <FilterMenu filter={urlFilter} onChange={onUrlFilterChange} placeholder="exact URL…" selectionValue={selected?.url ?? null} /></th>
               <th style={{ width: 66 }} className="num">Size</th>
               <th style={{ width: 70 }} className="num">Time</th>
@@ -213,7 +213,7 @@ const HttpRowItem = memo(function HttpRowItem({ row: r, query, paused, selected,
       <td className="mono dim">{fmtTime(r.ts)}</td>
       <td className="mono method"><Highlight text={r.method} query={query} /></td>
       <td className={`mono ${statusClass(r.status, r.error)}`}>
-        {paused ? <span className="bp-dot" /> : r.status === 0 ? 'ERR' : r.status ?? '…'}
+        {paused ? <span className="bp-dot" /> : statusLabel(r.status, r.error)}
       </td>
       <td className="url-cell">
         {paused && <span className="badge bp-paused">PAUSED</span>}

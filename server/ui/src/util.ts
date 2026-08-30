@@ -79,6 +79,12 @@ export function statusClass(status: number | undefined, error?: string | null): 
   return 'st-ok'
 }
 
+export function statusLabel(status: number | undefined, error?: string | null): string {
+  // ponytail: classify the SDK's current error text; add a protocol errorKind if more cancellation forms appear.
+  if (status === 0) return error?.includes('CancellationException') ? 'CANCEL' : 'ERROR'
+  return String(status ?? '…')
+}
+
 export function toCurl(row: HttpRow): string {
   const parts = [`curl -X ${row.method} '${row.url.replace(/'/g, "'\\''")}'`]
   for (const [k, v] of Object.entries(row.reqHeaders)) {

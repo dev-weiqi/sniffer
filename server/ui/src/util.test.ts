@@ -8,6 +8,7 @@ import {
   prettyJson,
   splitHighlight,
   statusClass,
+  statusLabel,
   toCurl,
   unwrapJsonString,
   urlParts,
@@ -55,6 +56,10 @@ assertEqual(statusClass(500), 'st-err', 'statusClass 5xx')
 assertEqual(statusClass(0), 'st-err', 'statusClass network error')
 assertEqual(statusClass(undefined), 'st-pending', 'statusClass pending')
 assertEqual(statusClass(200, 'boom'), 'st-err', 'statusClass explicit error')
+assertEqual(statusLabel(0, 'kotlinx.coroutines.JobCancellationException'), 'CANCEL', 'statusLabel cancellation')
+assertEqual(statusLabel(0, 'java.net.SocketTimeoutException'), 'ERROR', 'statusLabel transport error')
+assertEqual(statusLabel(200), '200', 'statusLabel HTTP status')
+assertEqual(statusLabel(undefined), '…', 'statusLabel pending')
 
 const row: HttpRow = {
   id: 'r1',
