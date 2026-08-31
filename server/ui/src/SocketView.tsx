@@ -5,7 +5,7 @@ import type { TrafficFilter } from './trafficFilter'
 import { fmtTime, newRuleId } from './util'
 import { useDetailWidth, useListKeys } from './hooks'
 import { JsonView } from './JsonView'
-import { CopyButton, Highlight, KV, Section, SlidersIcon } from './HttpView'
+import { CopyButton, Highlight, KV, Section, SlidersIcon, SortIcon } from './HttpView'
 import { decodeEngineIoFrame, displayEventName, frameLabel } from './engineio'
 
 /** socket.io lifecycle events (io.socket Socket/Manager EVENT_* constants), tinted red in the list */
@@ -30,7 +30,7 @@ export function SocketView({ mockCount, onOpenMocks, events, query, conns, connU
   onClear: () => void
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [sortDesc, setSortDesc] = useState(false)
+  const [sortDesc, setSortDesc] = useState(() => localStorage.getItem('sniffer-sort-socket') === 'desc')
   const [connFilter, setConnFilter] = useState<string | null>(null)
   const selected = events.find(e => e.id === selectedId) ?? null
   // ktor-ws frames are raw Engine.IO/Socket.IO text (e.g. `42/chat,[...]`); decode for display
@@ -49,6 +49,8 @@ export function SocketView({ mockCount, onOpenMocks, events, query, conns, connU
   const [detailWidth, startDetailDrag] = useDetailWidth()
   const listRef = useRef<HTMLDivElement>(null)
   const stickBottom = useRef(true)
+
+  useEffect(() => { localStorage.setItem('sniffer-sort-socket', sortDesc ? 'desc' : 'asc') }, [sortDesc])
 
   useEffect(() => {
     const el = listRef.current
@@ -94,11 +96,11 @@ export function SocketView({ mockCount, onOpenMocks, events, query, conns, connU
           <thead>
             <tr>
               <th style={{ width: 90 }} className="sortable" onClick={() => setSortDesc(d => !d)}>
-                Time {sortDesc ? '↓' : '↑'}
+                <span className="table-header-control"><span>Time</span><SortIcon descending={sortDesc} /></span>
               </th>
               <th style={{ width: 36 }}></th>
-              <th style={{ width: 160 }}>Event <FilterMenu filter={eventFilter} onChange={onEventFilterChange} placeholder="exact event name…"
-                selectionValue={selected ? displayEventName(selected.transport, selected.event, selected.payload, selected.label) : null} /></th>
+              <th style={{ width: 160 }}><span className="table-header-control"><span>Event</span><FilterMenu filter={eventFilter} onChange={onEventFilterChange} placeholder="exact event name…"
+                selectionValue={selected ? displayEventName(selected.transport, selected.event, selected.payload, selected.label) : null} /></span></th>
               <th>Connection</th>
               <th style={{ width: 80 }}>Ack</th>
             </tr>

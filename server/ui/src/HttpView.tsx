@@ -47,6 +47,16 @@ export function SlidersIcon() {
   )
 }
 
+export function SortIcon({ descending }: { descending: boolean }) {
+  return (
+    <svg className="sort-icon" data-descending={descending || undefined}
+      width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+      strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M8 13V3M4.5 6.5 8 3l3.5 3.5" />
+    </svg>
+  )
+}
+
 export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlFilter, onUrlFilterChange, armedCount, onMock, onArm, onResolve, onDisarmAll, onClear }: {
   rows: HttpRow[]
   query: string
@@ -63,7 +73,7 @@ export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlF
   onClear: () => void
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [sortDesc, setSortDesc] = useState(false)
+  const [sortDesc, setSortDesc] = useState(() => localStorage.getItem('sniffer-sort-http') === 'desc')
   const [showScrollToBottom, setShowScrollToBottom] = useState(false)
   const [menu, setMenu] = useState<{ x: number; y: number; row: HttpRow } | null>(null)
   const selectedHit = pausedHits.find(h => h.id === selectedId) ?? null
@@ -81,6 +91,8 @@ export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlF
   const ids = useMemo(() => sorted.map(r => r.id), [sorted])
   useListKeys(ids, selectedId, setSelectedId)
   const [detailWidth, startDetailDrag] = useDetailWidth()
+
+  useEffect(() => { localStorage.setItem('sniffer-sort-http', sortDesc ? 'desc' : 'asc') }, [sortDesc])
 
   useEffect(() => {
     const el = listRef.current
@@ -139,11 +151,11 @@ export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlF
           <thead>
             <tr>
               <th style={{ width: 90 }} className="sortable" onClick={() => setSortDesc(d => !d)}>
-                Time {sortDesc ? '↓' : '↑'}
+                <span className="table-header-control"><span>Time</span><SortIcon descending={sortDesc} /></span>
               </th>
               <th style={{ width: 62 }}>Method</th>
               <th style={{ width: 72 }}>Status</th>
-              <th>URL <FilterMenu filter={urlFilter} onChange={onUrlFilterChange} placeholder="exact URL…" selectionValue={selected?.url ?? null} /></th>
+              <th><span className="table-header-control"><span>URL</span><FilterMenu filter={urlFilter} onChange={onUrlFilterChange} placeholder="exact URL…" selectionValue={selected?.url ?? null} /></span></th>
               <th style={{ width: 66 }} className="num">Size</th>
               <th style={{ width: 70 }} className="num">Time</th>
             </tr>

@@ -256,6 +256,9 @@ button.danger:hover { color: var(--err); border-color: color-mix(in srgb, var(--
 table.grid { width: 100%; border-collapse: collapse; }
 table.grid th.sortable { cursor: pointer; user-select: none; }
 table.grid th.sortable:hover { color: var(--text); }
+.table-header-control { display: inline-flex; align-items: center; gap: 4px; line-height: 1; }
+.sort-icon { display: block; flex: none; }
+.sort-icon[data-descending] { transform: rotate(180deg); }
 table.grid th {
   position: sticky; top: 0; z-index: 1;
   text-align: left; font-weight: 500; font-size: 13px;
@@ -294,8 +297,8 @@ mark.hl { background: var(--warn); color: var(--bg-panel); border-radius: 2px; p
 .badge.lib { background: var(--bg-alt); color: var(--text-dim); border: 1px solid var(--border); }
 
 /* column noise filter: funnel in the header, fixed popover (the list pane clips absolutes) */
-.filter-anchor { display: inline-block; vertical-align: middle; margin-left: 2px; }
-.filter-btn { padding: 1px 4px; }
+.filter-anchor { display: inline-flex; margin: 0; }
+button.filter-btn { width: 20px; height: 20px; padding: 0; align-items: center; justify-content: center; }
 .filter-btn[data-on] { color: var(--accent); }
 .filter-pop {
   position: fixed; z-index: 60; width: 420px;
