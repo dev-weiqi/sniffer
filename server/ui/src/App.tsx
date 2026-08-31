@@ -20,6 +20,7 @@ import { HttpView } from './HttpView'
 import { SocketView } from './SocketView'
 import { HttpIcon, MocksView, SocketIcon } from './MocksView'
 import { FindBar } from './FindBar'
+import { DevicePicker } from './DevicePicker'
 
 type Tab = 'http' | 'socket'
 type PushPrefill = { connectionId: string; event: string; payload: string }
@@ -258,12 +259,6 @@ export default function App() {
   )
   const activeMockCount =
     selectedMocks.http.filter(r => r.enabled).length + selectedMocks.socket.filter(r => r.enabled).length
-  const canDeleteDevices = Boolean(selectedDevice)
-  const deleteButtonLabel = selectedDevice?.connected ? 'Delete connected device' : 'Delete offline device'
-  const deleteButtonTitle = selectedDevice?.connected
-    ? 'Delete this device and its traffic — a running app reconnects as a fresh device'
-    : 'Delete offline device'
-
   // deferred so typing stays snappy even when the query scans large stored bodies
   const deferredSearch = useDeferredValue(search)
   const filteredHttp = useMemo(() => {
@@ -365,7 +360,6 @@ export default function App() {
         setDeviceNotice(`Delete failed: ${await readApiError(res)}`)
         return
       }
-      setDeviceId('')
     } catch (e) {
       setDeviceNotice(`Delete failed: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
@@ -410,21 +404,13 @@ export default function App() {
           {state.dev ? 'Sniffer Dev' : 'Sniffer'}
         </div>
 
-        <select className="device-select" value={deviceId}
-          onChange={e => setDeviceId(e.target.value)} disabled={devices.length === 0}>
-          {devices.length === 0 && <option value="">No devices connected</option>}
-          {devices.map(d => (
-            <option key={d.deviceId} value={d.deviceId}>
-              {d.connected ? '🟢' : '🔴'} {d.deviceName} · {d.appId}
-            </option>
-          ))}
-        </select>
-        {canDeleteDevices && (
-          <button className="ghost danger" disabled={deletingDevices}
-            title={deleteButtonTitle} onClick={deleteDevices}>
-            {deletingDevices ? 'Deleting…' : deleteButtonLabel}
-          </button>
-        )}
+        <DevicePicker
+          devices={devices}
+          value={deviceId}
+          deleting={deletingDevices}
+          onChange={setDeviceId}
+          onDelete={deleteDevices}
+        />
         {deviceNotice && <span className="topbar-notice">{deviceNotice}</span>}
 
         <input

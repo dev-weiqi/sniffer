@@ -86,7 +86,6 @@ body {
 }
 .brand-status[data-on] { background: var(--ok); }
 
-.device-select { min-width: 320px; max-width: 480px; line-height: 1.5; padding-top: 6px; padding-bottom: 6px; }
 .topbar-notice {
   max-width: 260px;
   overflow: hidden;
@@ -132,6 +131,113 @@ button.ghost { background: transparent; border-color: transparent; color: var(--
 button.ghost:hover { color: var(--text); border-color: var(--border); }
 button.danger { color: var(--err); }
 button.danger:hover { color: var(--err); border-color: color-mix(in srgb, var(--err) 45%, var(--border)); }
+
+.device-picker {
+  position: relative;
+  flex: 0 1 390px;
+  min-width: 280px;
+  max-width: 390px;
+}
+.device-picker-trigger {
+  width: 100%; height: 34px;
+  display: flex; align-items: center; gap: 9px;
+  padding: 0 10px;
+  text-align: left;
+}
+.device-picker-trigger:active { transform: none; }
+.device-picker-trigger[aria-expanded="true"] { background: var(--bg-panel); border-color: var(--accent); }
+.device-picker-status {
+  width: 8px; height: 8px; flex: 0 0 8px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  opacity: .55;
+}
+.device-picker-status[data-connected="true"] {
+  background: var(--ok);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 14%, transparent);
+  opacity: 1;
+}
+.device-picker-trigger-copy {
+  flex: 1; min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.device-picker-name { font-weight: 600; }
+.device-picker-trigger-copy .device-picker-app { color: var(--text-dim); }
+.device-picker-trigger-copy .device-picker-app::before { content: " · "; }
+.device-picker-chevron,
+.device-picker-check,
+.device-picker-delete svg {
+  width: 16px; height: 16px; flex: 0 0 16px;
+  fill: none; stroke: currentColor; stroke-width: 1.5;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.device-picker-chevron { color: var(--text-dim); transition: transform .12s; }
+.device-picker-trigger[aria-expanded="true"] .device-picker-chevron { transform: rotate(180deg); }
+.device-picker-menu {
+  position: absolute; z-index: 50;
+  top: calc(100% + 6px); left: 0;
+  width: 390px; max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 70px);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 14px 38px rgba(0, 0, 0, .22);
+}
+.device-picker-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 12px 9px;
+  color: var(--text-dim); font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.device-picker-header span:first-child { color: var(--text); font-weight: 650; }
+.device-picker-list { min-height: 0; overflow-y: auto; padding: 6px; }
+.device-picker-option {
+  width: 100%; min-height: 48px;
+  display: grid; grid-template-columns: 10px minmax(0, 1fr) 16px;
+  align-items: center; gap: 10px;
+  padding: 7px 8px;
+  text-align: left;
+  background: transparent; border: 0; border-radius: 7px;
+}
+.device-picker-option:hover { background: var(--hover); border-color: transparent; }
+.device-picker-option[aria-pressed="true"] { background: var(--accent-soft); }
+.device-picker-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.device-picker-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.device-picker-app { color: var(--text-dim); font-size: 12px; }
+.device-picker-check { color: var(--accent); opacity: 0; }
+.device-picker-option[aria-pressed="true"] .device-picker-check { opacity: 1; }
+.device-picker-section {
+  margin: 6px 2px 2px;
+  padding: 8px 6px 3px;
+  color: var(--text-dim); font-size: 11px; font-weight: 650;
+  border-top: 1px solid var(--border);
+}
+.device-picker-delete-zone {
+  padding: 6px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--err) 4%, var(--bg-panel));
+}
+.device-picker-delete {
+  width: 100%;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px;
+  color: var(--err); text-align: left;
+  background: transparent; border-color: transparent;
+}
+.device-picker-delete:hover {
+  color: var(--err);
+  background: color-mix(in srgb, var(--err) 8%, transparent);
+  border-color: transparent;
+}
+.device-picker-delete > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.device-picker-delete small {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text-dim); font-size: 11px;
+}
 
 .tabs {
   display: flex; gap: 2px; margin-left: 6px;
