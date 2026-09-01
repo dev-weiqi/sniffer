@@ -120,8 +120,7 @@ await page.addInitScript(() => localStorage.setItem('sniffer-detail-w', '620'))
 await page.goto(BASE)
 await sleep(700)
 await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'))
-await page.locator('.device-select').selectOption(
-  await page.locator('.device-select option').evaluateAll(os => os.find(o => o.textContent.includes('Pixel 9 Pro')).value))
+await page.getByRole('button', { name: /Pixel 9 Pro/ }).waitFor()
 await sleep(500)
 // staged marketing shot: the destructive device button is real UI but off-topic noise here
 await page.evaluate(() => document.querySelector('.topbar button.ghost.danger')?.remove())
