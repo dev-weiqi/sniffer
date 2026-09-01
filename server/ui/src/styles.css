@@ -1030,7 +1030,7 @@ table.grid tbody tr.export-category-row[data-selected] td {
 
 .jn-str-mark { color: var(--text-dim); opacity: .6; margin-right: 1px; }
 
-/* Right-click menu on a traffic row (Copy cURL / Copy URL) */
+/* Right-click menu on a traffic row */
 .ctx-menu {
   position: fixed; z-index: 100; min-width: 180px; padding: 4px;
   background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px;

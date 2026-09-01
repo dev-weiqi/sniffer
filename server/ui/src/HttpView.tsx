@@ -293,7 +293,7 @@ function RowMenu({ x, y, row, onClose }: { x: number; y: number; row: HttpRow; o
 
   return (
     <div className="ctx-menu" ref={ref}
-      style={{ top: Math.min(y + 4, window.innerHeight - 76), left: Math.min(x, window.innerWidth - 190) }}>
+      style={{ top: Math.min(y + 4, window.innerHeight - 104), left: Math.min(x, window.innerWidth - 190) }}>
       <div className="ctx-item" onClick={() => copy('curl', toCurl(row))}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -308,6 +308,13 @@ function RowMenu({ x, y, row, onClose }: { x: number; y: number; row: HttpRow; o
           <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
         </svg>
         {copied === 'url' ? 'Copied ✓' : 'Copy URL'}
+      </div>
+      <div className="ctx-item" onClick={() => copy('path', urlParts(row.url).path)}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="2" strokeLinecap="round" aria-hidden>
+          <path d="M9 19 15 5" />
+        </svg>
+        {copied === 'path' ? 'Copied ✓' : 'Copy path'}
       </div>
     </div>
   )
