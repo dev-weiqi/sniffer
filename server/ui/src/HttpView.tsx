@@ -57,6 +57,20 @@ export function SortIcon({ descending }: { descending: boolean }) {
   )
 }
 
+export function ScrollToBottomButton({ onClick }: { onClick: () => void }) {
+  return (
+    <div className="scroll-bottom-shelf">
+      <button className="scroll-bottom-button" title="Scroll to bottom" aria-label="Scroll to bottom" onClick={onClick}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M12 4v14" /><path d="m7 13 5 5 5-5" /><path d="M6 21h12" />
+        </svg>
+        <span>Latest</span>
+      </button>
+    </div>
+  )
+}
+
 export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlFilter, onUrlFilterChange, armedCount, onMock, onArm, onResolve, onDisarmAll, onClear }: {
   rows: HttpRow[]
   query: string
@@ -173,15 +187,10 @@ export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlF
         {rows.length === 0 && pausedHits.length === 0 && <div className="empty">No requests yet — traffic appears live once the app starts</div>}
         </div>
         {showScrollToBottom && (
-          <button className="scroll-bottom-fab" title="Scroll to bottom" aria-label="Scroll to bottom" onClick={() => {
+          <ScrollToBottomButton onClick={() => {
             const el = listRef.current
             if (el) el.scrollTo({ top: el.scrollHeight, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
-          }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M12 4v14m-5-5 5 5 5-5" /><path d="M6 21h12" />
-            </svg>
-          </button>
+          }} />
         )}
       </div>
 

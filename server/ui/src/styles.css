@@ -326,16 +326,25 @@ button.danger:hover { color: var(--err); border-color: color-mix(in srgb, var(--
 
 .list-pane { position: relative; flex: 1; min-width: 0; background: var(--bg-panel); display: flex; flex-direction: column; overflow: hidden; }
 .list-scroll { flex: 1; overflow: auto; min-height: 0; }
-.scroll-bottom-fab {
-  position: absolute; right: 16px; bottom: 16px; z-index: 3;
-  display: grid; place-items: center; width: 38px; height: 38px; padding: 0;
-  color: var(--accent); background: var(--bg-panel);
-  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border)); border-radius: 50%;
-  box-shadow: 0 7px 20px rgb(25 25 35 / .18);
+.scroll-bottom-shelf {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 3;
+  height: 52px; display: grid; place-items: end center; padding-bottom: 9px;
+  pointer-events: none;
+  background: linear-gradient(to top, var(--bg-panel) 0%, color-mix(in srgb, var(--bg-panel) 92%, transparent) 48%, transparent 100%);
 }
-.scroll-bottom-fab:hover { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
-.scroll-bottom-fab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.scroll-bottom-fab svg { display: block; }
+.scroll-bottom-button {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 30px; padding: 0 11px;
+  color: var(--accent); background: var(--bg-panel);
+  border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--border));
+  border-radius: 999px;
+  box-shadow: 0 8px 18px rgb(25 25 35 / .13);
+  font-size: 12px; font-weight: 700;
+  pointer-events: auto;
+}
+.scroll-bottom-button:hover { color: var(--bg-panel); background: var(--accent); border-color: var(--accent); }
+.scroll-bottom-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.scroll-bottom-button svg { display: block; flex: none; }
 .panel-toolbar {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 10px;

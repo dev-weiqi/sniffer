@@ -5,7 +5,7 @@ import type { TrafficFilter } from './trafficFilter'
 import { fmtTime, newRuleId } from './util'
 import { useDetailWidth, useListKeys } from './hooks'
 import { JsonView } from './JsonView'
-import { CopyButton, Highlight, KV, Section, SlidersIcon, SortIcon } from './HttpView'
+import { CopyButton, Highlight, KV, ScrollToBottomButton, Section, SlidersIcon, SortIcon } from './HttpView'
 import { decodeEngineIoFrame, displayEventName, frameLabel } from './engineio'
 
 /** socket.io lifecycle events (io.socket Socket/Manager EVENT_* constants), tinted red in the list */
@@ -32,6 +32,7 @@ export function SocketView({ mockCount, onOpenMocks, events, query, conns, connU
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [sortDesc, setSortDesc] = useState(() => localStorage.getItem('sniffer-sort-socket') === 'desc')
   const [connFilter, setConnFilter] = useState<string | null>(null)
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false)
   const selected = events.find(e => e.id === selectedId) ?? null
   // ktor-ws frames are raw Engine.IO/Socket.IO text (e.g. `42/chat,[...]`); decode for display
   const selectedFrame = selected && selected.transport === 'ktor-ws' ? decodeEngineIoFrame(selected.payload) : null
@@ -55,7 +56,8 @@ export function SocketView({ mockCount, onOpenMocks, events, query, conns, connU
   useEffect(() => {
     const el = listRef.current
     if (el && !sortDesc && stickBottom.current && !selectedId) el.scrollTop = el.scrollHeight
-  }, [events.length, selectedId, sortDesc])
+    if (el) setShowScrollToBottom(el.scrollHeight - el.scrollTop - el.clientHeight > 1)
+  }, [events.length, filtered.length, selectedId, sortDesc])
 
   return (
     <div className="split" style={{ ['--detail-w' as string]: `${detailWidth}px` }}>
@@ -73,7 +75,9 @@ export function SocketView({ mockCount, onOpenMocks, events, query, conns, connU
           ref={listRef}
           onScroll={e => {
             const el = e.currentTarget
-            stickBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+            const distance = el.scrollHeight - el.scrollTop - el.clientHeight
+            stickBottom.current = distance < 40
+            setShowScrollToBottom(distance > 1)
           }}
         >
         {liveConns.length > 0 && (
@@ -132,6 +136,12 @@ export function SocketView({ mockCount, onOpenMocks, events, query, conns, connU
           <div className="empty">{connFilter ? 'No events for this connection yet' : 'No socket events yet'}</div>
         )}
         </div>
+        {showScrollToBottom && (
+          <ScrollToBottomButton onClick={() => {
+            const el = listRef.current
+            if (el) el.scrollTo({ top: el.scrollHeight, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+          }} />
+        )}
       </div>
 
       {selected && <div className="pane-resizer" onMouseDown={startDetailDrag} />}
