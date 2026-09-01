@@ -755,8 +755,13 @@ button.add { margin-top: 2px; }
 }
 .settings-version-row {
   display: grid; grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px; align-items: center;
+  gap: 12px; align-items: start;
 }
+.settings-version-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.settings-version-check { padding: 1px 0; border: 0; color: var(--accent); font-size: 12px; }
+.settings-version-check:hover { color: var(--accent); border: 0; text-decoration: underline; }
+.settings-version-note[data-status="ok"] { color: var(--ok) !important; }
+.settings-version-note[data-status="error"] { color: var(--err) !important; }
 .settings-version-row strong,
 .settings-adb strong {
   display: block;

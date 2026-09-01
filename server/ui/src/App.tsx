@@ -52,7 +52,7 @@ declare global {
     snifferDesktop?: {
       getConfig: () => Promise<{ port?: number }>
       setPort: (port: number) => Promise<{ port: number; restartRequired: boolean }>
-      checkUpdate?: () => Promise<{ supported: boolean; current?: string | null; latest?: string | null; available?: boolean }>
+      checkUpdate?: () => Promise<{ supported: boolean; current?: string | null; latest?: string | null; available?: boolean; error?: string }>
       applyUpdate?: (version: string) => Promise<{ ok: boolean; version?: string; error?: string }>
       onUpdateState?: (callback: (state: { phase: string; version?: string; error?: string }) => void) => () => void
       find?: (text: string, opts?: { first?: boolean; forward?: boolean }) => void
@@ -107,6 +107,7 @@ export default function App() {
   const [portNotice, setPortNotice] = useState<string | null>(null)
   // desktop-only in-app update: offered → downloading → relaunching (window reloads) | failed
   const [update, setUpdate] = useState<{ version: string; phase: 'offer' | 'downloading' | 'relaunching' | 'failed'; error?: string } | null>(null)
+  const [updateCheck, setUpdateCheck] = useState<'idle' | 'checking' | 'current' | 'failed' | 'unsupported'>('idle')
   // set by the post-update reload (?updated=<v>): greet once, then clean the URL
   const [updatedTo, setUpdatedTo] = useState<string | null>(null)
 
@@ -140,18 +141,37 @@ export default function App() {
 
   useEffect(() => connectStream(dispatch), [])
 
+  const checkForUpdate = async (manual = false, isActive: () => boolean = () => true) => {
+    const check = window.snifferDesktop?.checkUpdate
+    if (!check) {
+      if (manual) setUpdateCheck('unsupported')
+      return
+    }
+    if (manual) setUpdateCheck('checking')
+    try {
+      const result = await check()
+      if (!isActive()) return
+      if (result.supported && result.available && result.latest) {
+        setUpdate({ version: result.latest, phase: 'offer' })
+        if (manual) {
+          setUpdateCheck('idle')
+          setShowSettings(false)
+        }
+      } else if (manual) {
+        setUpdateCheck(!result.supported ? 'unsupported' : result.error ? 'failed' : 'current')
+      }
+    } catch {
+      if (manual && isActive()) setUpdateCheck('failed')
+    }
+  }
+
   useEffect(() => {
     const desktop = window.snifferDesktop
-    if (!desktop?.checkUpdate) return
+    if (!desktop) return
     let cancelled = false
-    desktop.checkUpdate()
-      .then(result => {
-        if (!cancelled && result.supported && result.available && result.latest) {
-          setUpdate({ version: result.latest, phase: 'offer' })
-        }
-      })
-      .catch(() => {})
+    void checkForUpdate(false, () => !cancelled)
     const unsubscribe = desktop.onUpdateState?.(state => {
+      if (cancelled) return
       if (state.phase === 'downloading' || state.phase === 'relaunching') {
         setUpdate({ version: state.version ?? '', phase: state.phase })
       } else if (state.phase === 'failed') {
@@ -452,7 +472,16 @@ export default function App() {
                     <strong>Version</strong>
                     <span>Sniffer Desktop</span>
                   </div>
-                  <span className="mono">{APP_VERSION}</span>
+                  <div className="settings-version-actions">
+                    <span className="mono">{APP_VERSION}</span>
+                    <button className="ghost settings-version-check"
+                      onClick={() => void checkForUpdate(true)} disabled={updateCheck === 'checking'}>
+                      {updateCheck === 'checking' ? 'Checking…' : 'Check for updates'}
+                    </button>
+                    {updateCheck === 'current' && <span className="settings-version-note" data-status="ok">Up to date</span>}
+                    {updateCheck === 'failed' && <span className="settings-version-note" data-status="error">Couldn’t check for updates</span>}
+                    {updateCheck === 'unsupported' && <span className="settings-version-note">Desktop app only</span>}
+                  </div>
                 </div>
                 <div className="settings-port">
                   <label>
