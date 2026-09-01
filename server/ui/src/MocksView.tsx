@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { HttpMockRule, Mocks, SocketConn, SocketMockRule } from './state'
 import { api } from './state'
 import { newRuleId, prettyJson, unwrapJsonString, wrapJsonString } from './util'
-import { useConfirm } from './Confirm'
 import { applyOrder, byOrder, loadIds, loadOrder, orderOf, saveIds, saveOrder } from './mockOrder'
 import { pointAt, resolvePushTarget } from './pushTarget'
 import { buildExportRules, countImportedRules, countSelectedRules, createFullExportSelection, importedCopies, parseImportedRules, type ExportRuleSelection, type ExportRulesSource, type PushEventRule } from './exportMocks'
@@ -205,7 +204,6 @@ export function MocksView({ scope, deviceId, appId, mocks, conns, pendingRule, p
   onPendingConsumed: () => void
   onClose: () => void
 }) {
-  const confirm = useConfirm()
   const [draft, setDraft] = useState<Mocks>(mocks)
   const [dirty, setDirty] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -427,9 +425,7 @@ export function MocksView({ scope, deviceId, appId, mocks, conns, pendingRule, p
             <MockList rows={httpRows} selectedId={httpRows[httpAt]?.id ?? null}
               onSelect={setSelHttp} onAdd={addHttp} addLabel="Add HTTP rule"
               onToggle={id => update({ ...draft, http: draft.http.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r) })}
-              onClearAll={draft.http.length > 0 ? async () => {
-                if (await confirm('Clear all HTTP mock rules?', 'Clear all')) update({ ...draft, http: [] })
-              } : undefined}
+              onClearAll={draft.http.length > 0 ? () => update({ ...draft, http: [] }) : undefined}
               placeholdersOn={showPlaceholders} onPlaceholders={() => setShowPlaceholders(v => !v)}
             />
             <div className="mocks-detail">
@@ -453,9 +449,7 @@ export function MocksView({ scope, deviceId, appId, mocks, conns, pendingRule, p
             <MockList rows={socketRows} selectedId={socketRows[socketAt]?.id ?? null}
               onSelect={setSelSocket} onAdd={addSocket} addLabel="Add socket rule"
               onToggle={id => update({ ...draft, socket: draft.socket.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r) })}
-              onClearAll={draft.socket.length > 0 ? async () => {
-                if (await confirm('Clear all socket mock rules?', 'Clear all')) update({ ...draft, socket: [] })
-              } : undefined}
+              onClearAll={draft.socket.length > 0 ? () => update({ ...draft, socket: [] }) : undefined}
               placeholdersOn={showPlaceholders} onPlaceholders={() => setShowPlaceholders(v => !v)}
             />
             <div className="mocks-detail">
@@ -751,7 +745,6 @@ function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed, onRecords
 }) {
   // ponytail: push records are a UI convenience, persisted in localStorage; starred ones
   // live in a per-appId bucket so every device of the app (current and future) sees them
-  const confirm = useConfirm()
   const storageKey = `sniffer-push-${deviceId}`
   const pushOrderKey = `sniffer-push-order:${deviceId}`
   const sharedKey = appId ? `sniffer-push-shared-${appId}` : null
@@ -846,10 +839,7 @@ function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed, onRecords
     <div className="mocks-md">
       <MockList rows={rows} selectedId={current?.id ?? null} onSelect={setSelected}
         onAdd={addRecord} addLabel="Add push event"
-        onClearAll={all.length > 0 ? async () => {
-          const note = sharedRecords.length > 0 ? ' Starred ones disappear for every device of this app.' : ''
-          if (await confirm(`Clear all push events?${note}`, 'Clear all')) { setRecords([]); setSharedRecords([]) }
-        } : undefined}
+        onClearAll={all.length > 0 ? () => { setRecords([]); setSharedRecords([]) } : undefined}
       />
       <div className="mocks-detail">
         {!current ? <div className="empty">No push events yet — add one to send a server event</div> : (

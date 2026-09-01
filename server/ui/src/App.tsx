@@ -576,7 +576,7 @@ export default function App() {
             armedCount={deviceBreakpoints.filter(r => r.enabled).length}
             onMock={mockFromRequest} onArm={armBreakpoint} onResolve={resolvePausedHit}
             onDisarmAll={disarmAllBreakpoints}
-            onClear={async () => { if (await confirm('Clear API traffic?', 'Clear')) api.clearHttpEntries() }} />
+            onClear={() => void api.clearHttpEntries()} />
         )}
         {tab === 'socket' && (
           <SocketView events={filteredSocketEvents} query={deferredSearch} conns={state.socketConns} connUrls={state.connUrls} deviceId={deviceId}
@@ -584,7 +584,7 @@ export default function App() {
             onOpenMocks={selectedDevice ? () => setMocksOpen('socket') : undefined}
             eventFilter={socketFilter} onEventFilterChange={setSocketFilter}
             onMockAck={mockFromSocketEvent} onPushPrefill={pushFromEvent}
-            onClear={async () => { if (await confirm('Clear socket events?', 'Clear')) api.clearSocketEntries() }} />
+            onClear={() => void api.clearSocketEntries()} />
         )}
       </main>
 
