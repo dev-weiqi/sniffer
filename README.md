@@ -78,7 +78,7 @@ npm install -g @dev-weiqi/sniffer@latest
 Or pin a specific version:
 
 ```bash
-npm install -g @dev-weiqi/sniffer@0.6.4
+npm install -g @dev-weiqi/sniffer@0.6.5
 ```
 
 ## Desktop app
