@@ -1,4 +1,4 @@
-import type { HttpRow } from './state.js'
+import type { HttpRow, SocketMockRule } from './state.js'
 
 export function fmtTime(ts: number): string {
   const d = new Date(ts)
@@ -33,6 +33,14 @@ export function prettyJson(text: string | null | undefined): string {
     return JSON.stringify(JSON.parse(text), null, 2)
   } catch {
     return text
+  }
+}
+
+export function prettySocketRule(rule: SocketMockRule): SocketMockRule {
+  return {
+    ...rule,
+    ackPayload: prettyJson(rule.ackPayload),
+    ...(rule.pushPayload === undefined ? {} : { pushPayload: prettyJson(rule.pushPayload) }),
   }
 }
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { HttpMockRule, Mocks, SocketConn, SocketMockRule } from './state'
 import { api } from './state'
-import { newRuleId, prettyJson, unwrapJsonString, wrapJsonString } from './util'
+import { newRuleId, prettyJson, prettySocketRule, unwrapJsonString, wrapJsonString } from './util'
 import { applyOrder, byOrder, loadIds, loadOrder, orderOf, saveIds, saveOrder } from './mockOrder'
 import { pointAt, resolvePushTarget } from './pushTarget'
 import { buildExportRules, countImportedRules, countSelectedRules, createFullExportSelection, importedCopies, parseImportedRules, type ExportRuleSelection, type ExportRulesSource, type PushEventRule } from './exportMocks'
@@ -57,11 +57,7 @@ function orderForSync(mocks: Mocks): Mocks {
 function beautified(mocks: Mocks): Mocks {
   return {
     http: mocks.http.map(r => ({ ...r, body: prettyJson(r.body) })),
-    socket: mocks.socket.map(r => r.transport === 'ktor-ws' ? r : {
-      ...r,
-      ackPayload: prettyJson(r.ackPayload),
-      ...(r.pushPayload === undefined ? {} : { pushPayload: prettyJson(r.pushPayload) }),
-    }),
+    socket: mocks.socket.map(prettySocketRule),
   }
 }
 
@@ -270,7 +266,7 @@ export function MocksView({ scope, deviceId, appId, mocks, conns, pendingRule, p
 
   useEffect(() => {
     if (pendingSocketRule && deviceId) {
-      setDraft(d => ({ ...d, socket: [{ ...pendingSocketRule, createdAt: Date.now() }, ...d.socket] }))
+      setDraft(d => ({ ...d, socket: [{ ...prettySocketRule(pendingSocketRule), createdAt: Date.now() }, ...d.socket] }))
       setSelSocket(pendingSocketRule.id)
       setSocketTab('rules')
       setDirty(true)
@@ -760,7 +756,7 @@ function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed, onRecords
   useEffect(() => {
     if (prefill) {
       const conn = conns.find(c => c.connectionId === prefill.connectionId)
-      const record = pointAt({ id: newRuleId(), target: '', event: prefill.event, payload: prefill.payload }, conn)
+      const record = pointAt({ id: newRuleId(), target: '', event: prefill.event, payload: prettyJson(prefill.payload) }, conn)
       setRecords(rs => [record, ...rs])
       setSelected(record.id)
       onConsumed()

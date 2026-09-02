@@ -6,6 +6,7 @@ import {
   splitLinks,
   newRuleId,
   prettyJson,
+  prettySocketRule,
   splitHighlight,
   statusClass,
   statusLabel,
@@ -48,6 +49,20 @@ assertEqual(prettyJson(null), '', 'prettyJson null')
 assertEqual(prettyJson(undefined), '', 'prettyJson undefined')
 assertEqual(prettyJson('{"a":1}'), '{\n  "a": 1\n}', 'prettyJson valid')
 assertEqual(prettyJson('{'), '{', 'prettyJson invalid fallback')
+
+const socketPrefill = prettySocketRule({
+  id: 's1', enabled: true, transport: 'socketio', event: 'chat',
+  ackPayload: '[{"ok":true}]', pushEvent: 'chat:reply', pushPayload: '[{"id":1}]', delayMs: 0,
+})
+assertEqual(socketPrefill.ackPayload, '[\n  {\n    "ok": true\n  }\n]', 'socket prefill pretty-prints ack JSON')
+assertEqual(socketPrefill.pushPayload, '[\n  {\n    "id": 1\n  }\n]', 'socket prefill pretty-prints push JSON')
+assertEqual(prettySocketRule({
+  id: 's2', enabled: true, transport: 'ktor-ws', event: 'chat', ackPayload: '{"id":1}', delayMs: 0,
+}).ackPayload, '{\n  "id": 1\n}', 'socket prefill pretty-prints valid JSON regardless of transport')
+const rawWsReply = '42/chat,[{"id":1}]'
+assertEqual(prettySocketRule({
+  id: 's3', enabled: true, transport: 'ktor-ws', event: 'chat', ackPayload: rawWsReply, delayMs: 0,
+}).ackPayload, rawWsReply, 'socket prefill keeps non-JSON payloads unchanged')
 
 assertEqual(statusClass(200), 'st-ok', 'statusClass 2xx')
 assertEqual(statusClass(301), 'st-info', 'statusClass 3xx')
