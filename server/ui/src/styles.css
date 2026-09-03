@@ -487,6 +487,7 @@ button.filter-btn { width: 20px; height: 20px; padding: 0; align-items: center; 
   border-bottom: 1px solid var(--border);
   position: sticky; top: 0; background: var(--bg-panel); z-index: 1;
 }
+.detail-toolbar > button { display: inline-flex; align-items: center; height: 32px; }
 
 /* breakpoints — a blocked (paused) response reads red: dot + light-red row */
 .badge.bp-paused { background: var(--err); color: #fff; }

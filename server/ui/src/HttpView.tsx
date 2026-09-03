@@ -345,7 +345,7 @@ function HttpDetail({ row, query, onMock, onArm, onClose }: {
       <div className="detail-toolbar">
         <button onClick={mockThis}>Mock this request</button>
         <button title="Pause future responses to this path so you can edit them before the app sees them"
-          onClick={() => onArm(row)}>⏸ Break on this</button>
+          onClick={() => onArm(row)}>Break on this</button>
         <span className="spacer" />
         <button className="ghost" onClick={onClose}>✕</button>
       </div>

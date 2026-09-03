@@ -36,6 +36,7 @@ export function SocketView({ mockCount, onOpenMocks, events, query, conns, connU
   const selected = events.find(e => e.id === selectedId) ?? null
   // ktor-ws frames are raw Engine.IO/Socket.IO text (e.g. `42/chat,[...]`); decode for display
   const selectedFrame = selected && selected.transport === 'ktor-ws' ? decodeEngineIoFrame(selected.payload) : null
+  const displayedPayload = selectedFrame ? selectedFrame.data : selected?.payload
   const liveConns = conns.filter(c => c.deviceId === deviceId && c.status === 'connected')
   const filtered = connFilter ? events.filter(e => e.connectionId === connFilter) : events
   const sorted = sortDesc ? [...filtered].reverse() : filtered
@@ -199,9 +200,9 @@ export function SocketView({ mockCount, onOpenMocks, events, query, conns, connU
               <KV k="Connection" v={connUrls[selected.connectionId] || selected.connectionId.slice(0, 8)} />
               {selected.mocked && <KV k="Mocked" v="yes" />}
             </Section>
-            <Section title="Payload" action={selected.payload ? <CopyButton text={selected.payload} /> : undefined}>
+            <Section title="Payload" action={displayedPayload ? <CopyButton text={displayedPayload} /> : undefined}>
               {selectedFrame
-                ? (selectedFrame.data ? <JsonView text={selectedFrame.data} query={query} /> : <span className="dim">(no payload)</span>)
+                ? (selectedFrame.data ? <JsonView text={selectedFrame.data} query={query} /> : <div className="dim pad">(no payload)</div>)
                 : <JsonView text={selected.payload} query={query} />}
             </Section>
             {selected.ackPayload !== undefined && (
