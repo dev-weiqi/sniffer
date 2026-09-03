@@ -368,7 +368,7 @@ export function MocksView({ scope, deviceId, appId, mocks, conns, pendingRule, p
   const httpRows: MockRow[] = draft.http.map(r => ({
     id: r.id,
     badge: r.method ?? 'ANY',
-    label: r.name || r.urlPattern || '(no path)',
+    label: r.name || r.urlPattern || '(new rule)',
     sub: r.name ? r.urlPattern : undefined,
     enabled: r.enabled,
     starred: r.starred,
@@ -377,7 +377,7 @@ export function MocksView({ scope, deviceId, appId, mocks, conns, pendingRule, p
   const socketRows: MockRow[] = draft.socket.map(r => ({
     id: r.id,
     badge: r.transport === 'ktor-ws' ? 'WS' : 'SIO',
-    label: r.name || r.event || '(no event)',
+    label: r.name || r.event || '(new rule)',
     sub: r.name ? r.event : undefined,
     enabled: r.enabled,
     starred: r.starred,
@@ -866,7 +866,7 @@ function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed, onRecords
   const rows: MockRow[] = all.map(r => ({
     id: r.id,
     badge: 'SIO',
-    label: r.name || r.event || '(no event)',
+    label: r.name || r.event || '(new event)',
     sub: r.name ? r.event : undefined,
     starred: r.starred,
   }))
