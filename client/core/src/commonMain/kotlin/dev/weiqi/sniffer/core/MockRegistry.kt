@@ -37,6 +37,10 @@ object MockRegistry {
         }
     }
 
+    fun clear() {
+        rules = MockRules()
+    }
+
     fun matchHttp(method: String, url: String): HttpMockRule? = matchHttp(method, url, null)
 
     fun matchHttp(method: String, url: String, body: String?): HttpMockRule? = matchHttp(method, url, body) { null }
