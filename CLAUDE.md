@@ -18,6 +18,7 @@ Self-hosted Flipper alternative for monitoring and mocking an app's HTTP and Soc
    A new mock-rule field must also be checked in: the daemon store (`normalizeMocks`, starred split, `~/.sniffer/mocks.json`), device sync (stripped like `starred`, or seen by the SDK?), the UI editors, duplicate detection (`httpSig` / `socketSig`) and `orderForSync`, and export/import (fields re-enter through the PUT path).
 2. **Non-trivial logic ships with a test.** Pure logic (mock matching, placeholder expansion, protocol serialization) goes in `client/core/src/commonTest`, in the style of `MockRegistryTest` / `MockPlaceholdersTest`.
 3. **The SDK must never affect the host app.** Swallow errors, reconnect silently, cap buffers (1000 messages offline).
+   On every client platform, unsupported traffic, malformed daemon messages, SDK failures, and daemon disconnects must fall through to the owner's original behavior. Only an explicitly matched mock, delay, or armed breakpoint may intentionally alter a request or response.
 4. **Keep `sample` and `sample-cmp` in parity:** same layout, headers and action labels. Only difference: CMP is ktor only.
 5. **Commits:** split by feature, end with the `Co-Authored-By` trailer. **Never push without explicit approval for that push.** Local commits are fine.
 

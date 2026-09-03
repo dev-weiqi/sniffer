@@ -7,9 +7,9 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
 </p>
 
-Sniffer is a Kotlin Multiplatform SDK and local monitor for inspecting and mocking
-mobile network traffic during development. It supports **OkHttp**, **Ktor Client**,
-**Socket.IO** and **Ktor WebSocket**.
+Sniffer is a Kotlin Multiplatform and native iOS SDK with a local monitor for inspecting and mocking mobile network traffic while you develop apps.
+
+It supports **OkHttp**, **Ktor Client**, **URLSession**, **Socket.IO**, and **WebSocket**.
 
 ![Sniffer API traffic panel](docs/assets/sniffer-api-preview.png)
 
@@ -82,6 +82,8 @@ builds: same API, empty implementation.
 | Ktor Client | `io.github.dev-weiqi.sniffer:ktor` |
 | Socket.IO | `io.github.dev-weiqi.sniffer:socketio` |
 | Ktor WebSocket | `io.github.dev-weiqi.sniffer:ktor-ws` |
+| Native iOS HTTP and WebSocket | Swift Package product `SnifferKit` |
+| Native iOS Socket.IO | Swift Package product `SnifferSocketIO` |
 
 ```kotlin
 val snifferVersion = "0.7.2"
