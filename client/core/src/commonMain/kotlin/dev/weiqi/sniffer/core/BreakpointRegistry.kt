@@ -24,6 +24,10 @@ object BreakpointRegistry {
         rules = newRules
     }
 
+    fun clear() {
+        rules = emptyList()
+    }
+
     // Exact-path match (same semantics as MockRegistry): [urlPattern] must equal the request's
     // path, both normalized. A full-URL pattern still matches its path.
     fun match(method: String, url: String, phase: String): BreakpointRule? {

@@ -19,6 +19,9 @@ targets:
       - Sources
     dependencies:
       - package: SnifferKit
+        product: SnifferKit
+      - package: SnifferKit
+        product: SnifferSocketIO
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.weiqi.sniffer.iossample

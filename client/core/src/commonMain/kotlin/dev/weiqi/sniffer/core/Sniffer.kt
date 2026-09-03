@@ -97,6 +97,7 @@ object Sniffer {
     fun stop() {
         scope?.cancel()
         scope = null
+        failOpen()
     }
 
     /** Reports one message. While disconnected, up to 1000 messages are buffered (oldest dropped). */
@@ -192,8 +193,7 @@ object Sniffer {
             }
         } finally {
             Breakpoints.connected = false
-            // release every paused response before tearing the connection down
-            Breakpoints.releaseAll()
+            failOpen()
             sender.cancel()
         }
     }
@@ -204,7 +204,8 @@ internal fun handleDaemonMessage(
     text: String,
     pushHandlers: Map<String, (event: String, payload: String) -> Unit>,
 ) {
-    val msg = runCatching { SnifferJson.decodeFromString<DaemonMessage>(text) }.getOrNull() ?: return
+    val msg = runCatching { SnifferJson.decodeFromString<DaemonMessage>(text) }.getOrNull()
+        ?: return failOpen()
     when (msg) {
         is MockRules -> MockRegistry.update(msg)
         is BreakpointRules -> BreakpointRegistry.update(msg.rules)
@@ -222,4 +223,10 @@ internal fun handleDaemonMessage(
             targets.forEach { h -> runCatching { h(msg.event, payload) } }
         }
     }
+}
+
+private fun failOpen() {
+    MockRegistry.clear()
+    BreakpointRegistry.clear()
+    Breakpoints.releaseAll()
 }
