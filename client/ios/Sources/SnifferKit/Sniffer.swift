@@ -17,8 +17,9 @@ public enum Sniffer {
 
     public static func configure(_ configuration: URLSessionConfiguration = .default) -> URLSessionConfiguration {
         var classes = configuration.protocolClasses ?? []
-        if !classes.contains(where: { $0 == SnifferURLProtocol.self }) {
-            classes.insert(SnifferURLProtocol.self, at: 0)
+        if !classes.contains(where: SnifferURLProtocol.isSnifferProtocolClass),
+           let protocolClass = SnifferURLProtocol.protocolClass(for: configuration) {
+            classes.insert(protocolClass, at: 0)
         }
         configuration.protocolClasses = classes
         return configuration
@@ -28,4 +29,3 @@ public enum Sniffer {
         SnifferRuntime.shared.stop()
     }
 }
-

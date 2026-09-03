@@ -91,8 +91,8 @@ event, payload), a light / dark toggle and a clear button.
 
 ### Mocks tab
 
-Rules are stored per device on the daemon, pushed immediately and run on the device, so
-they keep working offline.
+Rules are stored per device on the daemon, pushed immediately and run on the device
+while the daemon connection is healthy. Disconnecting clears them so owner traffic falls through.
 
 - **HTTP rules**: method (ANY = any) plus exact request path, answered with the given
   status, headers and body, optional delay. Matched requests never reach the network.
