@@ -28,6 +28,7 @@ DerivedData/
 *.xcuserstate
 xcuserdata/
 .swiftpm/
+.build/
 
 # Node
 node_modules/
