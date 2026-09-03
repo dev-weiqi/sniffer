@@ -26,6 +26,10 @@ object MockRegistry {
             socket = newRules.socket.map { it.copy(syncRevision = newRules.revision) })
     }
 
+    fun clear() {
+        rules = MockRules()
+    }
+
     // Exact-path match: [urlPattern] must equal the request's path (scheme, host, query and
     // fragment stripped). "/api/" no longer catches "/api/systems/v1/app-version". An empty
     // pattern matches nothing (a bare path always starts with "/").

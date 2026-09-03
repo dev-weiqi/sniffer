@@ -93,7 +93,7 @@ event, payload), a light / dark toggle and a clear button.
 
 ### Mock editors
 
-Edit HTTP rules from API and Socket rules from Socket. The daemon stores rules by device and sends changes to the SDK, which runs them locally. Already synchronized rules keep working while the daemon is offline.
+Edit HTTP rules from API and Socket rules from Socket. The daemon stores rules by device and sends changes to the SDK. On this branch, the SDK clears active rules when the daemon disconnects and resumes the app's original networking behavior.
 
 - **HTTP rules**: method (ANY = any) plus exact request path, answered with the given
   status, headers and body, optional delay. Matched requests never reach the network.

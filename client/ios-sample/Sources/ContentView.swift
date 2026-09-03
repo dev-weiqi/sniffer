@@ -20,6 +20,13 @@ struct ContentView: View {
                         .buttonStyle(.bordered)
                 }
 
+                HStack {
+                    Button("WebSocket") { model.testWebSocket() }
+                        .buttonStyle(.bordered)
+                    Button("Socket.IO") { model.testSocketIO() }
+                        .buttonStyle(.bordered)
+                }
+
                 LabeledContent("Status", value: model.status)
 
                 ScrollView {
@@ -38,4 +45,3 @@ struct ContentView: View {
         .task { model.loadOnce() }
     }
 }
-
