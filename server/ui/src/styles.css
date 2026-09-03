@@ -1,5 +1,6 @@
 /* light palette: cool-gray layering, colors darkened for contrast on white */
 :root {
+  color-scheme: light;
   --bg: #f3f4f7;
   --bg-panel: #ffffff;
   --bg-alt: #eceef2;
@@ -19,6 +20,7 @@
 
 /* explicit toggle via data-theme; default is light */
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --bg: #17171a;
   --bg-panel: #1e1e22;
   --bg-alt: #26262b;
@@ -364,6 +366,7 @@ button.danger:hover { color: var(--err); border-color: color-mix(in srgb, var(--
   border-left: 1px solid var(--border);
   background: var(--bg-panel);
   display: flex; flex-direction: column;
+  container-type: inline-size;
 }
 
 /* ---------- table ---------- */
@@ -521,12 +524,17 @@ tr.bp-row td { background: color-mix(in srgb, var(--err) 10%, var(--bg-panel)); 
 .bp-btn.danger { color: var(--err); border-color: var(--err); }
 
 .detail-section { border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+.response-body-section .body-pre { max-height: 60vh; }
+.response-body-footer {
+  height: 25vh; margin-top: 8px;
+  border-top: 1px solid var(--border); background: var(--bg-panel);
+}
 .detail-section h3 {
   font-size: 14px; font-weight: 600; padding: 9px 10px 5px;
   cursor: pointer; user-select: none;
   display: flex; align-items: center; gap: 4px;
 }
-.section-action { margin-left: auto; }
+.section-action { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
 .copy-btn { font-size: 13px; padding: 1px 8px; }
 .chev { display: inline-block; transition: transform .12s; color: var(--text-dim); }
 .chev[data-open] { transform: rotate(90deg); }
@@ -860,6 +868,26 @@ button.add { margin-top: 2px; }
   border: 1px solid var(--border); border-radius: 6px; color: var(--text-dim);
 }
 .jn-toggle:hover { color: var(--text); border-color: var(--accent); }
+.json-header-tools { display: inline-flex; align-items: center; gap: 6px; }
+.jn-view-tabs {
+  display: inline-flex; padding: 2px;
+  border-radius: 6px; background: var(--bg-alt);
+}
+.jn-view-tabs button {
+  padding: 2px 8px; border: 0; border-radius: 4px;
+  background: transparent; color: var(--text-dim); font-size: 11px;
+}
+.jn-view-tabs button[data-active] {
+  background: var(--bg-panel); color: var(--text); font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
+}
+.jn-expand-all {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 5px; border-color: transparent;
+  background: transparent; color: var(--text-dim); font-size: 11px;
+}
+.jn-expand-all:hover { color: var(--text); border-color: var(--border); }
+@container (max-width: 380px) { .jn-expand-label { display: none; } }
 .json-tree { padding-top: 4px; }
 .jn-head { cursor: pointer; white-space: nowrap; border-radius: 4px; }
 .jn-head:hover { background: var(--hover); }

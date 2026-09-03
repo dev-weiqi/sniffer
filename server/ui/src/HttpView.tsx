@@ -327,7 +327,10 @@ function HttpDetail({ row, query, onMock, onArm, onClose }: {
   onArm: (row: HttpRow) => void
   onClose: () => void
 }) {
+  const [responseView, setResponseView] = useState<'raw' | 'tree'>('tree')
+  const [responseExpandAll, setResponseExpandAll] = useState<boolean | null>(null)
   const { query: queryParams } = urlParts(row.url)
+  const responseIsJson = Boolean(row.respBody && !row.respBase64 && !isSse(row) && isValidJson(row.respBody))
 
   const mockThis = () => onMock(
     {
@@ -382,16 +385,34 @@ function HttpDetail({ row, query, onMock, onArm, onClose }: {
         </Section>
       )}
 
-      <Section title="Response Body" action={row.respBody ? <CopyButton text={row.respBody} /> : null}>
+      <Section title="Response Body" className="response-body-section" action={row.respBody ? <>
+        {responseIsJson && <span className="json-header-tools">
+          <span className="jn-view-tabs" aria-label="Response body view">
+            <button data-active={responseView === 'raw' || undefined} onClick={() => setResponseView('raw')}>Raw</button>
+            <button data-active={responseView === 'tree' || undefined} onClick={() => setResponseView('tree')}>Tree</button>
+          </span>
+          {responseView === 'tree' && <button className="jn-expand-all"
+            title={responseExpandAll === true ? 'Collapse all' : 'Expand all'}
+            aria-label={responseExpandAll === true ? 'Collapse all' : 'Expand all'}
+            onClick={() => setResponseExpandAll(open => open === true ? false : true)}>
+            <span aria-hidden>⇵</span>
+            <span className="jn-expand-label">{responseExpandAll === true ? 'Collapse all' : 'Expand all'}</span>
+          </button>}
+        </span>}
+        <CopyButton text={row.respBody} />
+      </> : null}>
         {row.respBody
           ? (row.respBase64 && imageContentType(row)
               ? <ImagePreview contentType={imageContentType(row)!} base64={row.respBody} />
-              : isSse(row) ? <pre className="body-pre"><Highlight text={row.respBody} query={query} /></pre> : <JsonView text={row.respBody} query={query} />)
+              : isSse(row) ? <pre className="body-pre"><Highlight text={row.respBody} query={query} /></pre>
+                : <JsonView text={row.respBody} query={query}
+                    view={responseIsJson ? responseView : undefined} expandAll={responseExpandAll} />)
           : <div className="dim pad">
               {row.status === undefined ? 'Waiting for response…'
                 : isSse(row) ? 'SSE stream — events appear here as the app reads them'
                 : '(empty or binary)'}
             </div>}
+        <div className="response-body-footer" aria-hidden />
       </Section>
     </aside>
   )
@@ -576,14 +597,15 @@ interface ImageDecoderLike {
   close?: () => void
 }
 
-export function Section({ title, action, children }: {
+export function Section({ title, action, className, children }: {
   title: string
   action?: React.ReactNode
+  className?: string
   children: React.ReactNode
 }) {
   const [open, setOpen] = useState(true)
   return (
-    <section className="detail-section">
+    <section className={`detail-section ${className ?? ''}`}>
       <h3 onClick={() => setOpen(!open)}>
         <span className="chev" data-open={open || undefined}>▸</span> {title}
         {action && <span className="section-action" onClick={e => e.stopPropagation()}>{action}</span>}
