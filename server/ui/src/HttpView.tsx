@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import type { HttpMockRule, HttpRow, PausedHit } from './state'
+import type { BreakpointRule, HttpMockRule, HttpRow, PausedHit } from './state'
 import { FilterMenu } from './FilterMenu'
 import type { TrafficFilter } from './trafficFilter'
 import { copyText, fmtDuration, fmtSize, fmtTime, prettyJson, splitHighlight, splitLinks, statusClass, statusLabel, toCurl, urlParts } from './util'
@@ -71,7 +71,7 @@ export function ScrollToBottomButton({ onClick }: { onClick: () => void }) {
   )
 }
 
-export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlFilter, onUrlFilterChange, armedCount, onMock, onArm, onResolve, onDisarmAll, onClear }: {
+export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlFilter, onUrlFilterChange, armedBreakpoints, onMock, onArm, onResolve, onDisarmAll, onClear }: {
   rows: HttpRow[]
   query: string
   pausedHits: PausedHit[]
@@ -79,7 +79,7 @@ export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlF
   onOpenMocks?: () => void
   urlFilter: TrafficFilter
   onUrlFilterChange: (filter: TrafficFilter) => void
-  armedCount: number
+  armedBreakpoints: BreakpointRule[]
   onMock: (rule: HttpMockRule, deviceId: string) => void
   onArm: (row: HttpRow) => void
   onResolve: (hit: PausedHit, action: 'resume' | 'abort', edits?: ResolveEdits) => void
@@ -140,10 +140,26 @@ export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlF
         <div className="panel-toolbar">
           <span className="dim">API traffic</span>
           {pausedHits.length > 0 && <span className="badge bp-paused bp-blink">⏸ {pausedHits.length} paused</span>}
-          {armedCount > 0 && (
-            <button className="badge bp-armed" title="Disarm all breakpoints" onClick={onDisarmAll}>
-              ⏸ {armedCount} armed ✕
-            </button>
+          {armedBreakpoints.length > 0 && (
+            <div className="bp-armed-wrap">
+              <button className="badge bp-armed" aria-label="Disarm all breakpoints"
+                aria-describedby="armed-breakpoints" onClick={onDisarmAll}>
+                ⏸ {armedBreakpoints.length} armed ✕
+              </button>
+              <div className="bp-armed-popover" id="armed-breakpoints" role="tooltip">
+                <div className="bp-armed-summary">
+                  <strong>{armedBreakpoints.length}</strong><span>response breakpoints armed</span>
+                </div>
+                <div className="bp-armed-rules">
+                  {armedBreakpoints.map(rule => (
+                    <div className="bp-armed-rule" key={rule.id}>
+                      <span className="mono bp-armed-method">{rule.method ?? 'ANY'}</span>
+                      <span className="mono bp-armed-path">{rule.urlPattern}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           )}
           <span className="spacer" />
           <button className="pill-btn mocks-btn" disabled={!onOpenMocks} onClick={onOpenMocks}>
@@ -198,7 +214,7 @@ export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlF
 
       {(selected || selectedHit) && <div className="pane-resizer" onMouseDown={startDetailDrag} />}
       {selectedHit
-        ? <PausedDetail hit={selectedHit} onResolve={onResolve} onClose={() => setSelectedId(null)} />
+        ? <PausedDetail key={selectedHit.id} hit={selectedHit} onResolve={onResolve} onClose={() => setSelectedId(null)} />
         : selected && <HttpDetail row={selected} query={query} onMock={onMock} onArm={onArm} onClose={() => setSelectedId(null)} />}
     </div>
   )
@@ -431,7 +447,7 @@ function PausedDetail({ hit, onResolve, onClose }: {
 }) {
   const [status, setStatus] = useState(String(hit.status))
   const [headers, setHeaders] = useState<Record<string, string>>(hit.headers)
-  const [body, setBody] = useState(hit.body ?? '')
+  const [body, setBody] = useState(() => prettyJson(hit.body))
   const bodyIsJson = isValidJson(body)
   const { domain, path } = urlParts(hit.url)
 
@@ -458,7 +474,7 @@ function PausedDetail({ hit, onResolve, onClose }: {
             title={bodyIsJson ? 'Format JSON' : 'Body is not valid JSON'}
             onClick={() => setBody(prettyJson(body))}>Pretty JSON</button>
         </label>
-        <textarea className="bp-ta mono" rows={10} value={body} onChange={e => setBody(e.target.value)} />
+        <textarea className="bp-ta mono" rows={18} value={body} onChange={e => setBody(e.target.value)} />
         <div className="bp-actions">
           <button className="bp-btn primary"
             onClick={() => onResolve(hit, 'resume', { status: Number(status) || hit.status, headers, body })}>

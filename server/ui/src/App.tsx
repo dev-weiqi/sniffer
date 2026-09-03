@@ -573,7 +573,7 @@ export default function App() {
             mockCount={selectedMocks.http.filter(r => r.enabled).length}
             onOpenMocks={selectedDevice ? () => setMocksOpen('http') : undefined}
             urlFilter={httpFilter} onUrlFilterChange={setHttpFilter}
-            armedCount={deviceBreakpoints.filter(r => r.enabled).length}
+            armedBreakpoints={deviceBreakpoints.filter(r => r.enabled)}
             onMock={mockFromRequest} onArm={armBreakpoint} onResolve={resolvePausedHit}
             onDisarmAll={disarmAllBreakpoints}
             onClear={() => void api.clearHttpEntries()} />

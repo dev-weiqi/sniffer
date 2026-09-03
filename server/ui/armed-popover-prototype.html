@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Armed breakpoints popover prototype</title>
+  <style>
+    /* PROTOTYPE — three armed-breakpoint hover panels, switch with ?variant=A|B|C. */
+    :root {
+      color-scheme: light;
+      --bg: #f3f4f7;
+      --panel: #fff;
+      --alt: #eceef2;
+      --hover: #f5f6f9;
+      --border: #e2e4ea;
+      --text: #1a1c22;
+      --dim: #70737c;
+      --accent: #5b48d9;
+      --warn: #b45309;
+      --warn-soft: #fff7ed;
+      --danger: #d92626;
+      font: 15px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); overflow: hidden; }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+
+    .app { height: 100vh; display: flex; flex-direction: column; }
+    .topbar { height: 50px; padding: 8px 12px; display: flex; align-items: center; gap: 12px; background: var(--panel); border-bottom: 1px solid var(--border); }
+    .brand { font-weight: 650; }
+    .device { width: 310px; padding: 7px 10px; background: var(--alt); border: 1px solid var(--border); border-radius: 6px; color: var(--dim); }
+    .device strong { color: var(--text); }
+    .search { margin-left: auto; width: min(360px, 30vw); padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; color: var(--dim); }
+
+    .toolbar { height: 42px; padding: 7px 12px; display: flex; align-items: center; gap: 8px; background: var(--panel); border-bottom: 1px solid var(--border); }
+    .toolbar-label { color: var(--dim); }
+    .spacer { flex: 1; }
+    .quiet-button { padding: 5px 9px; background: var(--alt); border: 1px solid var(--border); border-radius: 6px; }
+
+    .armed { position: relative; }
+    .armed-trigger { display: flex; align-items: center; gap: 5px; padding: 3px 7px; background: transparent; border: 1px solid var(--warn); border-radius: 5px; color: var(--warn); font-weight: 700; line-height: 1.2; }
+    .armed-trigger:hover, .armed-trigger:focus-visible, .armed:focus-within .armed-trigger { color: #fff; background: var(--warn); outline: none; }
+    .armed-trigger svg { width: 12px; height: 12px; }
+
+    .popover { position: absolute; z-index: 10; top: calc(100% + 8px); left: 0; display: none; background: var(--panel); border: 1px solid #d7d9df; border-radius: 8px; box-shadow: 0 10px 30px rgb(25 28 38 / .18), 0 2px 7px rgb(25 28 38 / .08); }
+    .armed:hover .popover, .armed:focus-within .popover { display: block; }
+    .popover::before { content: ""; position: absolute; top: -5px; left: 20px; width: 8px; height: 8px; background: var(--panel); border-left: 1px solid #d7d9df; border-top: 1px solid #d7d9df; transform: rotate(45deg); }
+
+    .table-wrap { flex: 1; overflow: hidden; background: var(--panel); }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
+    th { height: 31px; padding: 0 10px; text-align: left; color: var(--dim); font-weight: 600; border-bottom: 1px solid var(--border); }
+    td { height: 31px; padding: 0 10px; border-bottom: 1px solid #eff0f3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    tbody tr:hover { background: var(--hover); }
+    .status-ok { color: #147a3d; }
+    .status-warn { color: var(--warn); font-weight: 700; }
+    .method { font-weight: 700; }
+    .path { color: var(--text); }
+    .host { color: var(--dim); }
+
+    .panel-head { padding: 11px 12px 9px; border-bottom: 1px solid var(--border); }
+    .panel-title { font-size: 13px; font-weight: 700; }
+
+    /* A — a direct inventory: method first, exact matcher second. */
+    .variant-a .popover { width: 340px; }
+    .rule-list { padding: 5px 0; }
+    .rule { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 8px; padding: 8px 12px; }
+    .rule:hover { background: var(--hover); }
+    .method-chip { align-self: start; padding: 2px 4px; background: var(--alt); border-radius: 4px; text-align: center; font-size: 10px; font-weight: 800; }
+    .rule-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+    .rule-meta { margin-top: 3px; color: var(--dim); font-size: 11px; }
+
+    /* B — debugger inspector: selected rule and context are visually separated. */
+    .variant-b .popover { width: 410px; padding: 8px; }
+    .debug-grid { display: grid; grid-template-columns: 128px 1fr; min-height: 148px; overflow: hidden; border: 1px solid var(--border); border-radius: 6px; }
+    .debug-rules { padding: 5px; background: var(--alt); border-right: 1px solid var(--border); }
+    .debug-rule { width: 100%; padding: 7px 6px; background: transparent; border: 0; border-radius: 4px; text-align: left; font-size: 11px; }
+    .debug-rule[data-active] { background: var(--panel); box-shadow: 0 1px 2px rgb(0 0 0 / .08); }
+    .debug-detail { padding: 11px 12px; }
+    .debug-state { display: flex; align-items: center; gap: 6px; color: var(--warn); font-size: 11px; font-weight: 700; }
+    .debug-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
+    .debug-path { margin: 9px 0 12px; font-size: 13px; overflow-wrap: anywhere; }
+    .debug-facts { display: grid; grid-template-columns: 58px 1fr; gap: 5px; color: var(--dim); font-size: 11px; }
+    .debug-facts strong { color: var(--text); font-weight: 600; }
+
+    /* C — narrow grouped summary for dense toolbars. */
+    .variant-c .popover { width: 292px; }
+    .summary { padding: 10px 12px; }
+    .summary-count { display: flex; align-items: baseline; gap: 6px; }
+    .summary-count strong { color: var(--warn); font-size: 24px; line-height: 1; }
+    .summary-count span { color: var(--dim); font-size: 12px; }
+    .summary-group { display: grid; grid-template-columns: 44px 1fr; gap: 8px; margin-top: 10px; font-size: 11px; }
+    .summary-method { font-weight: 800; }
+    .summary-paths { display: grid; gap: 4px; min-width: 0; }
+    .summary-paths span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .prototype-switcher { position: fixed; z-index: 30; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; align-items: center; gap: 4px; padding: 5px; color: #fff; background: #1a1c22; border-radius: 9px; box-shadow: 0 7px 20px rgb(0 0 0 / .24); }
+    .prototype-switcher button { width: 30px; height: 28px; padding: 0; color: #fff; background: transparent; border: 0; border-radius: 5px; }
+    .prototype-switcher button:hover, .prototype-switcher button:focus-visible { background: #363942; outline: none; }
+    .prototype-label { min-width: 190px; text-align: center; font-size: 12px; font-weight: 650; }
+    .hint { position: fixed; left: 50%; bottom: 62px; transform: translateX(-50%); color: var(--dim); font-size: 12px; }
+
+    @media (max-width: 620px) {
+      .device { width: auto; flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; }
+      .search { display: none; }
+      .popover { position: fixed; top: 99px; left: 10px; width: calc(100vw - 20px) !important; }
+      .popover::before { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <span class="brand">Sniffer</span>
+      <div class="device"><strong>Pixel 9</strong> · dev.weiqi.sample</div>
+      <div class="search">Search traffic…</div>
+    </header>
+
+    <div class="toolbar">
+      <span class="toolbar-label">API traffic</span>
+      <div class="armed" id="armed">
+        <button class="armed-trigger" aria-haspopup="dialog" aria-label="2 armed breakpoints">
+          <svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><rect x="2" y="2" width="3" height="8" rx="1"/><rect x="7" y="2" width="3" height="8" rx="1"/></svg>
+          2 armed
+        </button>
+        <div class="popover" role="dialog" aria-label="Armed breakpoints"></div>
+      </div>
+      <span class="spacer"></span>
+      <button class="quiet-button">HTTP Mocks <b>3</b></button>
+      <button class="quiet-button">Clear API</button>
+    </div>
+
+    <main class="table-wrap">
+      <table>
+        <thead><tr><th style="width:90px">Time</th><th style="width:68px">Method</th><th style="width:72px">Status</th><th>URL</th><th style="width:70px">Size</th><th style="width:72px">Time</th></tr></thead>
+        <tbody>
+          <tr><td class="mono host">14:32:09</td><td class="mono method">GET</td><td class="mono status-ok">200</td><td><span class="host">api.acme.dev</span><span class="path">/v2/users/me</span></td><td class="mono">4.2 KB</td><td class="mono">182 ms</td></tr>
+          <tr><td class="mono host">14:32:07</td><td class="mono method">POST</td><td class="mono status-warn">201</td><td><span class="host">api.acme.dev</span><span class="path">/v2/orders/checkout</span></td><td class="mono">1.8 KB</td><td class="mono">324 ms</td></tr>
+          <tr><td class="mono host">14:32:05</td><td class="mono method">GET</td><td class="mono status-ok">200</td><td><span class="host">cdn.acme.dev</span><span class="path">/images/avatar.webp</span></td><td class="mono">48 KB</td><td class="mono">93 ms</td></tr>
+          <tr><td class="mono host">14:32:01</td><td class="mono method">PATCH</td><td class="mono status-ok">204</td><td><span class="host">api.acme.dev</span><span class="path">/v2/preferences</span></td><td class="mono">0 B</td><td class="mono">241 ms</td></tr>
+        </tbody>
+      </table>
+    </main>
+  </div>
+
+  <div class="hint">把游標移到「2 armed」上</div>
+  <nav class="prototype-switcher" aria-label="Prototype variants">
+    <button id="prev" aria-label="上一個提案">←</button>
+    <span class="prototype-label" id="variant-label"></span>
+    <button id="next" aria-label="下一個提案">→</button>
+  </nav>
+
+  <script>
+    const variants = {
+      A: {
+        name: 'A — 直接規則清單',
+        html: `
+          <div class="panel-head"><div class="panel-title">Armed breakpoints</div></div>
+          <div class="rule-list">
+            <div class="rule"><span class="method-chip mono">GET</span><div><div class="rule-path mono">/v2/users/me</div><div class="rule-meta">Exact path · Response phase</div></div></div>
+            <div class="rule"><span class="method-chip mono">POST</span><div><div class="rule-path mono">/v2/orders/checkout</div><div class="rule-meta">Exact path · Response phase</div></div></div>
+          </div>`
+      },
+      B: {
+        name: 'B — Debugger 檢視',
+        html: `
+          <div class="debug-grid">
+            <div class="debug-rules">
+              <button class="debug-rule mono" data-active>GET<br>/v2/users/me</button>
+              <button class="debug-rule mono">POST<br>/v2/orders/checkout</button>
+            </div>
+            <div class="debug-detail">
+              <div class="debug-state"><span class="debug-dot"></span>Armed</div>
+              <div class="debug-path mono">GET /v2/users/me</div>
+              <div class="debug-facts"><span>Pauses</span><strong>Response</strong><span>Match</span><strong>Exact path</strong><span>Device</span><strong>Pixel 9</strong></div>
+            </div>
+          </div>`
+      },
+      C: {
+        name: 'C — 緊湊分組摘要',
+        html: `
+          <div class="summary">
+            <div class="summary-count"><strong>2</strong><span>response breakpoints armed</span></div>
+            <div class="summary-group"><span class="summary-method mono">GET</span><div class="summary-paths mono"><span>/v2/users/me</span></div></div>
+            <div class="summary-group"><span class="summary-method mono">POST</span><div class="summary-paths mono"><span>/v2/orders/checkout</span></div></div>
+          </div>`
+      }
+    }
+
+    const keys = Object.keys(variants)
+    const armed = document.querySelector('#armed')
+    const popover = armed.querySelector('.popover')
+    const label = document.querySelector('#variant-label')
+
+    function render(key) {
+      if (!variants[key]) key = 'A'
+      armed.className = `armed variant-${key.toLowerCase()}`
+      popover.innerHTML = variants[key].html
+      label.textContent = variants[key].name
+      const url = new URL(location.href)
+      url.searchParams.set('variant', key)
+      history.replaceState(null, '', url)
+    }
+
+    function move(direction) {
+      const current = new URL(location.href).searchParams.get('variant') || 'A'
+      render(keys[(keys.indexOf(current) + direction + keys.length) % keys.length])
+    }
+
+    document.querySelector('#prev').addEventListener('click', () => move(-1))
+    document.querySelector('#next').addEventListener('click', () => move(1))
+    document.addEventListener('keydown', event => {
+      if (event.target.matches('input, textarea, [contenteditable]')) return
+      if (event.key === 'ArrowLeft') move(-1)
+      if (event.key === 'ArrowRight') move(1)
+    })
+    render(new URL(location.href).searchParams.get('variant') || 'A')
+  </script>
+</body>
+</html>
