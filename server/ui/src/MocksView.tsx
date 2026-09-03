@@ -5,6 +5,7 @@ import { newRuleId, prettyJson, prettySocketRule, unwrapJsonString, wrapJsonStri
 import { applyOrder, byOrder, loadIds, loadOrder, orderOf, saveIds, saveOrder } from './mockOrder'
 import { pointAt, resolvePushTarget } from './pushTarget'
 import { buildExportRules, countImportedRules, countSelectedRules, createFullExportSelection, importedCopies, parseImportedRules, type ExportRuleSelection, type ExportRulesSource, type PushEventRule } from './exportMocks'
+import { useConfirm } from './Confirm'
 
 type PushPrefill = { connectionId: string; event: string; payload: string }
 
@@ -81,6 +82,16 @@ function CopyIcon() {
   )
 }
 
+function SendIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="m22 2-7 20-4-9-9-4Z" />
+      <path d="M22 2 11 13" />
+    </svg>
+  )
+}
+
 function StarIcon({ filled }: { filled?: boolean }) {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor"
@@ -120,17 +131,27 @@ function CloseIcon() {
   )
 }
 
-/** Clearing the whole list is a different act from deleting one rule, so it must not wear the
-    same trash can: a list with an X reads as "empty this list", not "delete this item". */
+/** The X badge distinguishes clearing the list from a single rule's plain trash can. */
 function ClearListIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M13 6H3" />
-      <path d="M13 12H3" />
-      <path d="M13 18H3" />
-      <path d="m16 9 5 5" />
-      <path d="m21 9-5 5" />
+      <path d="M3 6h14M7 6V3h6v3M5 6l1 14h8l.4-5" />
+      <path d="M9 10v6M13 10v3" />
+      <circle cx="18" cy="18" r="5" fill="var(--bg-panel)" />
+      <path d="m16 16 4 4m0-4-4 4" strokeWidth="1" />
+    </svg>
+  )
+}
+
+function ToggleListIcon({ on }: { on: boolean }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 6h10M3 12h10M3 18h10" />
+      {on
+        ? <path d="m17 9 5 6m0-6-5 6" />
+        : <path d="m16 12 2 2 4-5" />}
     </svg>
   )
 }
@@ -200,6 +221,7 @@ export function MocksView({ scope, deviceId, appId, mocks, conns, pendingRule, p
   onPendingConsumed: () => void
   onClose: () => void
 }) {
+  const confirm = useConfirm()
   const [draft, setDraft] = useState<Mocks>(mocks)
   const [dirty, setDirty] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -421,7 +443,15 @@ export function MocksView({ scope, deviceId, appId, mocks, conns, pendingRule, p
             <MockList rows={httpRows} selectedId={httpRows[httpAt]?.id ?? null}
               onSelect={setSelHttp} onAdd={addHttp} addLabel="Add HTTP rule"
               onToggle={id => update({ ...draft, http: draft.http.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r) })}
-              onClearAll={draft.http.length > 0 ? () => update({ ...draft, http: [] }) : undefined}
+              onToggleAll={draft.http.length > 0 ? () => {
+                const enabled = !draft.http.every(r => r.enabled)
+                update({ ...draft, http: draft.http.map(r => ({ ...r, enabled })) })
+              } : undefined}
+              onClearAll={draft.http.length > 0 ? async () => {
+                if (await confirm(`Clear all ${draft.http.length} HTTP mock rules? This cannot be undone.`, 'Clear rules')) {
+                  update({ ...draft, http: [] })
+                }
+              } : undefined}
               placeholdersOn={showPlaceholders} onPlaceholders={() => setShowPlaceholders(v => !v)}
             />
             <div className="mocks-detail">
@@ -445,7 +475,15 @@ export function MocksView({ scope, deviceId, appId, mocks, conns, pendingRule, p
             <MockList rows={socketRows} selectedId={socketRows[socketAt]?.id ?? null}
               onSelect={setSelSocket} onAdd={addSocket} addLabel="Add socket rule"
               onToggle={id => update({ ...draft, socket: draft.socket.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r) })}
-              onClearAll={draft.socket.length > 0 ? () => update({ ...draft, socket: [] }) : undefined}
+              onToggleAll={draft.socket.length > 0 ? () => {
+                const enabled = !draft.socket.every(r => r.enabled)
+                update({ ...draft, socket: draft.socket.map(r => ({ ...r, enabled })) })
+              } : undefined}
+              onClearAll={draft.socket.length > 0 ? async () => {
+                if (await confirm(`Clear all ${draft.socket.length} socket mock rules? This cannot be undone.`, 'Clear rules')) {
+                  update({ ...draft, socket: [] })
+                }
+              } : undefined}
               placeholdersOn={showPlaceholders} onPlaceholders={() => setShowPlaceholders(v => !v)}
             />
             <div className="mocks-detail">
@@ -515,21 +553,29 @@ export interface MockRow {
 }
 
 /** Master list of the modal: never truncates a label -- long paths and names wrap instead. */
-function MockList({ rows, selectedId, onSelect, onToggle, onAdd, addLabel, onClearAll, placeholdersOn, onPlaceholders }: {
+function MockList({ rows, selectedId, onSelect, onToggle, onToggleAll, onAdd, addLabel, onClearAll, placeholdersOn, onPlaceholders }: {
   rows: MockRow[]
   selectedId: string | null
   onSelect: (id: string) => void
   onToggle?: (id: string) => void
+  onToggleAll?: () => void
   onAdd: () => void
   addLabel: string
   onClearAll?: () => void
   placeholdersOn?: boolean
   onPlaceholders?: () => void
 }) {
+  const allEnabled = rows.every(row => row.enabled !== false)
   return (
     <div className="mocks-list">
       <div className="mocks-list-tools">
         <button className="ghost icon-btn" title={addLabel} onClick={onAdd}><PlusIcon /></button>
+        {onToggleAll && (
+          <button className="ghost icon-btn" title={allEnabled ? 'Disable all rules' : 'Enable all rules'}
+            aria-label={allEnabled ? 'Disable all rules' : 'Enable all rules'} onClick={onToggleAll}>
+            <ToggleListIcon on={allEnabled} />
+          </button>
+        )}
         {onClearAll && (
           <button className="ghost icon-btn danger" title="Clear all" onClick={onClearAll}><ClearListIcon /></button>
         )}
@@ -914,8 +960,10 @@ function PushRecordCard({ record, conns, deviceId, canStar, onChange, onDelete, 
           onChange={e => onChange({ ...record, event: e.target.value })} />
         <button className="ghost icon-btn" title="Duplicate" onClick={onDuplicate}><CopyIcon /></button>
         <button className="ghost icon-btn danger" title="Delete" onClick={onDelete}><TrashIcon /></button>
+      </div>
+      <div className="push-send-row">
         <button disabled={!canSend} onClick={send}>
-          {status === 'sent' ? 'Sent ✓' : status === 'error' ? 'Failed' : 'Send'}
+          <SendIcon />{status === 'sent' ? 'Sent ✓' : status === 'error' ? 'Failed' : 'Send'}
         </button>
       </div>
       {targetMissing && (

@@ -606,12 +606,17 @@ tr.bp-row td { background: color-mix(in srgb, var(--err) 10%, var(--bg-panel)); 
 .mocks-btn { display: inline-flex; align-items: center; gap: 6px; }
 /* button and count read as one tonal family -- a solid accent pill next to accent text
    looks like an unread badge, which this is not */
-.mocks-btn:not(:disabled) {
+.mocks-btn[data-active="false"] {
+  color: var(--text);
+  background: var(--bg-alt);
+  border-color: var(--border);
+}
+.mocks-btn[data-active="true"] {
   color: var(--accent);
   background: var(--accent-soft);
   border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
 }
-.mocks-btn:not(:disabled):hover { border-color: var(--accent); }
+.mocks-btn[data-active="true"]:hover { border-color: var(--accent); }
 .mocks-btn .count.accent {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
   color: var(--accent);
@@ -703,6 +708,8 @@ tr.bp-row td { background: color-mix(in srgb, var(--err) 10%, var(--bg-panel)); 
 .rule-card[data-disabled] .hint { opacity: .45; }
 .rule-row { display: flex; gap: 8px; align-items: center; min-width: 0; }
 .rule-row .grow { flex: 1 1 0; min-width: 0; }
+.push-send-row { display: flex; justify-content: flex-end; }
+.push-send-row button { display: inline-flex; align-items: center; gap: 6px; }
 .w-status { width: 70px; }
 .w-delay { width: 84px; }
 .w-event { width: 220px; }

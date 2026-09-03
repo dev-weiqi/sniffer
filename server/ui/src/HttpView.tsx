@@ -162,7 +162,8 @@ export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlF
             </div>
           )}
           <span className="spacer" />
-          <button className="pill-btn mocks-btn" disabled={!onOpenMocks} onClick={onOpenMocks}>
+          <button className="pill-btn mocks-btn" data-active={mockCount > 0 ? 'true' : 'false'}
+            disabled={!onOpenMocks} onClick={onOpenMocks}>
             <SlidersIcon />HTTP Mocks{mockCount > 0 && <span className="count accent">{mockCount}</span>}
           </button>
           <button className="clear-btn" disabled={rows.length === 0} onClick={onClear}>Clear API</button>
