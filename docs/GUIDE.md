@@ -176,16 +176,16 @@ light–dark theme toggle (defaults to light), clear button.
 
 ### Mocks tab
 
-Rules live in the daemon per device and are pushed to that device immediately;
-they then run **on the device**, so they keep working offline.
+Rules live in the daemon per device and are pushed to that device immediately.
+They run **on the device** while the daemon connection is healthy; disconnecting clears them so owner traffic always falls through.
 
 - **HTTP rules**: method (ANY = any) + URL substring match → respond with the
   given status/headers/body, optional delay. Matched requests never touch the
   network — the interceptor short-circuits locally. The body editor has
   pretty-print / minify JSON helpers.
 - Mock bodies and socket payloads support placeholders expanded on the device
-  each time a rule matches: `${id}` and `${randomString(length)}`. Replace
-  `length` with the number you want for that rule.
+  each time a rule matches: `${randomId}`, `${now}`, and
+  `${randomString(min~max)}`.
 - **Socket rules** come in two flavors. **sio ack**: matches the emitted
   socket.io event name; matched emits are **not sent to the server** and the SDK
   calls the ack callback locally with your payload (JSON array = multiple ack

@@ -239,6 +239,8 @@ class ProtocolTest {
             """{"type":"push-event","connectionId":null,"event":"broadcast","payload":"${'$'}{unknown}"}""",
             handlers,
         )
+        Breakpoints.connected = true
+        val pending = Breakpoints.open("malformed")!!
         handleDaemonMessage("""{"type":"bad"}""", handlers)
         handleDaemonMessage("""not json""", handlers)
 
@@ -246,6 +248,9 @@ class ProtocolTest {
             listOf("chat" to "hello", "broadcast" to """${'$'}{unknown}"""),
             received,
         )
+        assertNull(MockRegistry.matchHttp("GET", "/mock"))
+        assertTrue(pending.isCompleted)
+        Breakpoints.connected = false
         MockRegistry.update(MockRules())
     }
 

@@ -8,10 +8,9 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
 </p>
 
-Sniffer is a Kotlin Multiplatform SDK and local monitor for inspecting and mocking
-mobile network traffic while you develop apps.
+Sniffer is a Kotlin Multiplatform and native iOS SDK with a local monitor for inspecting and mocking mobile network traffic while you develop apps.
 
-It supports **OkHttp**, **Ktor Client**, **Socket.IO**, and **Ktor WebSocket**.
+It supports **OkHttp**, **Ktor Client**, **URLSession**, **Socket.IO**, and **WebSocket**.
 
 ![Sniffer API traffic panel](docs/assets/sniffer-api-preview.png)
 
@@ -116,6 +115,8 @@ Supported client integrations:
 | Ktor Client | `io.github.dev-weiqi.sniffer:ktor` |
 | Socket.IO | `io.github.dev-weiqi.sniffer:socketio` |
 | Ktor WebSocket | `io.github.dev-weiqi.sniffer:ktor-ws` |
+| Native iOS HTTP and WebSocket | Swift Package product `SnifferKit` |
+| Native iOS Socket.IO | Swift Package product `SnifferSocketIO` |
 
 ```kotlin
 val snifferVersion = "0.6.0"
@@ -282,8 +283,8 @@ device.
 
 Rules are sent to the selected device and run inside the SDK. HTTP mocks
 short-circuit matched requests before the network. Socket ack rules answer the
-client locally. Mock bodies support placeholders such as `${id}` and
-`${randomString(length)}`.
+client locally. Mock bodies support `${randomId}`, `${now}`, and
+`${randomString(min~max)}` placeholders.
 
 ## Modules
 

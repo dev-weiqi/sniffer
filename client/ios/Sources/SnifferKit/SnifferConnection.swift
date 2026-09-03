@@ -5,6 +5,8 @@ final class SnifferConnection: NSObject, URLSessionWebSocketDelegate, @unchecked
     private let host: String
     private let port: Int
     private let deviceName: String
+    private let onMessage: (String) -> Void
+    private let onConnection: (Bool) -> Void
     private let queue = DispatchQueue(label: "dev.weiqi.sniffer.connection")
 
     private var session: URLSession?
@@ -13,12 +15,20 @@ final class SnifferConnection: NSObject, URLSessionWebSocketDelegate, @unchecked
     private var connected = false
     private var stopped = false
     private var reconnectScheduled = false
-
-    init(appID: String, host: String, port: Int, deviceName: String) {
+    init(
+        appID: String,
+        host: String,
+        port: Int,
+        deviceName: String,
+        onMessage: @escaping (String) -> Void,
+        onConnection: @escaping (Bool) -> Void
+    ) {
         self.appID = appID
         self.host = host
         self.port = port
         self.deviceName = deviceName
+        self.onMessage = onMessage
+        self.onConnection = onConnection
     }
 
     func start() {
@@ -29,6 +39,7 @@ final class SnifferConnection: NSObject, URLSessionWebSocketDelegate, @unchecked
         queue.async {
             self.stopped = true
             self.connected = false
+            self.onConnection(false)
             self.socket?.cancel(with: .goingAway, reason: nil)
             self.session?.invalidateAndCancel()
             self.socket = nil
@@ -61,7 +72,8 @@ final class SnifferConnection: NSObject, URLSessionWebSocketDelegate, @unchecked
             self.queue.async {
                 guard self.socket === socket, !self.stopped else { return }
                 switch result {
-                case .success:
+                case .success(let message):
+                    if case .string(let text) = message { self.onMessage(text) }
                     self.receive(on: socket)
                 case .failure:
                     self.disconnectAndRetry()
@@ -89,6 +101,7 @@ final class SnifferConnection: NSObject, URLSessionWebSocketDelegate, @unchecked
 
     private func disconnectAndRetry() {
         connected = false
+        onConnection(false)
         socket?.cancel()
         session?.invalidateAndCancel()
         socket = nil
@@ -109,6 +122,7 @@ final class SnifferConnection: NSObject, URLSessionWebSocketDelegate, @unchecked
         queue.async {
             guard self.socket === webSocketTask, !self.stopped else { return }
             self.connected = true
+            self.onConnection(true)
             self.sendOrBuffer(HelloMessage(
                 deviceId: DeviceIdentifier.current,
                 deviceName: self.deviceName,
@@ -140,7 +154,7 @@ private struct HelloMessage: Encodable {
     let platform = "ios"
     let appId: String
     let sdkVersion = "0.1.0"
-    let capabilities = ["http"]
+    let capabilities = ["http", "breakpoint", "ktor-ws", "socketio"]
 
     var json: String {
         guard let data = try? JSONEncoder().encode(self) else { return "" }
@@ -173,4 +187,3 @@ private struct AnyEncodable: Encodable {
 #if canImport(UIKit)
 import UIKit
 #endif
-

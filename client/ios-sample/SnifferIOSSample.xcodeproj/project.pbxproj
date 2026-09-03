@@ -10,6 +10,7 @@
 		153679EA8D06F8C970FEBE43 /* TargetAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = B41BA2BF96CEF3E75D74A9F6 /* TargetAPI.swift */; };
 		85AB383D59B58D1072E7417D /* SampleViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05D331073E5FFD4C2709E07C /* SampleViewModel.swift */; };
 		A3790787160C98338C5388A8 /* APINetworkingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16ACF060B96BF7B4F8A52B2A /* APINetworkingManager.swift */; };
+		A4A05323E64DA671B8971BE0 /* SnifferSocketIO in Frameworks */ = {isa = PBXBuildFile; productRef = 87FF522866031D1AC400BB8C /* SnifferSocketIO */; };
 		BD296CB0D4B58B3FFB0CD93B /* SnifferIOSSampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1069AC46860E3E2D9BE4D91 /* SnifferIOSSampleApp.swift */; };
 		CEB4E5B1413A6A77686881C0 /* TestAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E9EB065AA76CCDF3AED74FE /* TestAPI.swift */; };
 		D53A62050ADFCAB5717ADC9B /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44565B31B045EFEE8757D383 /* ContentView.swift */; };
@@ -20,13 +21,13 @@
 /* Begin PBXFileReference section */
 		05D331073E5FFD4C2709E07C /* SampleViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleViewModel.swift; sourceTree = "<group>"; };
 		16ACF060B96BF7B4F8A52B2A /* APINetworkingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APINetworkingManager.swift; sourceTree = "<group>"; };
-		1785CC2C57FD6188410DD222 /* sniffer */ = {isa = PBXFileReference; lastKnownFileType = folder; name = sniffer; path = ../..; sourceTree = SOURCE_ROOT; };
 		2E9EB065AA76CCDF3AED74FE /* TestAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestAPI.swift; sourceTree = "<group>"; };
 		44565B31B045EFEE8757D383 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		44569278A64D4822A2DF019D /* SnifferIOSSample.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SnifferIOSSample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		790E9A413E7FE6711AC13310 /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = API.swift; sourceTree = "<group>"; };
 		A1069AC46860E3E2D9BE4D91 /* SnifferIOSSampleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnifferIOSSampleApp.swift; sourceTree = "<group>"; };
 		B41BA2BF96CEF3E75D74A9F6 /* TargetAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetAPI.swift; sourceTree = "<group>"; };
+		F678E0CA89BA7D95AE5549D5 /* sniffer */ = {isa = PBXFileReference; lastKnownFileType = folder; name = sniffer; path = ../..; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -35,6 +36,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F34BC8F23C5B8346AEABF905 /* SnifferKit in Frameworks */,
+				A4A05323E64DA671B8971BE0 /* SnifferSocketIO in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -53,7 +55,7 @@
 		3051DFD9198AD770FDF69C93 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				1785CC2C57FD6188410DD222 /* sniffer */,
+				F678E0CA89BA7D95AE5549D5 /* sniffer */,
 			);
 			name = Packages;
 			sourceTree = "<group>";
@@ -97,6 +99,7 @@
 			name = SnifferIOSSample;
 			packageProductDependencies = (
 				8BD1188192C41A1431ED8B59 /* SnifferKit */,
+				87FF522866031D1AC400BB8C /* SnifferSocketIO */,
 			);
 			productName = SnifferIOSSample;
 			productReference = 44569278A64D4822A2DF019D /* SnifferIOSSample.app */;
@@ -351,6 +354,10 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		87FF522866031D1AC400BB8C /* SnifferSocketIO */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SnifferSocketIO;
+		};
 		8BD1188192C41A1431ED8B59 /* SnifferKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SnifferKit;
