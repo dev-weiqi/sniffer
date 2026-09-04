@@ -8,7 +8,7 @@ import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.client.call.body
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.sse.sse
-import io.ktor.client.engine.cio.CIO
+import io.ktor.client.engine.HttpClientEngineFactory
 import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.request.get
@@ -34,6 +34,11 @@ import kotlinx.coroutines.withTimeoutOrNull
 // Android reaches the daemon via adb reverse; the iOS simulator shares the Mac's loopback
 const val BASE = "http://localhost:$DEFAULT_PORT"
 private const val ANIMATED_WEBP = "https://mathiasbynens.be/demo/animated-webp-supported.webp"
+// a public JSON endpoint: reachable from a physical device, unlike the daemon's localhost test routes
+const val EXTERNAL_API = "https://httpbin.org/get"
+
+/** CIO on Android; Darwin on iOS, where CIO cannot do TLS. */
+internal expect fun httpEngine(): HttpClientEngineFactory<*>
 
 enum class LogKind { INFO, OK, ERROR, EVENT }
 
@@ -51,9 +56,9 @@ class DemoController {
     private var actionStart = false
 
     private val ktor by lazy {
-        HttpClient(CIO) {
+        HttpClient(httpEngine()) {
             install(SnifferKtor)
-        install(SnifferKtorWs)
+            install(SnifferKtorWs)
             install(io.ktor.client.plugins.sse.SSE)
             install(WebSockets)
         }
@@ -87,6 +92,10 @@ class DemoController {
                 val resp = ktor.get(ANIMATED_WEBP)
                 val bytes: ByteArray = resp.body()
                 log("WEBP → ${resp.status.value} ${bytes.size} bytes", resp.status.value.kind())
+            },
+            DemoAction("API") {
+                val resp = ktor.get(EXTERNAL_API)
+                log("API → ${resp.status.value} ${resp.bodyAsText().take(120)}", resp.status.value.kind())
             },
             DemoAction("SSE") {
                 // exercises ktor's engine-level SSE session (the path real apps use)

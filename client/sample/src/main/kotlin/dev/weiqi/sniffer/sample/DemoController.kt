@@ -46,6 +46,7 @@ import java.util.Locale
 // localhost is reachable on the emulator/device through the daemon's adb reverse
 private const val BASE = "http://localhost:$DEFAULT_PORT"
 private const val ANIMATED_WEBP = "https://mathiasbynens.be/demo/animated-webp-supported.webp"
+private const val EXTERNAL_API = "https://httpbin.org/get"
 
 enum class LogKind { INFO, OK, ERROR, EVENT }
 
@@ -109,6 +110,13 @@ class DemoController {
                     }
                 }
             },
+            DemoAction("API") {
+                io {
+                    okhttp.newCall(okhttp3.Request.Builder().url(EXTERNAL_API).build()).execute().use { resp ->
+                        log("okhttp API → ${resp.code} ${resp.body.string().take(120)}", resp.kind())
+                    }
+                }
+            },
             DemoAction("SSE") {
                 io {
                     okhttp.newCall(okhttp3.Request.Builder().url("$BASE/test/sse").build()).execute().use { resp ->
@@ -148,6 +156,10 @@ class DemoController {
                 val resp = ktor.get(ANIMATED_WEBP)
                 val bytes: ByteArray = resp.body()
                 log("ktor WEBP → ${resp.status.value} ${bytes.size} bytes", resp.status.value.kind())
+            },
+            DemoAction("API") {
+                val resp = ktor.get(EXTERNAL_API)
+                log("ktor API → ${resp.status.value} ${resp.bodyAsText().take(120)}", resp.status.value.kind())
             },
             DemoAction("SSE") {
                 // exercises ktor's engine-level SSE session (the path real apps use)

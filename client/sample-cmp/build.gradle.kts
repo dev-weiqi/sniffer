@@ -20,7 +20,6 @@ kotlin {
             implementation(project(":ktor"))
             implementation(project(":ktor-ws"))
             implementation(libs.ktor.client.core)
-            implementation(libs.ktor.client.cio)
             implementation(libs.ktor.client.websockets)
             implementation(libs.kotlinx.coroutines.core)
             implementation(compose.runtime)
@@ -30,6 +29,11 @@ kotlin {
         }
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
+            implementation(libs.ktor.client.cio)
+        }
+        // CIO has no TLS on Kotlin/Native ("TLS sessions are not supported"): iOS needs the system engine
+        iosMain.dependencies {
+            implementation(libs.ktor.client.darwin)
         }
     }
 }
