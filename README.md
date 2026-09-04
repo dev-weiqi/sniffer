@@ -85,6 +85,8 @@ builds: same API, empty implementation.
 | Native iOS HTTP and WebSocket | Swift Package product `SnifferKit` |
 | Native iOS Socket.IO | Swift Package product `SnifferSocketIO` |
 
+See [`client/ios/README.md`](client/ios/README.md) for native iOS integration with HTTP, Socket.IO, and `URLSessionWebSocketTask`.
+
 ```kotlin
 val snifferVersion = "0.7.2"
 

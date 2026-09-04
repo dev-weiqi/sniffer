@@ -1,6 +1,8 @@
 # iOS sample
 
-This sample uses the Popup iOS networking shape and the local `SnifferKit` Swift package against the existing Sniffer daemon.
+This sample uses native iOS networking and the local `SnifferKit` Swift package against the existing Sniffer daemon.
+
+See [`../ios/README.md`](../ios/README.md) for the native iOS integration steps used by a real app.
 
 ```sh
 cd server/daemon
