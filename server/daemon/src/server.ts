@@ -10,6 +10,7 @@ import { WebSocketServer, WebSocket } from 'ws'
 import { Server as SocketIOServer } from 'socket.io'
 import { handleApi } from './api.js'
 import { runAdbReverse } from './adb.js'
+import { startUsbBridge } from './usbmux.js'
 import { buildDoctorReport, buildDoctorPath } from './doctor.js'
 import { createEntryStore } from './entryStore.js'
 import { json } from './http.js'
@@ -37,6 +38,8 @@ const PORT = Number(process.env.PORT ?? 9091)
 // Android/adb reverse and the iOS simulator reach it via localhost; a real iOS device on
 // wifi (hitting the host's LAN IP) needs SNIFFER_BIND=0.0.0.0.
 const BIND_HOST = process.env.SNIFFER_BIND ?? '127.0.0.1'
+// Loopback port the iOS SDK listens on; we dial it through usbmuxd (see usbmux.ts)
+const USB_PORT = Number(process.env.SNIFFER_USB_PORT ?? 9092)
 // UI location differs by layout: `ui-dist/` sits next to `dist/` in the published npm package;
 // `../ui/dist` is the repo checkout (running from src/ via tsx).
 // repo layout first: a stale ui-dist/ left behind by npm pack must never shadow ui/dist
@@ -296,6 +299,9 @@ function adbReverse() {
 }
 setInterval(adbReverse, 5000)
 adbReverse()
+
+// ---------- usbmuxd: dial a plugged-in iPhone's SDK listener; same /device handler, roles flipped ----------
+startUsbBridge({ port: USB_PORT, onConnection: ws => deviceWss.emit('connection', ws) })
 
 server.on('error', (e: NodeJS.ErrnoException) => {
   if (e.code === 'EADDRINUSE') {

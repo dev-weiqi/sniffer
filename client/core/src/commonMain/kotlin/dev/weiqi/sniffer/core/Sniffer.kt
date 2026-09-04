@@ -5,6 +5,7 @@ import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.websocket.Frame
+import io.ktor.websocket.WebSocketSession
 import io.ktor.websocket.readText
 import io.ktor.websocket.send
 import kotlinx.coroutines.CoroutineScope
@@ -17,6 +18,8 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlin.concurrent.Volatile
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.uuid.Uuid
@@ -62,8 +65,8 @@ object Sniffer {
 
     /**
      * Starts the connection to the daemon. Defaults to localhost:9091 (Android devices and
-     * emulators are reached via the daemon's adb reverse; on iOS pass your Mac's LAN IP).
-     * Calling it again is a no-op.
+     * emulators are reached via the daemon's adb reverse; a physical iOS device is reached over
+     * USB instead, see [USB_PORT], or pass your Mac's LAN IP for wifi). Calling it again is a no-op.
      */
     fun start(
         appId: String,
@@ -88,6 +91,7 @@ object Sniffer {
         )
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default).also { sc ->
             sc.launch { connectLoop(actualHost, actualPort, hello) }
+            if (usbListenerEnabled()) sc.launch { usbLoop(hello) }
         }
     }
 
@@ -140,26 +144,15 @@ object Sniffer {
 
     private val client by lazy { HttpClient(CIO) { install(WebSockets) } }
 
+    // outbound (wifi / adb reverse / simulator) and USB may both reach a daemon; one session drains the queue
+    private val sessionLock = Mutex()
+
     @CoverageExcluded
     private suspend fun connectLoop(host: String, port: Int, hello: Hello) {
         while (currentCoroutineContext().isActive) {
             try {
-                client.webSocket(host = host, port = port, path = "/device") {
-                    for (msg in handshakeMessages(hello)) send(SnifferJson.encodeToString(msg))
-                    Breakpoints.connected = true
-                    val sender = launch {
-                        for (msg in queue) send(SnifferJson.encodeToString<DeviceMessage>(msg))
-                    }
-                    try {
-                        for (frame in incoming) {
-                            if (frame is Frame.Text) handleDaemonMessage(frame.readText(), pushHandlers)
-                        }
-                    } finally {
-                        Breakpoints.connected = false
-                        // release every paused response before tearing the connection down
-                        Breakpoints.releaseAll()
-                        sender.cancel()
-                    }
+                sessionLock.withLock {
+                    client.webSocket(host = host, port = port, path = "/device") { runSession(hello) }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -167,6 +160,42 @@ object Sniffer {
                 // daemon not running: retry silently, the SDK must never affect the app
             }
             delay(3000)
+        }
+    }
+
+    @CoverageExcluded
+    private suspend fun usbLoop(hello: Hello) {
+        val port = configOverride("usb_port")?.toIntOrNull() ?: USB_PORT
+        while (currentCoroutineContext().isActive) {
+            try {
+                serveUsb(port, accept = { sessionLock.tryLock() }) {
+                    try { runSession(hello) } finally { sessionLock.unlock() }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Throwable) {
+                // ponytail: port held by another Sniffer app (even a suspended one) -> keep retrying; SNIFFER_USB_PORT overrides
+            }
+            delay(3000)
+        }
+    }
+
+    /** The wire session, identical whichever side opened the socket. */
+    private suspend fun WebSocketSession.runSession(hello: Hello) {
+        for (msg in handshakeMessages(hello)) send(SnifferJson.encodeToString(msg))
+        Breakpoints.connected = true
+        val sender = launch {
+            for (msg in queue) send(SnifferJson.encodeToString<DeviceMessage>(msg))
+        }
+        try {
+            for (frame in incoming) {
+                if (frame is Frame.Text) handleDaemonMessage(frame.readText(), pushHandlers)
+            }
+        } finally {
+            Breakpoints.connected = false
+            // release every paused response before tearing the connection down
+            Breakpoints.releaseAll()
+            sender.cancel()
         }
     }
 

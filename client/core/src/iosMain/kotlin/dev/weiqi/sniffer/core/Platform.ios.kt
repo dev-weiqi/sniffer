@@ -17,3 +17,7 @@ internal actual fun nowIso(): String = NSISO8601DateFormatter().stringFromDate(N
 internal actual fun configOverride(key: String): String? =
     (NSProcessInfo.processInfo.environment["SNIFFER_${key.uppercase()}"] as? String)
         ?.takeIf { it.isNotBlank() }
+
+// the simulator sets SIMULATOR_* in the app's environment; a real device never does
+internal actual fun usbListenerEnabled(): Boolean =
+    NSProcessInfo.processInfo.environment["SIMULATOR_DEVICE_NAME"] == null

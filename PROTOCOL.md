@@ -13,6 +13,13 @@ A single daemon port (default **9091**) hosts everything:
 | `/socket.io`| test socket.io server |
 | `/`         | UI static files |
 
+**USB (physical iOS device).** usbmuxd only lets the Mac open a connection *into* a
+device port, so the roles flip: the SDK listens on the device's `127.0.0.1:9092`
+(`SNIFFER_USB_PORT`, both sides), the daemon dials it through usbmuxd and performs the
+WebSocket *client* handshake (`GET /device`). From the first frame on the protocol below is
+identical. The SDK serves one session at a time: while an outbound (`/device`) session is
+live, USB dial-ins are closed unanswered and the daemon retries on its next 5s poll.
+
 Timestamps are epoch millis. Bodies are always strings; binary bodies carry no
 content (`body: null`). Bodies over **1 MB** are truncated and flagged
 `bodyTruncated: true`.

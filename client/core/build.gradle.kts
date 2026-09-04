@@ -18,6 +18,10 @@ kotlin {
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.client.cio)
             implementation(libs.ktor.client.websockets)
+            // USB transport: the SDK is the WebSocket *server* side there (see UsbServer.kt)
+            implementation(libs.ktor.network)
+            implementation(libs.ktor.websockets)
+            implementation(libs.ktor.http.cio)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

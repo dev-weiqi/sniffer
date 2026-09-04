@@ -14,3 +14,9 @@ internal expect fun nowIso(): String
  * JVM — -Dsniffer.host/-Dsniffer.port or SNIFFER_HOST/SNIFFER_PORT env vars.
  */
 internal expect fun configOverride(key: String): String?
+
+/**
+ * Whether to accept daemon connections over USB (see UsbServer.kt). Only a physical iOS device
+ * needs it: Android has adb reverse and the simulator shares the Mac's loopback.
+ */
+internal expect fun usbListenerEnabled(): Boolean

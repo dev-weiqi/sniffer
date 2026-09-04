@@ -51,3 +51,6 @@ internal actual fun configOverride(key: String): String? {
     return System.getProperty("sniffer.$key")
         ?: System.getenv("SNIFFER_${key.uppercase()}")?.takeIf { it.isNotBlank() }
 }
+
+// Android reaches the daemon through adb reverse; plain JVM hosts have no usbmuxd peer
+internal actual fun usbListenerEnabled(): Boolean = false

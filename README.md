@@ -56,9 +56,10 @@ PORT=9092 sniffer start
 ```
 
 By default the daemon binds to `127.0.0.1` only, so it is not exposed to your
-network. Android (via `adb reverse`) and the iOS simulator reach it over
-`localhost`, so they are unaffected. A **physical iOS/Android device connecting
-over Wi-Fi** to your machine's LAN address needs the daemon opened up:
+network. Android (via `adb reverse`), the iOS simulator and a **USB-connected
+iPhone** (via usbmuxd, see below) reach it over `localhost`, so they are unaffected.
+Only a **device connecting over Wi-Fi** to your machine's LAN address needs the
+daemon opened up:
 
 ```bash
 SNIFFER_BIND=0.0.0.0 sniffer start
@@ -164,9 +165,26 @@ class App : Application() {
 }
 ```
 
-Android devices and emulators reach the daemon through `adb reverse`, so
-`localhost:9091` works by default. iOS simulators can also use `localhost`.
-For a physical iOS device, pass your Mac's LAN address:
+How the device reaches the daemon depends on where the app runs. The default
+`Sniffer.start(appId)` covers every row except Wi-Fi:
+
+| App runs on | Link | Setup |
+|-------------|------|-------|
+| Android device / emulator | `adb reverse` → `localhost:9091` | none (adb on PATH) |
+| iOS simulator | `localhost:9091` (shares the Mac's loopback) | none |
+| iPhone over USB | daemon dials the app through usbmuxd | none |
+| Any device over Wi-Fi | app → your Mac's LAN IP | `SNIFFER_BIND=0.0.0.0` + `host` |
+
+**iPhone over USB.** iOS has no `adb reverse`, so the direction is flipped: the
+SDK listens on the device's `127.0.0.1:9092` and the daemon connects into it via
+usbmuxd (built into macOS; nothing to install). Requirements: the phone is paired
+with this Mac (it is, if Xcode can deploy to it) and the app is in the foreground.
+The daemon polls every 5 s, so a freshly launched app shows up within a few
+seconds. Override the port on both sides with `SNIFFER_USB_PORT` if 9092 is taken.
+The USB link only carries Sniffer traffic: the app's own requests still go out over
+the phone's network, so `localhost` URLs in the app point at the phone, not your Mac.
+
+Over Wi-Fi instead, pass your Mac's LAN address:
 
 ```kotlin
 Sniffer.start(appId = "com.example.app", host = "192.168.1.20")
