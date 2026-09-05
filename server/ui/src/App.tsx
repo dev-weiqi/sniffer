@@ -12,7 +12,7 @@ import {
   type SocketMockRule,
 } from './state'
 import { parsePortInput } from './desktopPort'
-import { filterActive, loadFilter, passesFilter, saveFilter, type TrafficFilter } from './trafficFilter'
+import { filterActive, loadFilter, passesFilter, saveFilter, setAllEnabled, type TrafficFilter } from './trafficFilter'
 import { displayEventName } from './engineio'
 import { useConfirm } from './Confirm'
 import { newRuleId } from './util'
@@ -270,6 +270,11 @@ export default function App() {
     [state.devices],
   )
   const selectedDevice = devices.find(d => d.deviceId === deviceId) ?? null
+  const trafficContext = {
+    device: selectedDevice,
+    serverConnected: state.wsConnected,
+    onOpenSettings: () => setShowSettings(true),
+  }
   // a stale localStorage deviceId must not surface mocks when its device is gone
   const selectedMocks = selectedDevice ? state.mocksByDevice[deviceId] ?? emptyMocks : emptyMocks
   const deviceBreakpoints = selectedDevice ? state.breakpointsByDevice[deviceId] ?? [] : []
@@ -568,8 +573,9 @@ export default function App() {
       )}
 
       <main className="content">
-        {tab === 'http' && (
-          <HttpView rows={filteredHttp} query={deferredSearch} pausedHits={devicePausedHits}
+          <HttpView active={tab === 'http'} rows={filteredHttp} query={deferredSearch} pausedHits={devicePausedHits}
+            emptyState={{ ...trafficContext, hasTraffic: state.http.some(r => r.deviceId === deviceId),
+              onResetFilters: () => { setSearch(''); setHttpFilter(setAllEnabled(httpFilter, false)) } }}
             mockCount={selectedMocks.http.filter(r => r.enabled).length}
             onOpenMocks={selectedDevice ? () => setMocksOpen('http') : undefined}
             urlFilter={httpFilter} onUrlFilterChange={setHttpFilter}
@@ -577,15 +583,14 @@ export default function App() {
             onMock={mockFromRequest} onArm={armBreakpoint} onResolve={resolvePausedHit}
             onDisarmAll={disarmAllBreakpoints}
             onClear={() => void api.clearHttpEntries()} />
-        )}
-        {tab === 'socket' && (
-          <SocketView events={filteredSocketEvents} query={deferredSearch} conns={state.socketConns} connUrls={state.connUrls} deviceId={deviceId}
+          <SocketView active={tab === 'socket'} events={filteredSocketEvents} query={deferredSearch} conns={state.socketConns} connUrls={state.connUrls} deviceId={deviceId}
+            emptyState={{ ...trafficContext, hasTraffic: state.socketEvents.some(r => r.deviceId === deviceId),
+              onResetFilters: () => { setSearch(''); setSocketFilter(setAllEnabled(socketFilter, false)) } }}
             mockCount={selectedMocks.socket.filter(r => r.enabled).length}
             onOpenMocks={selectedDevice ? () => setMocksOpen('socket') : undefined}
             eventFilter={socketFilter} onEventFilterChange={setSocketFilter}
             onMockAck={mockFromSocketEvent} onPushPrefill={pushFromEvent}
             onClear={() => void api.clearSocketEntries()} />
-        )}
       </main>
 
       {mocksOpen && selectedDevice && (

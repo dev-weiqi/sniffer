@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SocketConn, SocketMockRule, SocketRow } from './state'
 import { FilterMenu } from './FilterMenu'
+import { TrafficEmpty, type TrafficEmptyProps } from './TrafficEmpty'
 import type { TrafficFilter } from './trafficFilter'
 import { fmtTime, newRuleId } from './util'
 import { useDetailWidth, useListKeys } from './hooks'
@@ -15,7 +16,9 @@ const SYS_EVENTS = new Set([
   'ping', 'pong',
 ])
 
-export function SocketView({ mockCount, onOpenMocks, events, query, conns, connUrls, deviceId, eventFilter, onEventFilterChange, onMockAck, onPushPrefill, onClear }: {
+export function SocketView({ active, emptyState, mockCount, onOpenMocks, events, query, conns, connUrls, deviceId, eventFilter, onEventFilterChange, onMockAck, onPushPrefill, onClear }: {
+  active: boolean
+  emptyState: TrafficEmptyProps
   events: SocketRow[]
   query: string
   eventFilter: TrafficFilter
@@ -47,7 +50,7 @@ export function SocketView({ mockCount, onOpenMocks, events, query, conns, connU
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conns, deviceId, connFilter])
   const ids = useMemo(() => sorted.map(e => e.id), [sorted])
-  useListKeys(ids, selectedId, setSelectedId)
+  useListKeys(ids, selectedId, setSelectedId, active)
   const [detailWidth, startDetailDrag] = useDetailWidth()
   const listRef = useRef<HTMLDivElement>(null)
   const stickBottom = useRef(true)
@@ -55,13 +58,14 @@ export function SocketView({ mockCount, onOpenMocks, events, query, conns, connU
   useEffect(() => { localStorage.setItem('sniffer-sort-socket', sortDesc ? 'desc' : 'asc') }, [sortDesc])
 
   useEffect(() => {
+    if (!active) return
     const el = listRef.current
     if (el && !sortDesc && stickBottom.current && !selectedId) el.scrollTop = el.scrollHeight
     if (el) setShowScrollToBottom(el.scrollHeight - el.scrollTop - el.clientHeight > 1)
-  }, [events.length, filtered.length, selectedId, sortDesc])
+  }, [events.length, filtered.length, selectedId, sortDesc, active])
 
   return (
-    <div className="split" style={{ ['--detail-w' as string]: `${detailWidth}px` }}>
+    <div className="split" hidden={!active} style={{ ['--detail-w' as string]: `${detailWidth}px` }}>
       <div className="list-pane">
         <div className="panel-toolbar">
           <span className="dim">Socket events</span>
@@ -76,6 +80,7 @@ export function SocketView({ mockCount, onOpenMocks, events, query, conns, connU
           className="list-scroll"
           ref={listRef}
           onScroll={e => {
+            if (!active) return
             const el = e.currentTarget
             const distance = el.scrollHeight - el.scrollTop - el.clientHeight
             stickBottom.current = distance < 40
@@ -135,10 +140,13 @@ export function SocketView({ mockCount, onOpenMocks, events, query, conns, connU
           </tbody>
         </table>
         {sorted.length === 0 && (
-          <div className="empty">{connFilter ? 'No events for this connection yet' : 'No socket events yet'}</div>
+          <TrafficEmpty kind="socket" {...emptyState} onResetFilters={() => {
+            setConnFilter(null)
+            emptyState.onResetFilters()
+          }} />
         )}
         </div>
-        {showScrollToBottom && (
+        {sorted.length > 0 && showScrollToBottom && (
           <ScrollToBottomButton onClick={() => {
             const el = listRef.current
             if (el) el.scrollTo({ top: el.scrollHeight, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })

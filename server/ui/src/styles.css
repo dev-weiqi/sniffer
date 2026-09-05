@@ -325,6 +325,7 @@ button.danger:hover { color: var(--err); border-color: color-mix(in srgb, var(--
 
 .content { flex: 1; min-height: 0; display: flex; }
 .split { display: flex; flex: 1; min-width: 0; }
+.split[hidden] { display: none; }
 
 .list-pane { position: relative; flex: 1; min-width: 0; background: var(--bg-panel); display: flex; flex-direction: column; overflow: hidden; }
 .list-scroll { flex: 1; overflow: auto; min-height: 0; }
@@ -482,6 +483,8 @@ button.filter-btn { width: 20px; height: 20px; padding: 0; align-items: center; 
 .sys-event { color: var(--err); }
 
 .empty { padding: 48px 20px; text-align: center; color: var(--text-dim); }
+.traffic-empty strong { display: block; color: var(--text); font-weight: 600; }
+.traffic-empty p { max-width: 420px; margin: 8px auto 16px; line-height: 1.5; }
 
 /* ---------- detail ---------- */
 

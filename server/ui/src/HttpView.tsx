@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { BreakpointRule, HttpMockRule, HttpRow, PausedHit } from './state'
 import { FilterMenu } from './FilterMenu'
+import { TrafficEmpty, type TrafficEmptyProps } from './TrafficEmpty'
 import type { TrafficFilter } from './trafficFilter'
 import { copyText, fmtDuration, fmtSize, fmtTime, prettyJson, splitHighlight, splitLinks, statusClass, statusLabel, toCurl, urlParts } from './util'
 import { newRuleId } from './util'
@@ -71,7 +72,9 @@ export function ScrollToBottomButton({ onClick }: { onClick: () => void }) {
   )
 }
 
-export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlFilter, onUrlFilterChange, armedBreakpoints, onMock, onArm, onResolve, onDisarmAll, onClear }: {
+export function HttpView({ active, emptyState, mockCount, onOpenMocks, rows, query, pausedHits, urlFilter, onUrlFilterChange, armedBreakpoints, onMock, onArm, onResolve, onDisarmAll, onClear }: {
+  active: boolean
+  emptyState: TrafficEmptyProps
   rows: HttpRow[]
   query: string
   pausedHits: PausedHit[]
@@ -103,16 +106,17 @@ export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlF
   // rows arrive in chronological order; reversing yields newest-first
   const sorted = useMemo(() => (sortDesc ? [...rows].reverse() : rows), [rows, sortDesc])
   const ids = useMemo(() => sorted.map(r => r.id), [sorted])
-  useListKeys(ids, selectedId, setSelectedId)
+  useListKeys(ids, selectedId, setSelectedId, active)
   const [detailWidth, startDetailDrag] = useDetailWidth()
 
   useEffect(() => { localStorage.setItem('sniffer-sort-http', sortDesc ? 'desc' : 'asc') }, [sortDesc])
 
   useEffect(() => {
+    if (!active) return
     const el = listRef.current
     if (el && !sortDesc && stickBottom.current && !selectedId) el.scrollTop = el.scrollHeight
     if (el) setShowScrollToBottom(el.scrollHeight - el.scrollTop - el.clientHeight > 1)
-  }, [rows.length, selectedId, sortDesc])
+  }, [rows.length, selectedId, sortDesc, active])
 
   // debugger-style focus: jump to a freshly paused response, and after resolving the selected one
   // jump to the next still-paused response so you can work through them.
@@ -120,6 +124,7 @@ export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlF
   const selectedIdRef = useRef(selectedId)
   selectedIdRef.current = selectedId
   useEffect(() => {
+    if (!active) return
     const prev = seenHitIds.current
     const current = new Set(pausedHits.map(h => h.id))
     seenHitIds.current = current
@@ -132,10 +137,10 @@ export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlF
     requestAnimationFrame(() => {
       listRef.current?.querySelector('tr[data-selected]')?.scrollIntoView({ block: 'nearest' })
     })
-  }, [pausedHits])
+  }, [pausedHits, active])
 
   return (
-    <div className="split" style={{ ['--detail-w' as string]: `${detailWidth}px` }}>
+    <div className="split" hidden={!active} style={{ ['--detail-w' as string]: `${detailWidth}px` }}>
       <div className="list-pane">
         <div className="panel-toolbar">
           <span className="dim">API traffic</span>
@@ -172,6 +177,7 @@ export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlF
           className="list-scroll"
           ref={listRef}
           onScroll={e => {
+            if (!active) return
             const el = e.currentTarget
             const distance = el.scrollHeight - el.scrollTop - el.clientHeight
             stickBottom.current = distance < 40
@@ -201,9 +207,9 @@ export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlF
             ))}
           </tbody>
         </table>
-        {rows.length === 0 && pausedHits.length === 0 && <div className="empty">No requests yet — traffic appears live once the app starts</div>}
+        {rows.length === 0 && pausedHits.length === 0 && <TrafficEmpty kind="http" {...emptyState} />}
         </div>
-        {showScrollToBottom && (
+        {rows.length > 0 && showScrollToBottom && (
           <ScrollToBottomButton onClick={() => {
             const el = listRef.current
             if (el) el.scrollTo({ top: el.scrollHeight, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
@@ -211,7 +217,7 @@ export function HttpView({ mockCount, onOpenMocks, rows, query, pausedHits, urlF
         )}
       </div>
 
-      {menu && <RowMenu {...menu} onClose={() => setMenu(null)} />}
+      {active && menu && <RowMenu {...menu} onClose={() => setMenu(null)} />}
 
       {(selected || selectedHit) && <div className="pane-resizer" onMouseDown={startDetailDrag} />}
       {selectedHit

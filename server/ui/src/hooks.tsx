@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 
 /** Arrow-key selection over the visible row order; Esc clears. Skips key events from form fields. */
-export function useListKeys(ids: string[], selectedId: string | null, select: (id: string | null) => void) {
+export function useListKeys(ids: string[], selectedId: string | null, select: (id: string | null) => void, active: boolean) {
   useEffect(() => {
+    if (!active) return
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
@@ -16,12 +17,12 @@ export function useListKeys(ids: string[], selectedId: string | null, select: (i
         : i === -1 ? 0 : Math.max(0, i - 1)
       select(ids[next])
       requestAnimationFrame(() => {
-        document.querySelector('.list-scroll tr[data-selected]')?.scrollIntoView({ block: 'nearest' })
+        document.querySelector('.split:not([hidden]) .list-scroll tr[data-selected]')?.scrollIntoView({ block: 'nearest' })
       })
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [ids, selectedId, select])
+  }, [ids, selectedId, select, active])
 }
 
 /** Draggable detail-pane width, persisted across sessions. */
