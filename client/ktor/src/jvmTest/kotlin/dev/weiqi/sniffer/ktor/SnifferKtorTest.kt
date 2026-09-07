@@ -27,6 +27,7 @@ import io.ktor.client.request.post
 import io.ktor.client.request.prepareGet
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsBytes
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -36,10 +37,16 @@ import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import io.ktor.util.AttributeKey
 import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.ByteChannel
+import io.ktor.utils.io.readAvailable
+import io.ktor.utils.io.writeFully
 import io.ktor.sse.ServerSentEvent
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeout
+import java.io.IOException
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.yield
 import kotlin.coroutines.cancellation.CancellationException
@@ -52,6 +59,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class SnifferKtorTest {
@@ -326,9 +334,11 @@ class SnifferKtorTest {
     }
 
     @Test
+    @OptIn(io.ktor.utils.io.InternalAPI::class)
     fun sse_session_wrapper_reports_events_as_flow_is_collected() = runBlocking {
         val reports = captureReports()
         val session = object : SSESession {
+            override fun bodyBuffer() = "diagnostic".encodeToByteArray()
             override val coroutineContext: CoroutineContext = EmptyCoroutineContext
             override val incoming = flowOf(
                 ServerSentEvent(data = "hello", event = "message"),
@@ -344,6 +354,7 @@ class SnifferKtorTest {
         )
 
         assertEquals(EmptyCoroutineContext, wrapped.coroutineContext)
+        assertEquals("diagnostic", wrapped.bodyBuffer().decodeToString())
         assertEquals(listOf("hello", "bye"), wrapped.incoming.toList().map { it.data })
         assertTrue(
             reports.filterIsInstance<HttpResponseMsg>()
@@ -499,6 +510,82 @@ class SnifferKtorTest {
         val reports = mutableListOf<DeviceMessage>()
         setReportSink { reports += it }
         return reports
+    }
+
+    @Test
+    fun reporting_failure_does_not_replace_host_failure() = runBlocking {
+        for (failure in listOf(IllegalArgumentException("host validator"), CancellationException("host cancelled"))) {
+            setReportSink { if (it is HttpResponseMsg) error("sniffer failed") }
+            for (withSniffer in listOf(false, true)) {
+                val client = HttpClient(MockEngine { throw failure }) { if (withSniffer) install(SnifferKtor) }
+                try {
+                    val actual = runCatching { client.get("http://example.test/error") }.exceptionOrNull()
+                    // Coroutine stacktrace recovery may copy the exception and keep it as the cause.
+                    assertTrue(actual === failure || actual?.cause === failure)
+                    assertEquals(failure.message, actual?.message)
+                } finally { client.close() }
+            }
+        }
+    }
+
+    @Test
+    fun reporting_failure_does_not_replace_http_exception() = runBlocking {
+        setReportSink { if (it is HttpResponseMsg) error("sniffer failed") }
+        var original: ClientRequestException? = null
+        val throwingPlugin = createClientPlugin("HostError") {
+            on(Send) { request ->
+                val call = proceed(request)
+                throw ClientRequestException(call.response, "host error").also { original = it }
+            }
+        }
+        val client = HttpClient(MockEngine { respond("bad", status = HttpStatusCode.BadRequest) }) {
+            install(SnifferKtor)
+            install(throwingPlugin)
+        }
+        try {
+            val failure = runCatching { client.get("http://example.test/error") }.exceptionOrNull()
+            assertIs<ClientRequestException>(failure)
+            assertSame(original, failure)
+        } finally { client.close() }
+    }
+
+    @Test
+    fun raw_event_stream_survives_reporting_failure() = runBlocking {
+        val events = "data: " + "x".repeat(20000) + "\n\n"
+        setReportSink { if (it is HttpResponseMsg && it.body != null) error("sniffer failed") }
+        val client = HttpClient(MockEngine {
+            respond(ByteReadChannel(events), headers = headersOf(HttpHeaders.ContentType, "text/event-stream"))
+        }) { install(SnifferKtor) }
+        try {
+            assertEquals(events, client.prepareGet("http://example.test/events").execute { it.bodyAsText() })
+        } finally { client.close() }
+    }
+
+    @Test
+    fun raw_event_stream_preserves_transport_failure(): Unit = runBlocking {
+        val channel = ByteChannel(autoFlush = true)
+        val consumed = CompletableDeferred<Unit>()
+        val failure = IOException("connection lost")
+        val writer = launch {
+            channel.writeFully("data: one\n\n".encodeToByteArray())
+            consumed.await()
+            channel.cancel(failure)
+        }
+        val client = HttpClient(MockEngine {
+            respond(channel, headers = headersOf(HttpHeaders.ContentType, "text/event-stream"))
+        }) { install(SnifferKtor) }
+        try {
+            withTimeout(5000) {
+                client.prepareGet("http://example.test/events").execute { response ->
+                    val body = response.bodyAsChannel()
+                    val buffer = ByteArray(32)
+                    assertTrue(body.readAvailable(buffer) > 0)
+                    consumed.complete(Unit)
+                    val actual = assertFailsWith<IOException> { while (body.readAvailable(buffer) != -1) { } }
+                    assertEquals(failure.message, actual.message)
+                }
+            }
+        } finally { writer.cancel(); client.close() }
     }
 
     private fun setReportSink(sink: ((DeviceMessage) -> Unit)?) {

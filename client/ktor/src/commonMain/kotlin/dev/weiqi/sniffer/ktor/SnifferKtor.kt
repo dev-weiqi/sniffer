@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onCompletion
 import io.ktor.client.plugins.isSaved
 import io.ktor.client.plugins.sse.SSESession
+import io.ktor.client.plugins.sse.SSEClientException
 import io.ktor.http.HttpProtocolVersion
 import io.ktor.util.date.GMTDate
 import io.ktor.utils.io.ByteReadChannel
@@ -207,16 +208,31 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
     // SSE plugin sessions: observe events by swapping the pipeline subject for a delegating
     // wrapper — same SSESession type, so the SSE plugin's own Transform still accepts it.
     // Any failure falls back to the original, untouched session.
-	    client.responsePipeline.intercept(HttpResponsePipeline.Parse) { (info, body) ->
-	        val id = context.request.attributes.getOrNull(SnifferSseIdKey) ?: return@intercept
-	        if (body !is SSESession) return@intercept
-	        val wrapped = runCatching {
-	            val headersMap = context.response.headers.flattenEntries().toMap()
-	            val status = context.response.status.value
-	            snifferSseSession(id, body, headersMap, status)
-	        }.getOrNull() ?: return@intercept
-	        proceedWith(HttpResponseContainer(info, wrapped))
-	    }
+    client.responsePipeline.intercept(HttpResponsePipeline.Parse) { (info, body) ->
+        val id = context.request.attributes.getOrNull(SnifferSseIdKey) ?: return@intercept
+        val observed = if (body is SSESession) runCatching {
+            snifferSseSession(id, body, context.response.headers.flattenEntries().toMap(), context.response.status.value)
+        }.getOrDefault(body) else body
+        try {
+            proceedWith(HttpResponseContainer(info, observed))
+        } catch (e: SSEClientException) {
+            // SSE validates after Send reported headers. Ktor puts a saved response in its
+            // exception: read that replayable copy, without consuming or replacing the session.
+            e.response?.takeIf { it !== context.response }?.let { response ->
+                runCatching {
+                    val captured = capBody(response.bodyAsText())
+                    Sniffer.report(HttpResponseMsg(
+                        id = id, status = response.status.value,
+                        headers = response.headers.flattenEntries().toMap(),
+                        body = captured.body, bodySize = captured.size, bodyTruncated = captured.truncated,
+                        durationMs = (response.responseTime.timestamp - response.requestTime.timestamp).coerceAtLeast(0),
+                        mocked = false, error = null, timestamp = now(),
+                    ))
+                }
+            }
+            throw e
+        }
+    }
 
     on(Send) { request ->
         val id = newId()
@@ -302,51 +318,56 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
         val call = try {
             proceed(request)
         } catch (e: ResponseException) {
-            // reading an unsaved (streaming) error body would consume what the host may re-read
-            val responseBody = if (e.response.isSaved) runCatching { e.response.bodyAsText() }.getOrNull() else null
-            val cappedBody = capBody(responseBody)
-            Sniffer.report(
-                HttpResponseMsg(
-                    id = id, status = e.response.status.value,
-                    headers = e.response.headers.flattenEntries().toMap(),
-                    body = cappedBody.body,
-                    bodySize = cappedBody.size,
-                    bodyTruncated = cappedBody.truncated,
-                    durationMs = now() - start,
-                    mocked = false,
-                    error = e.toString(),
-                    timestamp = now(),
-                    delayedMs = injectedDelayMs,
+            runCatching {
+                // reading an unsaved (streaming) error body would consume what the host may re-read
+                val responseBody = if (e.response.isSaved) runCatching { e.response.bodyAsText() }.getOrNull() else null
+                val cappedBody = capBody(responseBody)
+                Sniffer.report(
+                    HttpResponseMsg(
+                        id = id, status = e.response.status.value,
+                        headers = e.response.headers.flattenEntries().toMap(),
+                        body = cappedBody.body,
+                        bodySize = cappedBody.size,
+                        bodyTruncated = cappedBody.truncated,
+                        durationMs = now() - start,
+                        mocked = false,
+                        error = e.toString(),
+                        timestamp = now(),
+                        delayedMs = injectedDelayMs,
+                    )
                 )
-            )
+            }
             throw e
         } catch (e: Throwable) {
-            // a validator may have rethrown a real HTTP error as a custom exception; recover the
-            // status captured in onResponse. Only a genuine transport failure leaves status null.
-            val captured = statusHolder.status
-            // same rule as the ResponseException branch: only a saved body is replayable — reading
-            // an unsaved (streaming) one would consume what the host may still re-read
-            val responseBody = statusHolder.response
-                ?.takeIf { runCatching { it.isSaved }.getOrDefault(false) }
-                ?.let { runCatching { it.bodyAsText() }.getOrNull() }
-            val cappedBody = capBody(responseBody)
-            Sniffer.report(
-                HttpResponseMsg(
-                    id = id, status = captured ?: 0, headers = statusHolder.headers,
-                    body = cappedBody.body, bodySize = cappedBody.size, bodyTruncated = cappedBody.truncated,
-                    durationMs = now() - start,
-                    mocked = false, error = if (captured == null) e.toString() else null,
-                    timestamp = now(),
-                    delayedMs = injectedDelayMs,
+            runCatching {
+                // a validator may have rethrown a real HTTP error as a custom exception; recover the
+                // status captured in onResponse. Only a genuine transport failure leaves status null.
+                val captured = statusHolder.status
+                // same rule as the ResponseException branch: only a saved body is replayable — reading
+                // an unsaved (streaming) one would consume what the host may still re-read
+                val responseBody = statusHolder.response
+                    ?.takeIf { runCatching { it.isSaved }.getOrDefault(false) }
+                    ?.let { runCatching { it.bodyAsText() }.getOrNull() }
+                val cappedBody = capBody(responseBody)
+                Sniffer.report(
+                    HttpResponseMsg(
+                        id = id, status = captured ?: 0, headers = statusHolder.headers,
+                        body = cappedBody.body, bodySize = cappedBody.size, bodyTruncated = cappedBody.truncated,
+                        durationMs = now() - start,
+                        mocked = false, error = if (captured == null) e.toString() else null,
+                        timestamp = now(),
+                        delayedMs = injectedDelayMs,
+                    )
                 )
-            )
+            }
             throw e
         }
+        // Keep the replayable call even if reporting fails after saving its original body.
+        var resultCall = call
         // fenced for the same reason: reporting must never replace or break the real response
         try {
             val durationMs = now() - start
 
-            var resultCall = call
             var respBodyRaw: String? = null
             var respStatus = call.response.status.value
             var respHeaders = call.response.headers.flattenEntries().toMap()
@@ -449,7 +470,7 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
             resultCall
         } catch (t: Throwable) {
             if (t is CancellationException || t is BreakpointAbort) throw t
-            call
+            resultCall
         }
     }
 }
@@ -475,8 +496,7 @@ internal fun snifferSseSession(
             )
         )
     }
-    return object : SSESession {
-        override val coroutineContext get() = body.coroutineContext
+    return object : SSESession by body {
         override val incoming = body.incoming
             .onEach { ev ->
                 runCatching {
@@ -535,12 +555,15 @@ private fun teeEventStream(
                     if (captured.length < MAX_BODY_CHARS) {
                         captured.append(buffer.decodeToString(0, n))
                     }
-                    report(final = false)
+                    runCatching { report(final = false) }
                 }
             }
+        } catch (t: Throwable) {
+            // Deliver the original read failure to the host instead of a successful EOF.
+            teed.cancel(t)
         } finally {
             teed.close()
-            report(final = true)
+            runCatching { report(final = true) }
         }
     }
 

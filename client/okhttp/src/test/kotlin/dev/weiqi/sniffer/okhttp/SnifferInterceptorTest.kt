@@ -4,6 +4,9 @@ import dev.weiqi.sniffer.core.BreakpointRegistry
 import dev.weiqi.sniffer.core.BreakpointResolution
 import dev.weiqi.sniffer.core.BreakpointRule
 import dev.weiqi.sniffer.core.Breakpoints
+import dev.weiqi.sniffer.core.DeviceMessage
+import dev.weiqi.sniffer.core.HttpResponseMsg
+import dev.weiqi.sniffer.core.Sniffer
 import dev.weiqi.sniffer.core.HttpMockRule
 import dev.weiqi.sniffer.core.MAX_BODY_CHARS
 import dev.weiqi.sniffer.core.MockRegistry
@@ -37,6 +40,7 @@ class SnifferInterceptorTest {
         Breakpoints.connected = false
         Breakpoints.resolveAll(BreakpointResolution.Resume())
         Thread.interrupted()
+        setReportSink(null)
     }
 
     private fun armResponseBreakpoint() =
@@ -368,6 +372,39 @@ class SnifferInterceptorTest {
             .addInterceptor(SnifferOkHttp.interceptor())
             .addInterceptor { chain -> block(chain.request()) }
             .build()
+
+    @Test
+    fun get_post_errors_preserve_body_even_when_reporting_fails() {
+        val json = """{"message":"bad request"}"""
+        for (method in listOf("GET", "POST")) {
+            for (unknownLength in listOf(false, true)) {
+                for (brokenReporter in listOf(false, true)) {
+                    val reports = mutableListOf<DeviceMessage>()
+                    setReportSink {
+                        if (brokenReporter) error("sniffer failed")
+                        reports += it
+                    }
+                    val client = clientReturning { request ->
+                        val body = if (unknownLength) UnknownLengthResponseBody("application/json".toMediaType(), json)
+                            else json.toResponseBody("application/json".toMediaType())
+                        response(request, code = 400, body = body)
+                    }
+                    val request = Request.Builder().url("http://example.test/error")
+                        .method(method, if (method == "POST") "{}".toRequestBody() else null).build()
+                    client.newCall(request).execute().use { response ->
+                        assertEquals(400, response.code)
+                        assertEquals("application/json", response.header("content-type")?.substringBefore(';'))
+                        assertEquals(json, response.body.string())
+                    }
+                    if (!brokenReporter) assertEquals(json, reports.filterIsInstance<HttpResponseMsg>().last().body)
+                }
+            }
+        }
+    }
+
+    private fun setReportSink(sink: ((DeviceMessage) -> Unit)?) {
+        Sniffer::class.java.methods.single { it.name.startsWith("setReportSinkForTests") }.invoke(Sniffer, sink)
+    }
 
     private fun response(
         request: Request,
