@@ -21,6 +21,7 @@ kotlin {
             implementation(libs.ktor.client.cio)
             implementation(libs.ktor.client.okhttp)
             implementation("io.ktor:ktor-client-auth:${libs.versions.ktor.get()}")
+            implementation("io.ktor:ktor-client-logging:${libs.versions.ktor.get()}")
         }
     }
 }

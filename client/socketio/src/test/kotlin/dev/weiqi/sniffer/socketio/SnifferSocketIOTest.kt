@@ -348,8 +348,8 @@ class SnifferSocketIOTest {
 
     @Suppress("UNCHECKED_CAST")
     private fun pushHandlers(): Map<String, (String, String) -> Unit> {
-        val method = Sniffer::class.java.methods.single { it.name.startsWith("access\$getPushHandlers") }
-        return method.invoke(null) as Map<String, (String, String) -> Unit>
+        val field = Sniffer::class.java.getDeclaredField("pushHandlers").apply { isAccessible = true }
+        return field.get(null) as Map<String, (String, String) -> Unit>
     }
 
     private data class Emitted(val event: String, val args: Array<out Any?>)

@@ -22,6 +22,7 @@ import io.ktor.client.plugins.ResponseException
 import io.ktor.client.plugins.api.Send
 import io.ktor.client.plugins.api.createClientPlugin
 import io.ktor.client.plugins.sse.SSESession
+import io.ktor.client.plugins.sse.SSEClientException
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.prepareGet
@@ -29,6 +30,7 @@ import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.bodyAsText
+import io.ktor.client.statement.HttpResponsePipeline
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -308,6 +310,29 @@ class SnifferKtorTest {
         assertEquals(200, report.status)
         assertNull(report.body)
         client.close()
+    }
+
+    @Test
+    @OptIn(io.ktor.utils.io.InternalAPI::class)
+    fun unsaved_sse_exception_is_not_consumed_by_error_capture() = runBlocking {
+        val reports = captureReports()
+        val client = HttpClient(MockEngine { respond("live body") }) { install(SnifferKtor) }
+        var original: SSEClientException? = null
+        client.responsePipeline.intercept(HttpResponsePipeline.Transform) {
+            throw SSEClientException(context.response, message = "host failure").also { original = it }
+        }
+        try {
+            client.prepareGet("http://example.test/stream") {
+                attributes.put(AttributeKey<Boolean>("SSERequestFlag"), true)
+            }.execute { response ->
+                val failure = assertFailsWith<SSEClientException> { response.body<SSESession>() }
+                assertSame(original, failure)
+                val bytes = ByteArray(32)
+                val size = failure.response!!.rawContent.readAvailable(bytes)
+                assertEquals("live body", bytes.decodeToString(0, size))
+            }
+            assertNull(reports.filterIsInstance<HttpResponseMsg>().last().body)
+        } finally { client.close() }
     }
 
     @Test

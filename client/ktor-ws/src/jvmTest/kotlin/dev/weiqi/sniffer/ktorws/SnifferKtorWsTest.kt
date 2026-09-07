@@ -78,11 +78,15 @@ class SnifferKtorWsTest {
         val wrapped = SnifferFrameInterceptor(delegate, "ws://example.test/socket")
         delegate.outgoingChannel.close()
 
-        wrapped.send(Frame.Text("after close"))
-        delay(50)
-
-        assertTrue(wrapped.outgoing.isClosedForSend)
-        delegate.terminate()
+        try {
+            wrapped.send(Frame.Text("after close"))
+            withTimeout(1000) {
+                while (!wrapped.outgoing.isClosedForSend) delay(1)
+            }
+            assertTrue(wrapped.outgoing.isClosedForSend)
+        } finally {
+            delegate.terminate()
+        }
     }
 
     @Test
@@ -153,8 +157,8 @@ class SnifferKtorWsTest {
 
     @Suppress("UNCHECKED_CAST")
     private fun pushHandlers(): Map<String, (String, String) -> Unit> {
-        val method = Sniffer::class.java.methods.single { it.name.startsWith("access\$getPushHandlers") }
-        return method.invoke(null) as Map<String, (String, String) -> Unit>
+        val field = Sniffer::class.java.getDeclaredField("pushHandlers").apply { isAccessible = true }
+        return field.get(null) as Map<String, (String, String) -> Unit>
     }
 
     @OptIn(InternalAPI::class)

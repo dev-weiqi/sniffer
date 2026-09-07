@@ -218,7 +218,12 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
         } catch (e: SSEClientException) {
             // SSE validates after Send reported headers. Ktor puts a saved response in its
             // exception: read that replayable copy, without consuming or replacing the session.
-            e.response?.takeIf { it !== context.response }?.let { response ->
+            // Ktor clears SSERequestFlag after saving. Logging may already have saved this same
+            // call, so response identity and SaveBody's isSaved flag cannot identify that copy.
+            e.response?.takeIf { response ->
+                response.call.request.attributes.getOrNull(SnifferSseIdKey) == id &&
+                    response.call.request.attributes.allKeys.none { it.name == "SSERequestFlag" }
+            }?.let { response ->
                 runCatching {
                     val captured = capBody(response.bodyAsText())
                     Sniffer.report(HttpResponseMsg(

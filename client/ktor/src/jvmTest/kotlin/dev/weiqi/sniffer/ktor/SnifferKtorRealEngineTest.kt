@@ -9,6 +9,9 @@ import io.ktor.client.engine.cio.CIO
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpResponseValidator
 import io.ktor.client.plugins.sse.SSE
+import io.ktor.client.plugins.logging.Logging
+import io.ktor.client.plugins.logging.LogLevel
+import io.ktor.client.plugins.logging.Logger
 import io.ktor.client.plugins.sse.SSEClientException
 import io.ktor.client.plugins.sse.sse
 import io.ktor.client.request.post
@@ -229,6 +232,8 @@ class SnifferKtorRealEngineTest {
         snifferFirst: Boolean = false,
         method: HttpMethod = HttpMethod.Post,
         brokenReporter: Boolean = false,
+        logging: LogLevel? = null,
+        expectSuccess: Boolean = false,
     ) {
         val url = startServer(status, chunked)
         val reports = mutableListOf<DeviceMessage>()
@@ -239,6 +244,11 @@ class SnifferKtorRealEngineTest {
         val client = HttpClient(engine) {
             if (snifferFirst) { install(SnifferKtor); install(SSE) }
             else { install(SSE); install(SnifferKtor) }
+            this.expectSuccess = expectSuccess
+            if (logging != null) install(Logging) {
+                level = logging
+                logger = object : Logger { override fun log(message: String) = Unit }
+            }
         }
         try {
             val failure = runCatching {
@@ -266,6 +276,18 @@ class SnifferKtorRealEngineTest {
     fun sse_plugin_402_preserves_error_body(): Unit = runBlocking { probeSseError(CIO, status = 402) }
 
     @Test
+    fun sse_error_body_survives_host_logging(): Unit = runBlocking {
+        for (engine in listOf(CIO, OkHttp)) {
+            for (logging in listOf(LogLevel.HEADERS, LogLevel.BODY, LogLevel.ALL)) {
+                for (chunked in listOf(false, true)) {
+                    probeSseError(engine, logging = logging, expectSuccess = true, chunked = chunked)
+                }
+            }
+            probeSseError(engine, logging = LogLevel.ALL, expectSuccess = true, brokenReporter = true)
+        }
+    }
+
+    @Test
     fun sse_error_body_survives_engine_framing_and_plugin_order(): Unit = runBlocking {
         for (engine in listOf(CIO, OkHttp)) {
             for (chunked in listOf(false, true)) {
@@ -281,7 +303,7 @@ class SnifferKtorRealEngineTest {
 
     @Test
     fun successful_sse_delivers_events_before_the_response_finishes(): Unit = runBlocking {
-        for (engine in listOf(CIO, OkHttp)) {
+        for (engine in listOf(CIO, OkHttp)) for (logging in listOf(false, true)) {
             val firstRead = CountDownLatch(1)
             val http = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
             http.createContext("/events") { exchange ->
@@ -297,7 +319,14 @@ class SnifferKtorRealEngineTest {
             server = http
             val reports = mutableListOf<DeviceMessage>()
             setReportSink { reports += it }
-            val client = HttpClient(engine) { install(SSE); install(SnifferKtor) }
+            val client = HttpClient(engine) {
+                install(SSE)
+                install(SnifferKtor)
+                if (logging) install(Logging) {
+                    level = LogLevel.ALL
+                    logger = object : Logger { override fun log(message: String) = Unit }
+                }
+            }
             try {
                 val events = mutableListOf<String?>()
                 withTimeout(5_000) {
