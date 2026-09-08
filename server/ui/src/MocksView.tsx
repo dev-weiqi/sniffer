@@ -785,6 +785,7 @@ function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed, onRecords
   imported: PushRecord[] | null
   onImported: () => void
 }) {
+  const confirm = useConfirm()
   // ponytail: push records are a UI convenience, persisted in localStorage; starred ones
   // live in a per-appId bucket so every device of the app (current and future) sees them
   const storageKey = `sniffer-push-${deviceId}`
@@ -881,7 +882,12 @@ function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed, onRecords
     <div className="mocks-md">
       <MockList rows={rows} selectedId={current?.id ?? null} onSelect={setSelected}
         onAdd={addRecord} addLabel="Add push event"
-        onClearAll={all.length > 0 ? () => { setRecords([]); setSharedRecords([]) } : undefined}
+        onClearAll={all.length > 0 ? async () => {
+          if (await confirm(`Clear all ${all.length} push events, including starred events? This cannot be undone.`, 'Clear events')) {
+            setRecords([])
+            setSharedRecords([])
+          }
+        } : undefined}
       />
       <div className="mocks-detail">
         {!current ? <div className="empty">No push events yet — add one to send a server event</div> : (

@@ -144,6 +144,31 @@ try {
   await pane.getByRole('button', { name: 'Clear filters', exact: true }).click()
   await rows.first().waitFor()
   assert.equal(await pane.locator('.conn-chip[data-active="true"]').innerText(), 'All', 'Clearing filters resets the Socket connection filter too')
+  // Clearing push events must confirm before removing device and shared records.
+  await page.evaluate(() => {
+    localStorage.setItem('sniffer-push-tab-test', JSON.stringify([{ id: 'local-push', event: 'local push', payload: '{}' }]))
+    localStorage.setItem('sniffer-push-shared-test.app', JSON.stringify([{ id: 'shared-push', event: 'shared push', payload: '{}', starred: true }]))
+  })
+  await pane.getByRole('button', { name: /Socket Mocks/ }).click()
+  const mocks = page.getByRole('dialog', { name: 'Socket mocks', exact: true })
+  await mocks.getByRole('button', { name: /Server push events/ }).click()
+  const pushRecords = () => page.evaluate(() => [
+    JSON.parse(localStorage.getItem('sniffer-push-tab-test')),
+    JSON.parse(localStorage.getItem('sniffer-push-shared-test.app')),
+  ])
+  const beforeClear = await pushRecords()
+  await mocks.getByTitle('Clear all', { exact: true }).click()
+  const confirmation = page.getByRole('alertdialog')
+  await confirmation.waitFor()
+  assert.deepEqual(await pushRecords(), beforeClear, 'Opening confirmation must not clear push records')
+  await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
+  assert.deepEqual(await pushRecords(), beforeClear, 'Cancel preserves local and shared push records')
+  await mocks.getByTitle('Clear all', { exact: true }).click()
+  await confirmation.getByRole('button', { name: 'Clear events', exact: true }).click()
+  await mocks.getByText('No push events yet', { exact: false }).waitFor()
+  assert.deepEqual(await pushRecords(), [[], []], 'Confirm clears local and shared push records')
+  assert.equal(await mocks.getByTitle('Clear all', { exact: true }).count(), 0)
+  await mocks.getByTitle('Close', { exact: true }).click()
   stream.send(JSON.stringify({ type: 'entries-cleared' }))
   for (const [name, message] of [[/API/, 'Waiting for requests'], [/Socket/, 'Waiting for socket events']]) {
     await switchTo(name)
@@ -163,7 +188,7 @@ try {
   stream.close()
   await pane.getByText('Monitor disconnected', { exact: true }).waitFor()
   assert.deepEqual(errors, [], 'No browser errors')
-  console.log('PASS: tab state, keyboard isolation, background traffic, and actionable empty states')
+  console.log('PASS: tab state, keyboard isolation, background traffic, push clear confirmation, and actionable empty states')
 } catch (error) {
   if (page) console.error(await page.locator('.split:visible').innerText())
   throw error
