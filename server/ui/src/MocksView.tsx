@@ -227,6 +227,7 @@ export function MocksView({ scope, deviceId, appId, mocks, conns, pendingRule, p
   const [saved, setSaved] = useState(false)
   const [showPlaceholders, setShowPlaceholders] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
+  const [importResult, setImportResult] = useState<{ http: number; socket: number; push: number } | null>(null)
   const [exportPushRecords, setExportPushRecords] = useState<PushRecord[]>([])
   // reopening the panel restores the last selection; a stale rule id resolves to "nothing selected"
   const [selHttp, setSelHttp] = useState<string | null>(() => loadSelection().http ?? null)
@@ -309,7 +310,8 @@ export function MocksView({ scope, deviceId, appId, mocks, conns, pendingRule, p
     if (!dirty || !deviceId) return
     const t = setTimeout(() => {
       api.saveMocks(deviceId, orderForSync(draft))
-        .then(() => {
+        .then(response => {
+          if (!response.ok) throw new Error('Could not save mock rules')
           setDirty(false)
           setSaved(true)
           setTimeout(() => setSaved(false), 1200)
@@ -355,6 +357,7 @@ export function MocksView({ scope, deviceId, appId, mocks, conns, pendingRule, p
       }
       // push records live in the panel's localStorage, not in the synced mock store
       if (v.push.length > 0) setPushImport(importedCopies(v.push, newRuleId))
+      setImportResult({ http: v.http.length, socket: v.socket.length, push: v.push.length })
     }).catch(() => alert('Not a valid mock rules JSON file'))
   }
 
@@ -502,19 +505,19 @@ export function MocksView({ scope, deviceId, appId, mocks, conns, pendingRule, p
           </div>
         )}
 
-        {scope === 'socket' && socketTab === 'push' && (
-          <PushEventPanel
-            conns={conns}
-            deviceId={deviceId}
-            appId={appId}
-            prefill={pushPrefill}
-            onConsumed={onPendingConsumed}
-            onRecordsSnapshot={setExportPushRecords}
-            onCountChange={setPushCount}
-            imported={pushImport}
-            onImported={onPushImported}
-          />
-        )}
+        {/* Keep push storage active for imports and exports from every tab. */}
+        <PushEventPanel
+          active={scope === 'socket' && socketTab === 'push'}
+          conns={conns}
+          deviceId={deviceId}
+          appId={appId}
+          prefill={pushPrefill}
+          onConsumed={onPendingConsumed}
+          onRecordsSnapshot={setExportPushRecords}
+          onCountChange={setPushCount}
+          imported={pushImport}
+          onImported={onPushImported}
+        />
 
         <div className="mocks-modal-foot">
           <span className="dim">{dirty ? 'Saving…' : saved ? 'Saved ✓' : 'Synced'}</span>
@@ -537,7 +540,41 @@ export function MocksView({ scope, deviceId, appId, mocks, conns, pendingRule, p
           onExport={exportRules}
         />
       )}
+      {importResult && !dirty && !pushImport && (
+        <ImportResultModal counts={importResult} onClose={() => setImportResult(null)} />
+      )}
     </div>
+  )
+}
+
+function ImportResultModal({ counts, onClose }: {
+  counts: { http: number; socket: number; push: number }
+  onClose: () => void
+}) {
+  const ref = useRef<HTMLDialogElement>(null)
+  useEffect(() => {
+    const dialog = ref.current!
+    dialog.showModal()
+    return () => dialog.close()
+  }, [])
+
+  return (
+    <dialog ref={ref} className="modal import-result" aria-labelledby="import-result-title"
+      aria-describedby="import-result-description" onCancel={onClose}
+      onMouseDown={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+      <span className="import-result-check" aria-hidden="true">✓</span>
+      <h2 id="import-result-title">Import complete</h2>
+      <p id="import-result-description" className="dim">Items have been added to this device.</p>
+      <dl className="import-result-counts">
+        <div><dt>HTTP rules</dt><dd>× {counts.http}</dd></div>
+        <div><dt>Socket rules</dt><dd>× {counts.socket}</dd></div>
+        <div><dt>Push events</dt><dd>× {counts.push}</dd></div>
+      </dl>
+      <div className="modal-actions">
+        <span className="dim">{counts.http + counts.socket + counts.push} items imported</span>
+        <button className="modal-primary" autoFocus onClick={onClose}>Done</button>
+      </div>
+    </dialog>
   )
 }
 
@@ -774,7 +811,8 @@ function ExportRulesModal({ source, onCancel, onExport }: {
 
 type PushRecord = PushEventRule
 
-function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed, onRecordsSnapshot, onCountChange, imported, onImported }: {
+function PushEventPanel({ active, conns, deviceId, appId, prefill, onConsumed, onRecordsSnapshot, onCountChange, imported, onImported }: {
+  active: boolean
   conns: SocketConn[]
   deviceId: string
   appId: string | null
@@ -879,7 +917,7 @@ function PushEventPanel({ conns, deviceId, appId, prefill, onConsumed, onRecords
   }
 
   return (
-    <div className="mocks-md">
+    <div className="mocks-md" style={active ? undefined : { display: 'none' }}>
       <MockList rows={rows} selectedId={current?.id ?? null} onSelect={setSelected}
         onAdd={addRecord} addLabel="Add push event"
         onClearAll={all.length > 0 ? async () => {

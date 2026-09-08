@@ -52,7 +52,15 @@ try {
       ],
     }))
   })
-  await page.route('**/api/**', route => route.fulfill({ json: { checks: [] } }))
+  let savedMocks = { http: [], socket: [] }
+  await page.route('**/api/**', async route => {
+    if (route.request().url().endsWith('/api/mocks')) {
+      const { http, socket } = route.request().postDataJSON()
+      savedMocks = { http, socket }
+      stream.send(JSON.stringify({ type: 'mocks-changed', deviceId, mocks: savedMocks }))
+    }
+    await route.fulfill({ json: { checks: [] } })
+  })
   await page.goto(`http://127.0.0.1:${server.httpServer.address().port}`)
   const pane = page.locator('.split:visible')
   const rows = pane.locator('tbody tr')
@@ -144,6 +152,46 @@ try {
   await pane.getByRole('button', { name: 'Clear filters', exact: true }).click()
   await rows.first().waitFor()
   assert.equal(await pane.locator('.conn-chip[data-active="true"]').innerText(), 'All', 'Clearing filters resets the Socket connection filter too')
+  // Importing from HTTP must save all categories before ever visiting the Socket panel.
+  await switchTo(/API/)
+  await pane.getByRole('button', { name: /HTTP Mocks/ }).click()
+  const httpMocks = page.getByRole('dialog', { name: 'HTTP mock rules', exact: true })
+  const imported = {
+    http: [{ id: 'import-http', enabled: true, method: 'GET', urlPattern: '/imported', status: 200, headers: {}, body: '{}', delayMs: 0, delayOnly: false }],
+    socket: [{ id: 'import-socket', enabled: true, transport: 'socketio', event: 'imported:ack', ackPayload: '[true]', delayMs: 0 }],
+    push: [{ id: 'import-push', target: 'c1', event: 'imported:push', payload: '{}' }],
+  }
+  await httpMocks.locator('input[type=file]').setInputFiles({ name: 'all-rules.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(imported)) })
+  await httpMocks.getByText('Saved ✓', { exact: true }).waitFor()
+  const importResult = page.getByRole('dialog', { name: 'Import complete', exact: true })
+  await importResult.waitFor()
+  assert.deepEqual(await importResult.locator('dd').allTextContents(), ['× 1', '× 1', '× 1'])
+  await importResult.getByText('3 items imported', { exact: true }).waitFor()
+  assert.equal(await importResult.getByRole('button', { name: 'Done' }).evaluate(el => el === document.activeElement), true)
+  if (process.env.SNIFFER_IMPORT_SCREENSHOT) await page.screenshot({ path: process.env.SNIFFER_IMPORT_SCREENSHOT })
+  await importResult.getByRole('button', { name: 'Done' }).click()
+  assert.equal(await httpMocks.isVisible(), true, 'Done preserves the mock editor')
+  assert.equal(savedMocks.http.length, 1)
+  assert.equal(savedMocks.socket[0].event, 'imported:ack', 'HTTP import synchronizes Socket rules')
+  const storedPush = await page.evaluate(() => JSON.parse(localStorage.getItem('sniffer-push-tab-test') ?? '[]'))
+  assert.equal(storedPush.length, 1, 'HTTP import persists push events without opening the Push tab')
+  assert.equal(storedPush[0].event, 'imported:push')
+  await httpMocks.getByTitle('Close', { exact: true }).click()
+  await switchTo(/Socket/)
+  await pane.getByRole('button', { name: /Socket Mocks/ }).click()
+  const importedSocket = page.getByRole('dialog', { name: 'Socket mocks', exact: true })
+  await importedSocket.getByText('imported:ack', { exact: true }).waitFor()
+  await importedSocket.getByRole('button', { name: /Server push events/ }).click()
+  await importedSocket.getByText('imported:push', { exact: true }).waitFor()
+  // A second, push-only import reports this file's counts, including zero categories.
+  await importedSocket.locator('input[type=file]').setInputFiles({ name: 'push.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ push: imported.push })) })
+  await importResult.waitFor()
+  assert.deepEqual(await importResult.locator('dd').allTextContents(), ['× 0', '× 0', '× 1'])
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('sniffer-push-tab-test')).length), 2)
+  await page.keyboard.press('Escape')
+  await importResult.waitFor({ state: 'hidden' })
+  assert.equal(await importedSocket.isVisible(), true, 'Escape dismisses only the import result')
+  await importedSocket.getByTitle('Close', { exact: true }).click()
   // Clearing push events must confirm before removing device and shared records.
   await page.evaluate(() => {
     localStorage.setItem('sniffer-push-tab-test', JSON.stringify([{ id: 'local-push', event: 'local push', payload: '{}' }]))
@@ -188,7 +236,7 @@ try {
   stream.close()
   await pane.getByText('Monitor disconnected', { exact: true }).waitFor()
   assert.deepEqual(errors, [], 'No browser errors')
-  console.log('PASS: tab state, keyboard isolation, background traffic, push clear confirmation, and actionable empty states')
+  console.log('PASS: tab state, keyboard isolation, background traffic, cross-tab import results, push clear confirmation, and actionable empty states')
 } catch (error) {
   if (page) console.error(await page.locator('.split:visible').innerText())
   throw error
