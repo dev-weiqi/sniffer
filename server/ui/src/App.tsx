@@ -479,13 +479,20 @@ export default function App() {
                   </div>
                   <div className="settings-version-actions">
                     <span className="mono">{APP_VERSION}</span>
-                    <button className="ghost settings-version-check"
-                      onClick={() => void checkForUpdate(true)} disabled={updateCheck === 'checking'}>
-                      {updateCheck === 'checking' ? 'Checking…' : 'Check for updates'}
-                    </button>
-                    {updateCheck === 'current' && <span className="settings-version-note" data-status="ok">Up to date</span>}
-                    {updateCheck === 'failed' && <span className="settings-version-note" data-status="error">Couldn’t check for updates</span>}
-                    {updateCheck === 'unsupported' && <span className="settings-version-note">Desktop app only</span>}
+                    <div className="settings-version-status">
+                      <span className="settings-version-note" role="status"
+                        data-status={updateCheck === 'current' ? 'ok' : updateCheck === 'failed' ? 'error' : undefined}>
+                        {updateCheck === 'checking' ? 'Checking…' : updateCheck === 'current' ? 'Up to date'
+                          : updateCheck === 'failed' ? 'Couldn’t check for updates' : updateCheck === 'unsupported' ? 'Desktop app only' : 'Not checked yet'}
+                      </span>
+                      <button className="settings-version-check" title="Check for updates" aria-label="Check for updates"
+                        onClick={() => void checkForUpdate(true)} disabled={updateCheck === 'checking'}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M21 12a9 9 0 1 1-2.64-6.36L21 8M21 3v5h-5" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div className="settings-port">

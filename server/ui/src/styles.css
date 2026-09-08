@@ -792,9 +792,16 @@ button.add { margin-top: 2px; }
   display: grid; grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px; align-items: start;
 }
-.settings-version-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
-.settings-version-check { padding: 1px 0; border: 0; color: var(--accent); font-size: 12px; }
-.settings-version-check:hover { color: var(--accent); border: 0; text-decoration: underline; }
+.settings-version-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+.settings-version-status { display: flex; align-items: center; gap: 9px; }
+.settings-version-note { max-width: 112px; text-align: right; }
+.settings-version-check {
+  display: grid; place-items: center; flex: none; width: 30px; height: 28px; padding: 5px;
+  color: var(--accent); background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); border-radius: 6px;
+}
+.settings-version-check:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
+.settings-version-check:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .settings-version-note[data-status="ok"] { color: var(--ok) !important; }
 .settings-version-note[data-status="error"] { color: var(--err) !important; }
 .settings-version-row strong,
