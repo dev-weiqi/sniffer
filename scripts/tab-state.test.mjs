@@ -191,6 +191,45 @@ try {
   await page.keyboard.press('Escape')
   await importResult.waitFor({ state: 'hidden' })
   assert.equal(await importedSocket.isVisible(), true, 'Escape dismisses only the import result')
+  // Export selection persists across categories; the download contains only selected items.
+  await importedSocket.getByRole('button', { name: 'Export', exact: true }).click()
+  const exportDialog = page.getByRole('dialog', { name: 'Export rules', exact: true })
+  await exportDialog.getByText('Selected 4 / 4 items', { exact: true }).waitFor()
+  await exportDialog.getByRole('button', { name: 'Deselect all', exact: true }).click()
+  assert.equal(await exportDialog.getByRole('button', { name: 'Export (0)', exact: true }).isDisabled(), true)
+  await exportDialog.getByRole('checkbox', { name: 'Select all HTTP rules', exact: true }).check()
+  await exportDialog.getByRole('button', { name: 'Select all', exact: true }).click()
+  await exportDialog.getByRole('tab', { name: /Socket rules/ }).click()
+  await exportDialog.getByRole('checkbox', { name: 'Export imported:ack', exact: true }).uncheck()
+  await exportDialog.getByRole('tab', { name: /Push events/ }).click()
+  const pushItems = exportDialog.getByRole('checkbox', { name: 'Export imported:push', exact: true })
+  await pushItems.first().uncheck()
+  assert.equal(await exportDialog.getByRole('checkbox', { name: 'Select all Push events' }).evaluate(el => el.indeterminate), true)
+  await exportDialog.getByRole('tab', { name: /HTTP rules/ }).click()
+  assert.equal(await exportDialog.getByRole('checkbox', { name: 'Export /imported', exact: true }).isChecked(), true)
+  await page.keyboard.press('End')
+  assert.equal(await exportDialog.getByRole('tab', { name: /Push events/ }).getAttribute('aria-selected'), 'true')
+  assert.equal(await pushItems.first().isChecked(), false, 'Switching categories preserves item selection')
+  const expectedPush = await page.evaluate(() => JSON.parse(localStorage.getItem('sniffer-push-tab-test'))[1])
+  if (process.env.SNIFFER_EXPORT_SCREENSHOT) {
+    await page.screenshot({ path: process.env.SNIFFER_EXPORT_SCREENSHOT })
+    await page.evaluate(() => document.documentElement.dataset.theme = 'dark')
+    await page.evaluate(() => document.getAnimations().forEach(animation => animation.finish()))
+    await page.screenshot({ path: process.env.SNIFFER_EXPORT_SCREENSHOT.replace('.png', '-dark.png') })
+  }
+  const downloadReady = page.waitForEvent('download')
+  await exportDialog.getByRole('button', { name: 'Export (2)', exact: true }).click()
+  const download = await downloadReady
+  const chunks = []
+  for await (const chunk of await download.createReadStream()) chunks.push(chunk)
+  const exported = JSON.parse(Buffer.concat(chunks).toString())
+  assert.deepEqual(exported, { http: savedMocks.http, socket: [], push: [expectedPush] }, 'Downloaded JSON contains precisely the selected rules and original fields')
+  assert.equal(await importedSocket.isVisible(), true, 'Export preserves the mock editor')
+  await importedSocket.getByRole('button', { name: 'Export', exact: true }).click()
+  await exportDialog.getByText('Selected 4 / 4 items', { exact: true }).waitFor()
+  await page.keyboard.press('Escape')
+  await exportDialog.waitFor({ state: 'hidden' })
+  assert.equal(await importedSocket.isVisible(), true, 'Escape dismisses only the export dialog')
   await importedSocket.getByTitle('Close', { exact: true }).click()
   // Clearing push events must confirm before removing device and shared records.
   await page.evaluate(() => {
@@ -216,6 +255,11 @@ try {
   await mocks.getByText('No push events yet', { exact: false }).waitFor()
   assert.deepEqual(await pushRecords(), [[], []], 'Confirm clears local and shared push records')
   assert.equal(await mocks.getByTitle('Clear all', { exact: true }).count(), 0)
+  await mocks.getByRole('button', { name: 'Export', exact: true }).click()
+  await exportDialog.getByRole('tab', { name: /Push events/ }).click()
+  await exportDialog.getByText('No push events to export.', { exact: true }).waitFor()
+  assert.equal(await exportDialog.getByRole('checkbox', { name: 'Select all Push events' }).isDisabled(), true)
+  await exportDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
   await mocks.getByTitle('Close', { exact: true }).click()
   stream.send(JSON.stringify({ type: 'entries-cleared' }))
   for (const [name, message] of [[/API/, 'Waiting for requests'], [/Socket/, 'Waiting for socket events']]) {
@@ -236,7 +280,7 @@ try {
   stream.close()
   await pane.getByText('Monitor disconnected', { exact: true }).waitFor()
   assert.deepEqual(errors, [], 'No browser errors')
-  console.log('PASS: tab state, keyboard isolation, background traffic, cross-tab import results, push clear confirmation, and actionable empty states')
+  console.log('PASS: tab state, keyboard isolation, background traffic, cross-tab import results, per-item exports, push clear confirmation, and actionable empty states')
 } catch (error) {
   if (page) console.error(await page.locator('.split:visible').innerText())
   throw error

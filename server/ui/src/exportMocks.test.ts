@@ -84,14 +84,19 @@ assertIds(full.push, ['push-1', 'push-2'], 'full push export')
 assert(full.http[1].enabled === false, 'exports disabled HTTP rules too')
 
 const partial = buildExportRules(source, {
-  http: true,
-  socket: false,
-  push: true,
+  http: new Set(['http-2']),
+  socket: new Set(['socket-1']),
+  push: new Set(['push-2']),
 })
-assertIds(partial.http, ['http-1', 'http-2'], 'category-selected HTTP export')
-assertIds(partial.socket, [], 'unselected socket category is omitted')
-assertIds(partial.push, ['push-1', 'push-2'], 'category-selected push export')
-assert(partial.http[1].enabled === false, 'category export includes disabled rules too')
+assertIds(partial.http, ['http-2'], 'only selected HTTP items are exported')
+assertIds(partial.socket, ['socket-1'], 'only selected Socket items are exported')
+assertIds(partial.push, ['push-2'], 'only selected Push items are exported')
+assert(partial.http[0] === source.http[1] && partial.socket[0] === source.socket[0] && partial.push[0] === source.push[1],
+  'selection preserves complete rule data, including enabled and starred flags')
+assert(countImportedRules(buildExportRules(source, { http: new Set(), socket: new Set(), push: new Set() })) === 0,
+  'deselecting every item exports no rules')
+assertIds(buildExportRules(source, { ...fullSelection, http: new Set(['http-2', 'missing', 'http-1']) }).http,
+  ['http-1', 'http-2'], 'selection preserves source order and ignores stale IDs')
 
 const empty = buildExportRules({ http: [], socket: [], push: [] },
   createFullExportSelection({ http: [], socket: [], push: [] }))
@@ -111,7 +116,7 @@ assertIds(roundTrip!.push, ['push-1', 'push-2'], 'push events survive a round tr
 assert(countImportedRules(roundTrip!) === 6, 'counts every imported rule')
 
 // a file holding only push events still carries rules -- importing it must not be a no-op
-const pushOnly = parseImportedRules(JSON.stringify(buildExportRules(source, { http: false, socket: false, push: true })))
+const pushOnly = parseImportedRules(JSON.stringify(buildExportRules(source, { http: new Set(), socket: new Set(), push: fullSelection.push })))
 assert(countImportedRules(pushOnly!) === 2, 'a push-only export is not empty on import')
 
 // missing categories default to empty rather than throwing (older files, hand-edited files)

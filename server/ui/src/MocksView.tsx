@@ -4,7 +4,7 @@ import { api } from './state'
 import { newRuleId, prettyJson, prettySocketRule, unwrapJsonString, wrapJsonString } from './util'
 import { applyOrder, byOrder, loadIds, loadOrder, orderOf, saveIds, saveOrder } from './mockOrder'
 import { pointAt, resolvePushTarget } from './pushTarget'
-import { buildExportRules, countImportedRules, countSelectedRules, createFullExportSelection, importedCopies, parseImportedRules, type ExportRuleSelection, type ExportRulesSource, type PushEventRule } from './exportMocks'
+import { buildExportRules, countImportedRules, createFullExportSelection, importedCopies, parseImportedRules, type ExportRuleSelection, type ExportRulesSource, type PushEventRule } from './exportMocks'
 import { useConfirm } from './Confirm'
 
 type PushPrefill = { connectionId: string; event: string; payload: string }
@@ -650,50 +650,29 @@ function MockList({ rows, selectedId, onSelect, onToggle, onToggleAll, onAdd, ad
 }
 
 type ExportCategory = {
-  key: 'http' | 'socket' | 'push'
+  key: keyof ExportRuleSelection
   title: string
-  count: number
+  rows: MockRow[]
 }
 
 function exportCategories(source: ExportRulesSource): ExportCategory[] {
   return [
-    {
-      key: 'http',
-      title: 'HTTP rules',
-      count: source.http.length,
-    },
-    {
-      key: 'socket',
-      title: 'Socket rules',
-      count: source.socket.length,
-    },
-    {
-      key: 'push',
-      title: 'Server push events',
-      count: source.push.length,
-    },
+    { key: 'http', title: 'HTTP rules', rows: source.http.map(r => ({
+      id: r.id, label: r.name || r.urlPattern || '(new rule)',
+      sub: `${r.method ?? 'ANY'} ${r.urlPattern}`, badge: String(r.status),
+    })) },
+    { key: 'socket', title: 'Socket rules', rows: source.socket.map(r => ({
+      id: r.id, label: r.name || r.event || '(new rule)', sub: r.event, badge: r.transport,
+    })) },
+    { key: 'push', title: 'Push events', rows: source.push.map(r => ({
+      id: r.id, label: r.name || r.event || '(new event)', sub: r.event, badge: 'push',
+    })) },
   ]
 }
 
-type MutableExportRuleSelection = {
-  http: boolean
-  socket: boolean
-  push: boolean
-}
-
-function toMutableSelection(selection: ExportRuleSelection): MutableExportRuleSelection {
-  return { ...selection }
-}
-
-function emptyExportSelection(): MutableExportRuleSelection {
-  return { http: false, socket: false, push: false }
-}
-
-function selectionHas(selection: MutableExportRuleSelection, category: ExportCategory): boolean {
-  return selection[category.key]
-}
-
-function SelectAllCheckbox({ checked, indeterminate, onChange }: {
+function SelectAllCheckbox({ checked, indeterminate, disabled, label, onChange }: {
+  disabled: boolean
+  label: string
   checked: boolean
   indeterminate: boolean
   onChange: (checked: boolean) => void
@@ -710,7 +689,8 @@ function SelectAllCheckbox({ checked, indeterminate, onChange }: {
       type="checkbox"
       checked={checked}
       onChange={e => onChange(e.target.checked)}
-      aria-label="Select all rules"
+      aria-label={label}
+      disabled={disabled}
     />
   )
 }
@@ -720,92 +700,92 @@ function ExportRulesModal({ source, onCancel, onExport }: {
   onCancel: () => void
   onExport: (selection: ExportRuleSelection) => void
 }) {
-  const [selection, setSelection] = useState<MutableExportRuleSelection>(() =>
-    toMutableSelection(createFullExportSelection(source)))
+  const [selection, setSelection] = useState(() => createFullExportSelection(source))
+  const [activeKey, setActiveKey] = useState<keyof ExportRuleSelection>('http')
   const categories = exportCategories(source)
-  const selectedCount = countSelectedRules(selection)
-  const allSelected = selectedCount === categories.length
-  const partiallySelected = selectedCount > 0 && selectedCount < categories.length
+  const active = categories.find(c => c.key === activeKey)!
+  const selected = buildExportRules(source, selection)
+  const selectedCount = countImportedRules(selected)
+  const totalCount = countImportedRules(source)
+  const allSelected = selectedCount === totalCount
+  const activeCount = selected[activeKey].length
+  const ref = useRef<HTMLDialogElement>(null)
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onCancel()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onCancel])
+    const dialog = ref.current!
+    dialog.showModal()
+    return () => dialog.close()
+  }, [])
 
-  const setAll = (checked: boolean) => {
-    setSelection(checked ? toMutableSelection(createFullExportSelection(source)) : emptyExportSelection())
-  }
-
-  const setCategory = (category: ExportCategory, checked: boolean) => {
+  const setItem = (id: string, checked: boolean) => {
     setSelection(current => {
-      const next = toMutableSelection(current)
-      next[category.key] = checked
-      return next
+      const next = new Set(current[activeKey])
+      if (checked) next.add(id)
+      else next.delete(id)
+      return { ...current, [activeKey]: next }
     })
   }
 
-  const toggleCategory = (category: ExportCategory) => setCategory(category, !selectionHas(selection, category))
-  const countLabel = (count: number) => `${count} ${count === 1 ? 'rule' : 'rules'}`
-
   return (
-    <div className="modal-backdrop" onMouseDown={onCancel}>
-      <div className="modal export-modal" role="dialog" aria-modal="true" aria-labelledby="export-rules-title"
-        onMouseDown={e => e.stopPropagation()}>
-        <div className="export-modal-head">
-          <h2 id="export-rules-title">Export rules</h2>
-        </div>
-
-        <div className="export-table-actions">
-          <label className="field checkbox-field">
-            <SelectAllCheckbox checked={allSelected} indeterminate={partiallySelected} onChange={setAll} />
-            All
-          </label>
-        </div>
-
-        <div className="export-table-wrap">
-          <table className="grid export-grid">
-            <thead>
-              <tr>
-                <th></th>
-                <th>Rule</th>
-              </tr>
-            </thead>
-            <tbody>
-              {categories.map(category => (
-                <tr key={category.key} className="export-category-row"
-                  data-selected={selectionHas(selection, category) || undefined}
-                  onClick={() => toggleCategory(category)}>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={selectionHas(selection, category)}
-                      onClick={e => e.stopPropagation()}
-                      onChange={e => setCategory(category, e.target.checked)}
-                      aria-label={`Export ${category.title}`}
-                    />
-                  </td>
-                  <td className="export-rule-cell">
-                    <span className="export-rule-name">{category.title}</span>
-                    <span className="dim">{countLabel(category.count)}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="modal-actions">
-          <button className="ghost" onClick={onCancel}>Cancel</button>
-          <button className="modal-primary" disabled={selectedCount === 0} autoFocus onClick={() => onExport(selection)}>Export</button>
-        </div>
+    <dialog ref={ref} className="modal export-modal" aria-labelledby="export-rules-title"
+      onCancel={onCancel} onMouseDown={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+      <header className="export-modal-head">
+        <h2 id="export-rules-title">Export rules</h2>
+        <p className="dim">Choose items from any category to export.</p>
+      </header>
+      <div className="export-toolbar">
+        <button disabled={totalCount === 0} onClick={() => setSelection(allSelected
+          ? { http: new Set(), socket: new Set(), push: new Set() }
+          : createFullExportSelection(source))}>
+          {allSelected ? 'Deselect all' : 'Select all'}
+        </button>
+        <span aria-live="polite">Selected {selectedCount} / {totalCount} items</span>
       </div>
-    </div>
+      <div className="export-content">
+        <div className="export-sidebar" role="tablist" aria-label="Rule categories" aria-orientation="vertical">
+          {categories.map((category, index) => (
+            <button key={category.key} role="tab" id={`export-tab-${category.key}`}
+              aria-controls="export-category-panel" aria-selected={activeKey === category.key}
+              tabIndex={activeKey === category.key ? 0 : -1}
+              onClick={() => setActiveKey(category.key)} onKeyDown={e => {
+                if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) return
+                e.preventDefault()
+                const next = categories[e.key === 'Home' ? 0 : e.key === 'End' ? categories.length - 1
+                  : (index + (e.key === 'ArrowDown' ? 1 : categories.length - 1)) % categories.length]
+                setActiveKey(next.key)
+                document.getElementById(`export-tab-${next.key}`)?.focus()
+              }}>
+              <span>{category.title}</span><small>{selected[category.key].length} / {category.rows.length}</small>
+            </button>
+          ))}
+        </div>
+        <section className="export-items" role="tabpanel" id="export-category-panel" aria-labelledby={`export-tab-${activeKey}`}>
+          <label className="export-category-head">
+            <SelectAllCheckbox checked={active.rows.length > 0 && activeCount === active.rows.length}
+              indeterminate={activeCount > 0 && activeCount < active.rows.length}
+              disabled={active.rows.length === 0} label={`Select all ${active.title}`}
+              onChange={checked => setSelection(current => ({
+                ...current, [activeKey]: new Set(checked ? active.rows.map(r => r.id) : []),
+              }))} />
+            <strong>{active.title}</strong><span className="dim">{activeCount} / {active.rows.length}</span>
+          </label>
+          {active.rows.map(row => (
+            <label key={row.id} className="export-item">
+              <input type="checkbox" checked={selection[activeKey].has(row.id)}
+                aria-label={`Export ${row.label}`} onChange={e => setItem(row.id, e.target.checked)} />
+              <span className="export-item-copy"><span>{row.label}</span><small className="dim mono">{row.sub}</small></span>
+              <span className="mocks-list-badge">{row.badge}</span>
+            </label>
+          ))}
+          {active.rows.length === 0 && <p className="empty">No {active.title.toLowerCase()} to export.</p>}
+        </section>
+      </div>
+      <footer className="modal-actions">
+        <span className="dim export-summary">{categories.map(c => `${c.title} × ${selected[c.key].length}`).join(' · ')}</span>
+        <button className="ghost" onClick={onCancel}>Cancel</button>
+        <button className="modal-primary" disabled={selectedCount === 0} onClick={() => onExport(selection)}>Export ({selectedCount})</button>
+      </footer>
+    </dialog>
   )
 }
 

@@ -16,29 +16,25 @@ export type ExportRulesSource = Mocks & {
 }
 
 export type ExportRuleSelection = {
-  http: boolean
-  socket: boolean
-  push: boolean
+  http: Set<string>
+  socket: Set<string>
+  push: Set<string>
 }
 
 export function createFullExportSelection(source: ExportRulesSource): ExportRuleSelection {
   return {
-    http: true,
-    socket: true,
-    push: true,
+    http: new Set(source.http.map(r => r.id)),
+    socket: new Set(source.socket.map(r => r.id)),
+    push: new Set(source.push.map(r => r.id)),
   }
 }
 
 export function buildExportRules(source: ExportRulesSource, selection: ExportRuleSelection): ExportRulesSource {
   return {
-    http: selection.http ? source.http : [],
-    socket: selection.socket ? source.socket : [],
-    push: selection.push ? source.push : [],
+    http: source.http.filter(r => selection.http.has(r.id)),
+    socket: source.socket.filter(r => selection.socket.has(r.id)),
+    push: source.push.filter(r => selection.push.has(r.id)),
   }
-}
-
-export function countSelectedRules(selection: ExportRuleSelection): number {
-  return Number(selection.http) + Number(selection.socket) + Number(selection.push)
 }
 
 /** Parse an exported rules file. Returns null when the text is not a rules JSON object.

@@ -1016,69 +1016,48 @@ button.modal-primary:hover {
 }
 .import-result-counts dd { font: 16px ui-monospace, monospace; }
 .import-result .modal-actions { justify-content: space-between; align-items: center; }
-.export-modal {
-  width: min(820px, calc(100vw - 40px));
-  max-height: 86vh;
-  display: flex;
-  flex-direction: column;
+.modal.export-modal {
+  width: min(960px, calc(100vw - 40px)); height: min(620px, 86vh);
+  margin: auto; padding: 0; overflow: hidden;
 }
-.export-modal-head {
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
+.export-modal[open] { display: flex; flex-direction: column; }
+.export-modal::backdrop { background: rgb(0 0 0 / 0.35); }
+.export-modal-head { padding: 20px 24px; border-bottom: 1px solid var(--border); }
+.export-modal-head h2 { font-size: 18px; margin-bottom: 6px; }
+.export-modal-head p { font-size: 12px; }
+.export-toolbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 13px 24px; border-bottom: 1px solid var(--border); background: var(--bg-alt); font-size: 13px;
 }
-.export-modal-head h2 {
-  font-size: 16px;
+.export-content { display: grid; grid-template-columns: 220px minmax(0, 1fr); flex: 1; min-height: 0; }
+.export-sidebar { padding: 16px 10px; border-right: 1px solid var(--border); background: var(--bg-alt); overflow: auto; }
+.export-sidebar button {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 14px 10px; margin-bottom: 5px; background: transparent; border-color: transparent; font-size: 13px;
 }
-.export-table-actions {
-  display: flex; align-items: center; gap: 10px;
-  margin-bottom: 10px;
-}
-.export-table-wrap {
-  overflow: auto;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-.export-grid th,
-.export-grid td {
-  vertical-align: top;
-}
-.export-grid th:first-child,
-.export-grid td:first-child {
-  width: 42px;
-  text-align: center;
-}
-.export-grid input[type="checkbox"] {
-  accent-color: var(--accent);
-}
-.export-rule-cell {
-  min-width: 260px;
-  white-space: normal;
-}
-.export-rule-name {
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-.export-category-row td {
-  background: var(--bg-alt);
-  font-weight: 650;
-  text-align: left;
-}
-table.grid tbody tr.export-category-row:hover td {
-  background: var(--hover);
-}
-table.grid tbody tr.export-category-row[data-selected] td {
-  background: var(--accent-soft);
-}
-.export-category-row .dim {
-  margin-left: 10px;
-  font-weight: 400;
-}
-.export-category-row {
-  cursor: pointer;
-}
-.export-empty-row td {
-  background: color-mix(in srgb, var(--bg-alt) 34%, var(--bg-panel));
+.export-sidebar button[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.export-sidebar small { color: var(--text-dim); white-space: nowrap; }
+.export-items { overflow: auto; }
+.export-category-head, .export-item { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.export-category-head { background: var(--bg-alt); position: sticky; top: 0; }
+.export-category-head strong { font-size: 13px; }
+.export-category-head .dim { margin-left: auto; font-size: 12px; }
+.export-modal input[type="checkbox"] { width: 16px; height: 16px; flex: none; accent-color: var(--accent); }
+.export-item:has(input:checked) { background: var(--accent-soft); }
+.export-item:hover { background: var(--hover); }
+.export-item-copy { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 5px; overflow-wrap: anywhere; font-size: 13px; }
+.export-item-copy small { font-size: 11px; }
+.export-modal .modal-actions { align-items: center; margin: 0; padding: 15px 24px; border-top: 1px solid var(--border); }
+.export-summary { flex: 1; font-size: 12px; }
+.export-modal button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 640px) {
+  .export-content { grid-template-columns: 145px minmax(0, 1fr); }
+  .export-sidebar { padding: 12px 6px; }
+  .export-sidebar button { flex-wrap: wrap; padding: 10px 6px; }
+  .export-modal-head, .export-toolbar, .export-category-head, .export-item, .export-modal .modal-actions { padding: 12px; }
+  .export-modal .modal-actions { flex-wrap: wrap; }
+  .export-summary { flex-basis: 100%; }
+  .export-item .mocks-list-badge { display: none; }
 }
 .dup-warning {
   color: var(--warn); padding: 0 12px;
