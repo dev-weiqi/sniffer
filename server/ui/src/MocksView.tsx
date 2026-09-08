@@ -731,16 +731,13 @@ function ExportRulesModal({ source, onCancel, onExport }: {
       onCancel={onCancel} onMouseDown={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
       <header className="export-modal-head">
         <h2 id="export-rules-title">Export rules</h2>
-        <p className="dim">Choose items from any category to export.</p>
-      </header>
-      <div className="export-toolbar">
         <button disabled={totalCount === 0} onClick={() => setSelection(allSelected
           ? { http: new Set(), socket: new Set(), push: new Set() }
           : createFullExportSelection(source))}>
-          {allSelected ? 'Deselect all' : 'Select all'}
+          {allSelected ? 'Deselect All Rules & Events' : 'Select All Rules & Events'}
         </button>
-        <span aria-live="polite">Selected {selectedCount} / {totalCount} items</span>
-      </div>
+        <span className="dim" aria-live="polite">Selected {selectedCount} / {totalCount} items</span>
+      </header>
       <div className="export-content">
         <div className="export-sidebar" role="tablist" aria-label="Rule categories" aria-orientation="vertical">
           {categories.map((category, index) => (

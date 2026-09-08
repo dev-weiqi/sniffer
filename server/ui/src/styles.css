@@ -1029,39 +1029,41 @@ button.modal-primary:hover {
 }
 .export-modal[open] { display: flex; flex-direction: column; }
 .export-modal::backdrop { background: rgb(0 0 0 / 0.35); }
-.export-modal-head { padding: 20px 24px; border-bottom: 1px solid var(--border); }
-.export-modal-head h2 { font-size: 18px; margin-bottom: 6px; }
-.export-modal-head p { font-size: 12px; }
-.export-toolbar {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 13px 24px; border-bottom: 1px solid var(--border); background: var(--bg-alt); font-size: 13px;
+.export-modal-head {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap; min-height: 68px;
+  padding: 16px 24px; border-bottom: 1px solid var(--border); background: var(--bg-panel);
 }
-.export-content { display: grid; grid-template-columns: 220px minmax(0, 1fr); flex: 1; min-height: 0; }
-.export-sidebar { padding: 16px 10px; border-right: 1px solid var(--border); background: var(--bg-alt); overflow: auto; }
+.export-modal-head h2 { font-size: 18px; margin: 0; flex: 1; }
+.export-modal-head button { font-size: 13px; }
+.export-modal-head > span { font-size: 12px; white-space: nowrap; }
+.export-content { display: grid; grid-template-columns: 200px minmax(0, 1fr); flex: 1; min-height: 0; }
+.export-sidebar { border-right: 1px solid var(--border); background: var(--bg-panel); overflow: auto; }
 .export-sidebar button {
   width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 14px 10px; margin-bottom: 5px; background: transparent; border-color: transparent; font-size: 13px;
+  height: 52px; padding: 0 16px; margin: 0; background: var(--bg-panel); text-align: left;
+  border: 0; border-bottom: 1px solid var(--border); border-radius: 0; font-size: 13px;
 }
-.export-sidebar button[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.export-sidebar button[aria-selected="true"] { background: var(--accent-soft); box-shadow: inset 3px 0 var(--accent); }
+.export-sidebar button:hover { background: var(--hover); }
 .export-sidebar small { color: var(--text-dim); white-space: nowrap; }
 .export-items { overflow: auto; }
 .export-category-head, .export-item { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); cursor: pointer; }
-.export-category-head { background: var(--bg-alt); position: sticky; top: 0; }
+.export-category-head { background: var(--bg-panel); position: sticky; top: 0; }
 .export-category-head strong { font-size: 13px; }
 .export-category-head .dim { margin-left: auto; font-size: 12px; }
 .export-modal input[type="checkbox"] { width: 16px; height: 16px; flex: none; accent-color: var(--accent); }
-.export-item:has(input:checked) { background: var(--accent-soft); }
+.export-item:has(input:checked) { background: color-mix(in srgb, var(--accent-soft) 38%, var(--bg-panel)); }
 .export-item:hover { background: var(--hover); }
 .export-item-copy { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 5px; overflow-wrap: anywhere; font-size: 13px; }
 .export-item-copy small { font-size: 11px; }
 .export-modal .modal-actions { align-items: center; margin: 0; padding: 15px 24px; border-top: 1px solid var(--border); }
 .export-summary { flex: 1; font-size: 12px; }
 .export-modal button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.export-sidebar button:focus-visible { outline-offset: -3px; }
 @media (max-width: 640px) {
-  .export-content { grid-template-columns: 145px minmax(0, 1fr); }
-  .export-sidebar { padding: 12px 6px; }
-  .export-sidebar button { flex-wrap: wrap; padding: 10px 6px; }
-  .export-modal-head, .export-toolbar, .export-category-head, .export-item, .export-modal .modal-actions { padding: 12px; }
+  .export-content { grid-template-columns: 160px minmax(0, 1fr); }
+  .export-sidebar button { padding: 0 12px; }
+  .export-modal-head, .export-category-head, .export-item, .export-modal .modal-actions { padding: 12px; }
   .export-modal .modal-actions { flex-wrap: wrap; }
   .export-summary { flex-basis: 100%; }
   .export-item .mocks-list-badge { display: none; }
