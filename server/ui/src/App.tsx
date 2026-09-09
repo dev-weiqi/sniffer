@@ -91,6 +91,7 @@ export default function App() {
   const [mocksOpen, setMocksOpen] = useState<null | 'http' | 'socket'>(null)
   const [deviceId, setDeviceId] = useState<string>(() => localStorage.getItem('sniffer-device') ?? '')
   const [search, setSearch] = useState('')
+  const searchRef = useRef<HTMLInputElement>(null)
   const [pendingRule, setPendingRule] = useState<HttpMockRule | null>(null)
   const [pendingSocketRule, setPendingSocketRule] = useState<SocketMockRule | null>(null)
   const [pendingPush, setPendingPush] = useState<PushPrefill | null>(null)
@@ -278,6 +279,29 @@ export default function App() {
     [state.devices],
   )
   const selectedDevice = devices.find(d => d.deviceId === deviceId) ?? null
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.isComposing) return
+      const key = e.key.toLowerCase()
+      if (key !== 'm' && key !== ',' && key !== 'f') return
+      const dialogOpen = !!document.querySelector('dialog[open], [role="dialog"], [role="alertdialog"]')
+      if (key === 'f' && dialogOpen) return
+      e.preventDefault()
+      if (e.repeat || dialogOpen) return
+      if (key === ',') setShowSettings(v => !v)
+      else if (key === 'f') {
+        setShowSettings(false)
+        searchRef.current?.focus()
+        searchRef.current?.select()
+      }
+      else if (selectedDevice) {
+        setShowSettings(false)
+        setMocksOpen(tab)
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [tab, selectedDevice])
   const trafficContext = {
     device: selectedDevice,
     serverConnected: state.wsConnected,
@@ -447,7 +471,10 @@ export default function App() {
         {deviceNotice && <span className="topbar-notice">{deviceNotice}</span>}
 
         <input
+          ref={searchRef}
           className="search"
+          title="Search (⌘F)"
+          aria-keyshortcuts="Meta+F"
           placeholder="Search URL, method, status, event…"
           value={search}
           onChange={e => setSearch(e.target.value)}
@@ -469,7 +496,7 @@ export default function App() {
         </button>
 
         <div className="settings" ref={settingsRef}>
-          <button className="ghost" title="Settings" onClick={() => setShowSettings(v => !v)}>
+          <button className="ghost" title="Settings (⌘,)" aria-keyshortcuts="Meta+," onClick={() => setShowSettings(v => !v)}>
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="3" />

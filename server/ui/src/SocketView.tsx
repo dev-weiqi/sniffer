@@ -71,7 +71,7 @@ export function SocketView({ active, emptyState, mockCount, onOpenMocks, events,
           <span className="dim">Socket events</span>
           <span className="spacer" />
           <button className="pill-btn mocks-btn" data-active={mockCount > 0 ? 'true' : 'false'}
-            disabled={!onOpenMocks} onClick={onOpenMocks}>
+            title="Socket Mocks (⌘M)" aria-keyshortcuts="Meta+M" disabled={!onOpenMocks} onClick={onOpenMocks}>
             <SlidersIcon />Socket Mocks{mockCount > 0 && <span className="count accent">{mockCount}</span>}
           </button>
           <button className="clear-btn" disabled={events.length === 0} onClick={onClear}>Clear Socket</button>

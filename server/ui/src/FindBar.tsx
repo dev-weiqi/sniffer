@@ -15,6 +15,7 @@ export function FindBar() {
   useEffect(() => {
     if (!supported) return
     const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
         e.preventDefault()
         setOpen(true)

@@ -168,7 +168,7 @@ export function HttpView({ active, emptyState, mockCount, onOpenMocks, rows, que
           )}
           <span className="spacer" />
           <button className="pill-btn mocks-btn" data-active={mockCount > 0 ? 'true' : 'false'}
-            disabled={!onOpenMocks} onClick={onOpenMocks}>
+            title="HTTP Mocks (⌘M)" aria-keyshortcuts="Meta+M" disabled={!onOpenMocks} onClick={onOpenMocks}>
             <SlidersIcon />HTTP Mocks{mockCount > 0 && <span className="count accent">{mockCount}</span>}
           </button>
           <button className="clear-btn" disabled={rows.length === 0} onClick={onClear}>Clear API</button>

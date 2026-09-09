@@ -142,6 +142,11 @@ function createWindow() {
     },
   })
   win.maximize()
+  // Let the UI handle these keys instead of the native menu's Cmd+M minimize action.
+  win.webContents.on('before-input-event', (_event, input) => {
+    win.webContents.setIgnoreMenuShortcuts(input.meta && !input.control && !input.alt && !input.shift
+      && ['m', ',', 'f'].includes(input.key.toLowerCase()))
+  })
   // Links come out of captured traffic, so they belong to the user's browser. Without this
   // Electron answers target=_blank with a bare BrowserWindow of its own, and a plain href would
   // navigate the app away from the UI entirely. Only http(s) is handed to the OS.
