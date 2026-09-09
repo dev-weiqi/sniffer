@@ -98,6 +98,7 @@ export default function App() {
   const [deletingDevices, setDeletingDevices] = useState(false)
   const [deviceNotice, setDeviceNotice] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const settingsRef = useRef<HTMLDivElement>(null)
   const [adbStatus, setAdbStatus] = useState<'ok' | 'warn' | 'loading' | 'unknown'>('unknown')
   const [adbSummary, setAdbSummary] = useState('Not checked')
   const initialPort = Number(location.port || 9091)
@@ -241,7 +242,14 @@ export default function App() {
     if (!showSettings) return
     let cancelled = false
     void refreshAdbStatus(() => !cancelled)
-    return () => { cancelled = true }
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!settingsRef.current?.contains(event.target as Node)) setShowSettings(false)
+    }
+    document.addEventListener('mousedown', closeOnOutsideClick, true)
+    return () => {
+      cancelled = true
+      document.removeEventListener('mousedown', closeOnOutsideClick, true)
+    }
   }, [showSettings])
 
   // ←/→ cycle the tabs (↑/↓ walk list rows inside a view); form fields keep their arrows
@@ -460,7 +468,7 @@ export default function App() {
           {theme === 'light' ? <MoonIcon /> : <SunIcon />}
         </button>
 
-        <div className="settings">
+        <div className="settings" ref={settingsRef}>
           <button className="ghost" title="Settings" onClick={() => setShowSettings(v => !v)}>
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -470,7 +478,6 @@ export default function App() {
           </button>
           {showSettings && (
             <>
-              <div className="settings-backdrop" onClick={() => setShowSettings(false)} />
               <div className="settings-popover">
                 <div className="settings-version-row">
                   <div>
