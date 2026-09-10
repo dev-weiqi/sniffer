@@ -8,7 +8,11 @@ import {
   isSnifferState,
   repoRootFrom,
   waitForExit,
+  waitForDaemon,
 } from './launcher.mjs'
+import { rejects } from 'node:assert/strict'
+import { EventEmitter } from 'node:events'
+import { PassThrough } from 'node:stream'
 
 function assert(condition, message) {
   if (!condition) throw new Error(message)
@@ -101,5 +105,49 @@ assert(devIgnoresOverride.cwd.endsWith('/repo/server/daemon'), 'dev launch ignor
 assert(await waitForExit({ exitCode: 0, signalCode: null, once: () => { throw new Error('must not subscribe') } }) === true,
   'already-exited child resolves immediately')
 assert(await waitForExit(null) === true, 'no child is already stopped')
+
+// An existing dev daemon can answer health checks after the update's child fails to bind.
+{
+  const child = new EventEmitter()
+  child.stdout = new PassThrough()
+  child.exitCode = null
+  child.signalCode = null
+  let healthChecks = 0
+  const pending = waitForDaemon({
+    url: desktopUrl(9091), child, timeoutMs: 100, intervalMs: 1,
+    fetchFn: async () => {
+      healthChecks++
+      return { ok: true, json: async () => ({ devices: [], entryCount: 0, mocksByDevice: {} }) }
+    },
+  })
+  const rejected = rejects(pending, /exited/, 'another daemon must not make the update report a successful relaunch')
+  child.exitCode = 1
+  child.emit('exit', 1, null)
+  await rejected
+  assert(healthChecks === 0, 'wait for our child to listen before checking the port')
+}
+{
+  const child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), exitCode: null, signalCode: null })
+  let healthChecks = 0
+  const pending = waitForDaemon({
+    url: desktopUrl(9091), child, timeoutMs: 100, intervalMs: 1,
+    fetchFn: async () => {
+      healthChecks++
+      return { ok: true, json: async () => ({ devices: [], entryCount: 0, mocksByDevice: {} }) }
+    },
+  })
+  child.stdout.write('Sniffer dae')
+  assert(healthChecks === 0, 'partial startup output is not readiness')
+  child.stdout.write('mon: http://localhost:9091\n')
+  await pending
+  assert(healthChecks === 1, 'check health after our child starts listening')
+  assert(child.listenerCount('exit') === 0 && child.stdout.listenerCount('data') === 0, 'startup listeners are cleaned up')
+
+  await rejects(waitForDaemon({ url: desktopUrl(9091), child, timeoutMs: 1 }), /did not start listening/)
+  const failedSpawn = waitForDaemon({ url: desktopUrl(9091), child, timeoutMs: 100 })
+  const rejected = rejects(failedSpawn, /ENOENT/)
+  child.emit('error', new Error('ENOENT'))
+  await rejected
+}
 
 console.log('launcher.test: all assertions passed')

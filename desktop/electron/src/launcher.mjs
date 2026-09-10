@@ -105,8 +105,34 @@ export function startDaemon({
   return child
 }
 
-export async function waitForDaemon({ url, fetchFn = fetch, timeoutMs = 15000, intervalMs = 250 }) {
+export async function waitForDaemon({ url, child, fetchFn = fetch, timeoutMs = 15000, intervalMs = 250 }) {
   const startedAt = Date.now()
+  if (child) {
+    // Older bundled daemons already log this from server.listen; no daemon upgrade is required.
+    // A health response alone could belong to another Sniffer occupying the same port.
+    await new Promise((resolve, reject) => {
+      let output = ''
+      const done = error => {
+        clearTimeout(timer)
+        child.stdout?.off('data', onData)
+        child.off('error', done)
+        child.off('exit', onExit)
+        if (error) reject(error)
+        else resolve()
+      }
+      const onExit = (code, signal) => done(new Error(`Sniffer daemon exited before listening (${signal ?? code}) at ${url}`))
+      const onData = data => {
+        output += data.toString()
+        if (output.includes('Sniffer daemon: http://localhost:')) done()
+        output = output.slice(-256)
+      }
+      const timer = setTimeout(() => done(new Error(`Sniffer daemon did not start listening at ${url}`)), timeoutMs)
+      child.stdout?.on('data', onData)
+      child.once('error', done)
+      child.once('exit', onExit)
+      if (child.exitCode !== null || child.signalCode) onExit(child.exitCode, child.signalCode)
+    })
+  }
   let lastError = null
   while (Date.now() - startedAt < timeoutMs) {
     try {

@@ -99,23 +99,23 @@ function installIpc() {
       pushUpdateState({ phase: 'relaunching', version })
       const veilShownAt = Date.now()
       stopDaemon(daemon)
-      await waitForExit(daemon)
+      if (!await waitForExit(daemon)) throw new Error('Previous Sniffer daemon did not exit')
       activeDaemonDir = dir
       await startCurrentDaemon(repoRootFrom(import.meta.url), { interactive: false })
       // a fast daemon restart can finish in well under a second; hold the veil long enough
       // that the relaunch reads as an event instead of a flicker
       const veilLeft = 1500 - (Date.now() - veilShownAt)
       if (veilLeft > 0) await new Promise(resolve => setTimeout(resolve, veilLeft))
-      mainWindow?.loadURL(url)
+      await mainWindow?.loadURL(url)
       return { ok: true, version }
     } catch (error) {
       // never leave the app daemon-less: fall back to the version that was running
       try {
         stopDaemon(daemon)
-        await waitForExit(daemon)
+        if (!await waitForExit(daemon)) throw new Error('Previous Sniffer daemon did not exit')
         activeDaemonDir = previousDir
         await startCurrentDaemon(repoRootFrom(import.meta.url), { interactive: false })
-        mainWindow?.loadURL(url)
+        // Keep the existing renderer so its failure state survives instead of offering again.
       } catch {
         // fallback restart failed too; surface the original error, the window shows the dialog path
       }
@@ -194,7 +194,7 @@ async function startCurrentDaemon(repoRoot, { interactive = true } = {}) {
     daemonDir: activeDaemonDir,
   })
   try {
-    await waitForDaemon({ url })
+    await waitForDaemon({ url, child: daemon })
   } catch (error) {
     stopDaemon(daemon)
     daemon = null
