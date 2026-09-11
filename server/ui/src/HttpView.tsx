@@ -5,7 +5,7 @@ import { TrafficEmpty, type TrafficEmptyProps } from './TrafficEmpty'
 import type { TrafficFilter } from './trafficFilter'
 import { copyText, fmtDuration, fmtSize, fmtTime, prettyJson, splitHighlight, splitLinks, statusClass, statusLabel, toCurl, urlParts } from './util'
 import { newRuleId } from './util'
-import { useDetailWidth, useListKeys, useUnreadRows } from './hooks'
+import { useDetailWidth, useFollowLatestRow, useListKeys, useUnreadRows } from './hooks'
 import { JsonView } from './JsonView'
 import { HeadersEditor } from './MocksView'
 import { base64ToBytes, formatWebpSummary, parseWebpAnimation, type WebpAnimationInfo } from './webp'
@@ -72,8 +72,9 @@ export function ScrollToBottomButton({ onClick }: { onClick: () => void }) {
   )
 }
 
-export function HttpView({ active, emptyState, mockCount, onOpenMocks, rows, allRows, unreadScope, onUnreadChange, query, pausedHits, urlFilter, onUrlFilterChange, armedBreakpoints, onMock, onArm, onResolve, onDisarmAll, onClear }: {
+export function HttpView({ active, followLatest, emptyState, mockCount, onOpenMocks, rows, allRows, unreadScope, onUnreadChange, query, pausedHits, urlFilter, onUrlFilterChange, armedBreakpoints, onMock, onArm, onResolve, onDisarmAll, onClear }: {
   active: boolean
+  followLatest: boolean
   emptyState: TrafficEmptyProps
   rows: HttpRow[]
   allRows: HttpRow[]
@@ -121,6 +122,8 @@ export function HttpView({ active, emptyState, mockCount, onOpenMocks, rows, all
     if (el && !sortDesc && stickBottom.current && !selectedId) el.scrollTop = el.scrollHeight
     if (el) setShowScrollToBottom(el.scrollHeight - el.scrollTop - el.clientHeight > 1)
   }, [rows.length, selectedId, sortDesc, active])
+
+  useFollowLatestRow(allRows, rows, active && followLatest && !selectedHit && !menu, unreadScope, setSelectedId, listRef)
 
   // debugger-style focus: jump to a freshly paused response, and after resolving the selected one
   // jump to the next still-paused response so you can work through them.

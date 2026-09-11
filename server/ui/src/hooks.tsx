@@ -1,4 +1,24 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+
+/** Follow received IDs, not list length: filters and the row cap are not arrivals. */
+export function useFollowLatestRow(
+  allRows: readonly { id: string }[], visibleRows: readonly { id: string }[],
+  enabled: boolean, scope: string, select: (id: string) => void, listRef: RefObject<HTMLDivElement>,
+) {
+  const previous = useRef({ scope, ids: new Set(allRows.map(row => row.id)) })
+  useEffect(() => {
+    const before = previous.current
+    previous.current = { scope, ids: new Set(allRows.map(row => row.id)) }
+    const latest = visibleRows[visibleRows.length - 1]
+    if (!enabled || before.scope !== scope || !latest || before.ids.has(latest.id)) return
+    select(latest.id)
+    requestAnimationFrame(() => {
+      if (listRef.current?.getClientRects().length) {
+        listRef.current.querySelector('tr[data-selected]')?.scrollIntoView({ block: 'center' })
+      }
+    })
+  }, [allRows, visibleRows, enabled, scope, select, listRef])
+}
 
 /** Only newly received, visible rows count; filtering and response/ack updates are not arrivals. */
 export function useUnreadRows(

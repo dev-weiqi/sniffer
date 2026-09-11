@@ -4,7 +4,7 @@ import { FilterMenu } from './FilterMenu'
 import { TrafficEmpty, type TrafficEmptyProps } from './TrafficEmpty'
 import type { TrafficFilter } from './trafficFilter'
 import { fmtTime, newRuleId } from './util'
-import { useDetailWidth, useListKeys, useUnreadRows } from './hooks'
+import { useDetailWidth, useFollowLatestRow, useListKeys, useUnreadRows } from './hooks'
 import { JsonView } from './JsonView'
 import { CopyButton, Highlight, KV, RowMenu, ScrollToBottomButton, Section, SlidersIcon, SortIcon } from './HttpView'
 import { decodeEngineIoFrame, displayEventName, frameLabel } from './engineio'
@@ -16,8 +16,9 @@ const SYS_EVENTS = new Set([
   'ping', 'pong',
 ])
 
-export function SocketView({ active, emptyState, mockCount, onOpenMocks, events, allRows, unreadScope, onUnreadChange, query, conns, connUrls, deviceId, eventFilter, onEventFilterChange, onMockAck, onPushPrefill, onClear }: {
+export function SocketView({ active, followLatest, emptyState, mockCount, onOpenMocks, events, allRows, unreadScope, onUnreadChange, query, conns, connUrls, deviceId, eventFilter, onEventFilterChange, onMockAck, onPushPrefill, onClear }: {
   active: boolean
+  followLatest: boolean
   emptyState: TrafficEmptyProps
   events: SocketRow[]
   allRows: SocketRow[]
@@ -68,6 +69,8 @@ export function SocketView({ active, emptyState, mockCount, onOpenMocks, events,
     if (el && !sortDesc && stickBottom.current && !selectedId) el.scrollTop = el.scrollHeight
     if (el) setShowScrollToBottom(el.scrollHeight - el.scrollTop - el.clientHeight > 1)
   }, [events.length, filtered.length, selectedId, sortDesc, active])
+
+  useFollowLatestRow(allRows, filtered, active && followLatest && !menu, unreadScope, setSelectedId, listRef)
 
   return (
     <div className="split" hidden={!active} style={{ ['--detail-w' as string]: `${detailWidth}px` }}>
