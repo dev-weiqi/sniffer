@@ -4,7 +4,7 @@ import { FilterMenu } from './FilterMenu'
 import { TrafficEmpty, type TrafficEmptyProps } from './TrafficEmpty'
 import type { TrafficFilter } from './trafficFilter'
 import { fmtTime, newRuleId } from './util'
-import { useDetailWidth, useListKeys } from './hooks'
+import { useDetailWidth, useListKeys, useUnreadRows } from './hooks'
 import { JsonView } from './JsonView'
 import { CopyButton, Highlight, KV, ScrollToBottomButton, Section, SlidersIcon, SortIcon } from './HttpView'
 import { decodeEngineIoFrame, displayEventName, frameLabel } from './engineio'
@@ -16,10 +16,13 @@ const SYS_EVENTS = new Set([
   'ping', 'pong',
 ])
 
-export function SocketView({ active, emptyState, mockCount, onOpenMocks, events, query, conns, connUrls, deviceId, eventFilter, onEventFilterChange, onMockAck, onPushPrefill, onClear }: {
+export function SocketView({ active, emptyState, mockCount, onOpenMocks, events, allRows, unreadScope, onUnreadChange, query, conns, connUrls, deviceId, eventFilter, onEventFilterChange, onMockAck, onPushPrefill, onClear }: {
   active: boolean
   emptyState: TrafficEmptyProps
   events: SocketRow[]
+  allRows: SocketRow[]
+  unreadScope: string
+  onUnreadChange: (count: number) => void
   query: string
   eventFilter: TrafficFilter
   onEventFilterChange: (filter: TrafficFilter) => void
@@ -41,7 +44,8 @@ export function SocketView({ active, emptyState, mockCount, onOpenMocks, events,
   const selectedFrame = selected && selected.transport === 'ktor-ws' ? decodeEngineIoFrame(selected.payload) : null
   const displayedPayload = selectedFrame ? selectedFrame.data : selected?.payload
   const liveConns = conns.filter(c => c.deviceId === deviceId && c.status === 'connected')
-  const filtered = connFilter ? events.filter(e => e.connectionId === connFilter) : events
+  const filtered = useMemo(() => connFilter ? events.filter(e => e.connectionId === connFilter) : events, [events, connFilter])
+  useUnreadRows(allRows, filtered, active, unreadScope, onUnreadChange)
   const sorted = sortDesc ? [...filtered].reverse() : filtered
 
   // the filtered connection can die (or the device can change) — don't stay stuck on an invisible filter
@@ -121,6 +125,7 @@ export function SocketView({ active, emptyState, mockCount, onOpenMocks, events,
               const f = e.transport === 'ktor-ws' ? decodeEngineIoFrame(e.payload) : null
               return (
               <tr key={e.id} data-selected={e.id === selectedId || undefined}
+                data-latest={e.id === filtered[filtered.length - 1]?.id || undefined}
                 onClick={() => setSelectedId(e.id === selectedId ? null : e.id)}>
                 <td className="mono dim">{fmtTime(e.ts)}</td>
                 <td className={e.direction === 'out' ? 'dir-out' : 'dir-in'}>

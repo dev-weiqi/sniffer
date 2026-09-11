@@ -3,6 +3,9 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const uiRequire = createRequire(new URL('../server/ui/package.json', import.meta.url))
 const daemonRequire = createRequire(new URL('../server/daemon/package.json', import.meta.url))
@@ -11,9 +14,12 @@ const { default: react } = await import(uiRequire.resolve('@vitejs/plugin-react'
 const { chromium } = daemonRequire('playwright-core')
 const { WebSocketServer } = daemonRequire('ws')
 const sockets = new WebSocketServer({ noServer: true })
+// Tests must not replace optimized dependencies used by an open development page.
+const cacheDir = await mkdtemp(join(tmpdir(), 'sniffer-tab-test-'))
 const server = await createServer({
   configFile: false,
   root: fileURLToPath(new URL('../server/ui', import.meta.url)),
+  cacheDir,
   plugins: [react()],
   define: { __APP_VERSION__: JSON.stringify('test') },
   server: { host: '127.0.0.1', port: 0 },
@@ -75,6 +81,20 @@ try {
     await pane.locator('.list-scroll').evaluate((el, top) => { el.scrollTop = top }, value)
     await settle()
   }
+  assert.equal(await page.locator('.tab-unread').count(), 0, 'Initial history is not unread traffic')
+  for (const name of [/API/, /Socket/]) {
+    await switchTo(name)
+    assert.equal(await pane.locator('tr[data-latest]').count(), 1)
+    const latestText = await pane.locator('tr[data-latest]').innerText()
+    await pane.locator('th.sortable').click()
+    assert.equal(await rows.first().innerText(), latestText, 'Newest marker follows the row when sorting')
+    await pane.locator('th.sortable').click()
+    assert.equal(await rows.last().innerText(), latestText)
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    assert.equal(await pane.locator('tr[data-latest] td').first().evaluate(el => getComputedStyle(el, '::after').animationName), 'none')
+    await page.emulateMedia({ reducedMotion: 'no-preference' })
+  }
+  await switchTo(/API/)
   await rows.nth(20).click()
   await position(400)
   const httpSelected = await selected()
@@ -113,6 +133,8 @@ try {
   let nextId = 80
   for (const [current, other] of [[/API/, /Socket/], [/Socket/, /API/]]) {
     await switchTo(current)
+    assert.equal(await pane.locator('tr[data-latest]').count(), 1, 'Incoming traffic keeps exactly one newest marker')
+    assert.equal(await rows.last().getAttribute('data-latest'), 'true', 'The marker moves to the new row')
     await page.keyboard.press('Escape')
     await position(300)
     const before = await scroll()
@@ -319,7 +341,99 @@ try {
   assert.equal(await exportDialog.getByRole('checkbox', { name: 'Select all Push events' }).isDisabled(), true)
   await exportDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
   await mocks.getByTitle('Close', { exact: true }).click()
-  stream.send(JSON.stringify({ type: 'entries-cleared' }))
+  // Unread badges count new visible rows, independently of totals and response/ack updates.
+  const tabButton = name => page.locator('nav.tabs').getByRole('button', { name })
+  let devFlag = false
+  const sendMessages = async messages => {
+    for (const message of messages) stream.send(JSON.stringify(message))
+    devFlag = !devFlag
+    stream.send(JSON.stringify({ type: 'server-info', dev: devFlag }))
+    await page.waitForFunction(title => document.title === title, devFlag ? 'Sniffer Dev' : 'Sniffer')
+    await settle()
+  }
+  const sendTraffic = async (id, transform = value => value) => sendMessages(traffic(id).map(value => ({ type: 'event', ...transform(value) })))
+  for (const [current, other] of [[/API/, /Socket/], [/Socket/, /API/]]) {
+    await switchTo(current)
+    await switchTo(other)
+    await switchTo(current)
+    const id = nextId++
+    await sendTraffic(id)
+    assert.equal(await tabButton(other).locator('.tab-unread').innerText(), '1')
+    assert.equal(await tabButton(current).locator('.tab-unread').count(), 0)
+    await sendMessages([
+      { type: 'event', ...traffic(id)[1] },
+      { type: 'event', ...entry({ type: 'socket-ack', id: `s${id}`, payload: '[]', mocked: false }) },
+    ])
+    assert.equal(await tabButton(other).locator('.tab-unread').innerText(), '1', 'Responses and ACKs do not add another unread row')
+    if (current.source === 'API') {
+      await page.keyboard.press('Escape')
+      await position(1e6)
+      await page.screenshot({ path: '/tmp/sniffer-unread-production.png' })
+      assert.equal(await tabButton(other).locator('.tab-unread').evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(217, 45, 32)')
+      assert.equal(await pane.locator('tr[data-latest] td').first().evaluate(el => getComputedStyle(el, '::after').backgroundColor), 'rgb(91, 72, 217)')
+    }
+    await switchTo(other)
+    assert.equal(await tabButton(other).locator('.tab-unread').count(), 0, 'Opening a tab clears its badge')
+  }
+  await page.locator('input.search').fill('no-such-unread')
+  await pane.getByText('No matching results', { exact: true }).waitFor()
+  await sendTraffic(nextId++)
+  assert.equal(await page.locator('.tab-unread').count(), 0, 'Search-hidden arrivals are not counted')
+  await page.locator('input.search').fill('')
+  await rows.first().waitFor()
+  await settle()
+  assert.equal(await page.locator('.tab-unread').count(), 0, 'Removing search does not turn old rows into new arrivals')
+  // Both column filters and the Socket connection selector apply to unread counts.
+  for (const [current, other, value] of [[/API/, /Socket/, 'https://example.test/hidden'], [/Socket/, /API/, 'hidden:event']]) {
+    await switchTo(current)
+    await position(0)
+    await pane.getByTitle('Filter this column').click()
+    await pane.locator('.filter-add input').fill(value)
+    await pane.getByTitle('Add filter value').click()
+    if (!await pane.locator('.filter-switch input').isChecked()) await pane.locator('.filter-switch').click()
+    await page.locator('.brand').click()
+    await switchTo(other)
+    await sendTraffic(nextId++, e => ({ ...e, message: { ...e.message, url: 'https://example.test/hidden', event: 'hidden:event' } }))
+    assert.equal(await tabButton(current).locator('.tab-unread').count(), 0, 'Column-hidden arrivals are not counted')
+    await switchTo(current)
+    await position(0)
+    await pane.getByTitle('Filter this column').click()
+    await pane.getByTitle('Disable every value').click()
+    await page.locator('.brand').click()
+    assert.equal(await tabButton(current).locator('.tab-unread').count(), 0)
+  }
+  await switchTo(/Socket/)
+  await pane.getByRole('button', { name: 'socketio · https://empty.test', exact: true }).click()
+  await switchTo(/API/)
+  await sendTraffic(nextId++)
+  assert.equal(await tabButton(/Socket/).locator('.tab-unread').count(), 0, 'Other Socket connections do not count')
+  await switchTo(/Socket/)
+  await pane.getByRole('button', { name: 'All', exact: true }).click()
+  await switchTo(/API/)
+  // The 500-row cap must not stop new counts when total length stays unchanged.
+  await sendMessages(Array.from({ length: 505 }, () => traffic(nextId++).map(e => ({ type: 'event', ...e }))).flat())
+  assert.equal(await tabButton(/Socket/).locator('.tab-unread').innerText(), '99+')
+  assert.equal(await tabButton(/Socket/).locator('.count').innerText(), '500')
+  await switchTo(/Socket/)
+  await switchTo(/API/)
+  await sendTraffic(nextId++)
+  assert.equal(await tabButton(/Socket/).locator('.tab-unread').innerText(), '1', 'Capped lists still detect the next row')
+  await sendMessages([{ type: 'socket-entries-cleared' }])
+  assert.equal(await tabButton(/Socket/).locator('.tab-unread').count(), 0, 'Clearing hidden traffic clears its badge')
+  await sendTraffic(nextId++)
+  await sendMessages([{ type: 'device-status', deviceId: 'other-device', connected: true, info: { deviceName: 'Other phone', appId: 'test.other', platform: 'android' } }])
+  await page.locator('.device-picker-trigger').click()
+  await page.locator('.device-picker-option').filter({ hasText: 'Other phone' }).click()
+  assert.equal(await page.locator('.tab-unread').count(), 0, 'Switching devices resets unread history')
+  await page.locator('.device-picker-trigger').click()
+  await page.locator('.device-picker-option').filter({ hasText: 'Test phone' }).click()
+  await sendMessages([{ type: 'device-deleted', deviceId: 'other-device' }])
+  assert.equal(await page.locator('.tab-unread').count(), 0, 'Device history is not newly received traffic')
+  // A reconnect snapshot resets the baseline, including retained history.
+  await sendTraffic(nextId++)
+  await sendMessages([{ type: 'init', devices: [{ deviceId, deviceName: 'Test phone', appId: 'test.app', platform: 'android', connected: true }], entries: traffic(nextId++) }])
+  assert.equal(await page.locator('.tab-unread').count(), 0, 'Reconnect replay does not create badges')
+  await sendMessages([{ type: 'entries-cleared' }])
   for (const [name, message] of [[/API/, 'Waiting for requests'], [/Socket/, 'Waiting for socket events']]) {
     await switchTo(name)
     await pane.getByText(message, { exact: true }).waitFor()
@@ -372,4 +486,5 @@ try {
   for (const ws of sockets.clients) ws.terminate()
   sockets.close()
   await server.close()
+  await rm(cacheDir, { recursive: true, force: true })
 }

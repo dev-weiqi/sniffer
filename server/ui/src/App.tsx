@@ -90,6 +90,10 @@ export default function App() {
   // the mock rules moved out of the tab bar into a modal each panel opens for its own rules
   const [mocksOpen, setMocksOpen] = useState<null | 'http' | 'socket'>(null)
   const [deviceId, setDeviceId] = useState<string>(() => localStorage.getItem('sniffer-device') ?? '')
+  const [httpUnread, setHttpUnread] = useState(0)
+  const [socketUnread, setSocketUnread] = useState(0)
+  const [streamVersion, setStreamVersion] = useState(0)
+  const unreadScope = `${deviceId}:${streamVersion}`
   const [search, setSearch] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
   const [pendingRule, setPendingRule] = useState<HttpMockRule | null>(null)
@@ -141,7 +145,11 @@ export default function App() {
     saveFilter(`sniffer-filter-socket:${deviceId}`, filter, localStorage)
   }
 
-  useEffect(() => connectStream(dispatch), [])
+  useEffect(() => connectStream(action => {
+    // Initial history and reconnect snapshots establish a fresh baseline.
+    if (action.type === 'server' && action.msg.type === 'init') setStreamVersion(version => version + 1)
+    dispatch(action)
+  }), [])
 
   const checkForUpdate = async (manual = false, isActive: () => boolean = () => true) => {
     const check = window.snifferDesktop?.checkUpdate
@@ -481,11 +489,17 @@ export default function App() {
         />
 
         <nav className="tabs">
-          <button data-active={tab === 'http' || undefined} onClick={() => setTab('http')}>
+          <button data-active={tab === 'http' || undefined} onClick={() => setTab('http')}
+            aria-label={`API, ${filteredHttp.length} entries${tab !== 'http' && httpUnread ? `, ${httpUnread} new` : ''}`}
+            title={tab !== 'http' && httpUnread ? `${httpUnread} new requests since last viewed` : undefined}>
             <HttpIcon /> API <span className="count">{filteredHttp.length}</span>
+            {tab !== 'http' && httpUnread > 0 && <span className="tab-unread" aria-hidden="true">{httpUnread > 99 ? '99+' : httpUnread}</span>}
           </button>
-          <button data-active={tab === 'socket' || undefined} onClick={() => setTab('socket')}>
+          <button data-active={tab === 'socket' || undefined} onClick={() => setTab('socket')}
+            aria-label={`Socket, ${filteredSocketEvents.length} entries${tab !== 'socket' && socketUnread ? `, ${socketUnread} new` : ''}`}
+            title={tab !== 'socket' && socketUnread ? `${socketUnread} new events since last viewed` : undefined}>
             <SocketIcon /> Socket <span className="count">{filteredSocketEvents.length}</span>
+            {tab !== 'socket' && socketUnread > 0 && <span className="tab-unread" aria-hidden="true">{socketUnread > 99 ? '99+' : socketUnread}</span>}
           </button>
         </nav>
 
@@ -615,6 +629,7 @@ export default function App() {
 
       <main className="content">
           <HttpView active={tab === 'http'} rows={filteredHttp} query={deferredSearch} pausedHits={devicePausedHits}
+            allRows={state.http} unreadScope={unreadScope} onUnreadChange={setHttpUnread}
             emptyState={{ ...trafficContext, hasTraffic: state.http.some(r => r.deviceId === deviceId),
               onResetFilters: () => { setSearch(''); setHttpFilter(setAllEnabled(httpFilter, false)) } }}
             mockCount={selectedMocks.http.filter(r => r.enabled).length}
@@ -625,6 +640,7 @@ export default function App() {
             onDisarmAll={disarmAllBreakpoints}
             onClear={() => void api.clearHttpEntries()} />
           <SocketView active={tab === 'socket'} events={filteredSocketEvents} query={deferredSearch} conns={state.socketConns} connUrls={state.connUrls} deviceId={deviceId}
+            allRows={state.socketEvents} unreadScope={unreadScope} onUnreadChange={setSocketUnread}
             emptyState={{ ...trafficContext, hasTraffic: state.socketEvents.some(r => r.deviceId === deviceId),
               onResetFilters: () => { setSearch(''); setSocketFilter(setAllEnabled(socketFilter, false)) } }}
             mockCount={selectedMocks.socket.filter(r => r.enabled).length}

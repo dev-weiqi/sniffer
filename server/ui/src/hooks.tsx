@@ -1,4 +1,23 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+
+/** Only newly received, visible rows count; filtering and response/ack updates are not arrivals. */
+export function useUnreadRows(
+  allRows: readonly { id: string }[], visibleRows: readonly { id: string }[],
+  active: boolean, scope: string, onChange: (count: number) => void,
+) {
+  const previous = useRef({ scope, ids: new Set(allRows.map(row => row.id)), unread: new Set<string>() })
+  useLayoutEffect(() => {
+    const before = previous.current
+    const unread = new Set<string>()
+    if (!active && before.scope === scope) {
+      for (const row of visibleRows) {
+        if (before.unread.has(row.id) || !before.ids.has(row.id)) unread.add(row.id)
+      }
+    }
+    previous.current = { scope, ids: new Set(allRows.map(row => row.id)), unread }
+    onChange(unread.size)
+  }, [allRows, visibleRows, active, scope, onChange])
+}
 
 /** Arrow-key selection over the visible row order; Esc clears. Skips key events from form fields. */
 export function useListKeys(ids: string[], selectedId: string | null, select: (id: string | null) => void, active: boolean) {

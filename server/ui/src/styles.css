@@ -245,7 +245,15 @@ button.danger:hover { color: var(--err); border-color: color-mix(in srgb, var(--
   display: flex; gap: 2px; margin-left: 6px;
   background: var(--bg-alt); border-radius: 8px; padding: 2px;
 }
-.tabs button { border: none; background: transparent; padding: 4px 12px; border-radius: 6px; color: var(--text-dim); }
+.tabs button { position: relative; border: none; background: transparent; padding: 4px 12px; border-radius: 6px; color: var(--text-dim); }
+.tab-unread {
+  position: absolute; right: -4px; top: -10px; z-index: 1;
+  min-width: 20px; height: 20px; padding: 0 5px;
+  border: 2px solid var(--bg-panel); border-radius: 10px;
+  background: #d92d20; color: #fff;
+  font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 16px;
+  pointer-events: none;
+}
 .tabs button:not([data-active]):hover { background: var(--hover); color: var(--text); }
 .tabs button[data-active] {
   background: var(--bg-panel); color: var(--text); font-weight: 600;
@@ -394,6 +402,20 @@ table.grid td {
 table.grid tbody tr { cursor: default; transition: background 0.12s; }
 table.grid tbody tr:hover { background: var(--hover); }
 table.grid tbody tr[data-selected] { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
+
+table.grid tr[data-latest] > td:first-child { position: relative; color: var(--accent); }
+table.grid tr[data-latest] > td:first-child::after {
+  content: ""; position: absolute; left: 0; top: 7px; bottom: 7px; width: 3px;
+  background: var(--accent); border-radius: 0 2px 2px 0;
+  animation: latest-signal 240ms cubic-bezier(.23, 1, .32, 1);
+}
+@keyframes latest-signal {
+  from { opacity: .25; transform: scaleY(.5); }
+  to { opacity: 1; transform: scaleY(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  table.grid tr[data-latest] > td:first-child::after { animation: none; }
+}
 
 mark.hl { background: var(--warn); color: var(--bg-panel); border-radius: 2px; padding: 0 1px; font-weight: 600; }
 

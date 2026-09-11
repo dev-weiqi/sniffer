@@ -5,7 +5,7 @@ import { TrafficEmpty, type TrafficEmptyProps } from './TrafficEmpty'
 import type { TrafficFilter } from './trafficFilter'
 import { copyText, fmtDuration, fmtSize, fmtTime, prettyJson, splitHighlight, splitLinks, statusClass, statusLabel, toCurl, urlParts } from './util'
 import { newRuleId } from './util'
-import { useDetailWidth, useListKeys } from './hooks'
+import { useDetailWidth, useListKeys, useUnreadRows } from './hooks'
 import { JsonView } from './JsonView'
 import { HeadersEditor } from './MocksView'
 import { base64ToBytes, formatWebpSummary, parseWebpAnimation, type WebpAnimationInfo } from './webp'
@@ -72,10 +72,13 @@ export function ScrollToBottomButton({ onClick }: { onClick: () => void }) {
   )
 }
 
-export function HttpView({ active, emptyState, mockCount, onOpenMocks, rows, query, pausedHits, urlFilter, onUrlFilterChange, armedBreakpoints, onMock, onArm, onResolve, onDisarmAll, onClear }: {
+export function HttpView({ active, emptyState, mockCount, onOpenMocks, rows, allRows, unreadScope, onUnreadChange, query, pausedHits, urlFilter, onUrlFilterChange, armedBreakpoints, onMock, onArm, onResolve, onDisarmAll, onClear }: {
   active: boolean
   emptyState: TrafficEmptyProps
   rows: HttpRow[]
+  allRows: HttpRow[]
+  unreadScope: string
+  onUnreadChange: (count: number) => void
   query: string
   pausedHits: PausedHit[]
   mockCount: number
@@ -97,6 +100,7 @@ export function HttpView({ active, emptyState, mockCount, onOpenMocks, rows, que
   const selected = rows.find(r => r.id === selectedId) ?? null
   const listRef = useRef<HTMLDivElement>(null)
   const stickBottom = useRef(true)
+  useUnreadRows(allRows, rows, active, unreadScope, onUnreadChange)
 
   // a paused hit shares its request's id, so mark that row as blocked in place rather than
   // showing a duplicate. Only hits with no row yet (e.g. after Clear) get pinned to the top.
@@ -203,6 +207,7 @@ export function HttpView({ active, emptyState, mockCount, onOpenMocks, rows, que
             ))}
             {sorted.map(r => (
               <HttpRowItem key={r.id} row={r} query={query} paused={pausedById.has(r.id)}
+                latest={r.id === rows[rows.length - 1]?.id}
                 selected={r.id === selectedId} onSelect={setSelectedId} onMenu={setMenu} />
             ))}
           </tbody>
@@ -252,10 +257,11 @@ const PausedRowItem = memo(function PausedRowItem({ hit, selected, onSelect }: {
 })
 
 // memoized: only the rows whose data or selection changed re-render as traffic streams in
-const HttpRowItem = memo(function HttpRowItem({ row: r, query, paused, selected, onSelect, onMenu }: {
+const HttpRowItem = memo(function HttpRowItem({ row: r, query, paused, selected, latest, onSelect, onMenu }: {
   row: HttpRow
   query: string
   paused: boolean
+  latest: boolean
   selected: boolean
   onSelect: (id: string | null) => void
   onMenu: (menu: { x: number; y: number; row: HttpRow }) => void
@@ -263,6 +269,7 @@ const HttpRowItem = memo(function HttpRowItem({ row: r, query, paused, selected,
   const { domain, path } = urlParts(r.url)
   return (
     <tr className={paused ? 'bp-row' : undefined} data-selected={selected || undefined}
+      data-latest={latest || undefined}
       onClick={() => onSelect(selected ? null : r.id)}
       onContextMenu={e => {
         e.preventDefault()
