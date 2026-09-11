@@ -1119,11 +1119,12 @@ button.modal-primary:hover {
 }
 .ctx-item {
   display: flex; align-items: center; gap: 9px; padding: 5px 10px;
-  border-radius: 5px; cursor: pointer; white-space: nowrap;
+  width: 100%; border: 0; background: transparent; color: var(--text); font: inherit;
+  border-radius: 5px; cursor: pointer; white-space: nowrap; text-align: left;
 }
 .ctx-item svg { flex: none; color: var(--text-dim); }
-.ctx-item:hover { background: var(--accent); color: #fff; }
-.ctx-item:hover svg { color: #fff; }
+.ctx-item:hover:not(:disabled), .ctx-item:focus-visible { background: var(--accent); color: #fff; outline: none; }
+.ctx-item:hover:not(:disabled) svg, .ctx-item:focus-visible svg { color: #fff; }
 
 /* Main-tab leading icons (HttpIcon / SocketIcon reused from the mocks modal) */
 .tabs button { display: inline-flex; align-items: center; gap: 6px; }

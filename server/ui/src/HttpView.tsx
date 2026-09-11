@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { BreakpointRule, HttpMockRule, HttpRow, PausedHit } from './state'
 import { FilterMenu } from './FilterMenu'
 import { TrafficEmpty, type TrafficEmptyProps } from './TrafficEmpty'
@@ -222,7 +222,11 @@ export function HttpView({ active, emptyState, mockCount, onOpenMocks, rows, all
         )}
       </div>
 
-      {active && menu && <RowMenu {...menu} onClose={() => setMenu(null)} />}
+      {active && menu && <RowMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} items={[
+        { label: 'Copy cURL', text: toCurl(menu.row), icon: 'curl' },
+        { label: 'Copy URL', text: menu.row.url, icon: 'url' },
+        { label: 'Copy path', text: urlParts(menu.row.url).path, icon: 'path' },
+      ]} />}
 
       {(selected || selectedHit) && <div className="pane-resizer" onMouseDown={startDetailDrag} />}
       {selectedHit
@@ -295,7 +299,10 @@ const HttpRowItem = memo(function HttpRowItem({ row: r, query, paused, selected,
 })
 
 /** Right-click menu on a traffic row — the copy actions live here, not in the detail pane. */
-function RowMenu({ x, y, row, onClose }: { x: number; y: number; row: HttpRow; onClose: () => void }) {
+export function RowMenu({ x, y, items, onClose }: {
+  x: number; y: number; onClose: () => void
+  items: { label: string; text: string; icon: 'curl' | 'url' | 'path' | 'event'; disabled?: boolean }[]
+}) {
   const ref = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState<string | null>(null)
   useEffect(() => {
@@ -321,31 +328,40 @@ function RowMenu({ x, y, row, onClose }: { x: number; y: number; row: HttpRow; o
     setTimeout(onClose, 300)
   }
 
+  useLayoutEffect(() => {
+    const el = ref.current!
+    el.style.top = `${Math.max(4, Math.min(y + 4, window.innerHeight - el.offsetHeight - 4))}px`
+    el.style.left = `${Math.max(4, Math.min(x, window.innerWidth - el.offsetWidth - 4))}px`
+    el.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true })
+  }, [x, y])
+
   return (
-    <div className="ctx-menu" ref={ref}
-      style={{ top: Math.min(y + 4, window.innerHeight - 104), left: Math.min(x, window.innerWidth - 190) }}>
-      <div className="ctx-item" onClick={() => copy('curl', toCurl(row))}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" />
-        </svg>
-        {copied === 'curl' ? 'Copied ✓' : 'Copy cURL'}
-      </div>
-      <div className="ctx-item" onClick={() => copy('url', row.url)}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-        </svg>
-        {copied === 'url' ? 'Copied ✓' : 'Copy URL'}
-      </div>
-      <div className="ctx-item" onClick={() => copy('path', urlParts(row.url).path)}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          strokeWidth="2" strokeLinecap="round" aria-hidden>
-          <path d="M9 19 15 5" />
-        </svg>
-        {copied === 'path' ? 'Copied ✓' : 'Copy path'}
-      </div>
+    <div className="ctx-menu" role="menu" aria-label="Copy traffic" ref={ref}
+      style={{ top: y, left: x }} onKeyDown={e => {
+        if (e.key === 'Escape') { e.stopPropagation(); onClose(); return }
+        if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+        e.preventDefault()
+        e.stopPropagation()
+        const buttons = Array.from(ref.current!.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'))
+        const index = buttons.indexOf(document.activeElement as HTMLButtonElement)
+        buttons[(index + (e.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus()
+      }}>
+      {items.map(item => (
+        <button className="ctx-item" role="menuitem" key={item.label} disabled={item.disabled}
+          onClick={() => copy(item.label, item.text)}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            {item.icon === 'curl' && <><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></>}
+            {item.icon === 'url' && <>
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+            </>}
+            {item.icon === 'path' && <path d="M9 19 15 5" />}
+            {item.icon === 'event' && <path d="M10 3 8 21M16 3l-2 18M4 9h17M3 15h17" />}
+          </svg>
+          {copied === item.label ? 'Copied ✓' : item.label}
+        </button>
+      ))}
     </div>
   )
 }

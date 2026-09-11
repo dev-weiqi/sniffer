@@ -352,6 +352,44 @@ try {
     await settle()
   }
   const sendTraffic = async (id, transform = value => value) => sendMessages(traffic(id).map(value => ({ type: 'event', ...transform(value) })))
+  // Both traffic menus copy the clicked row, including real Socket names behind display labels.
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+      writeText: async text => { window.copiedTraffic = text },
+    } })
+  })
+  const copyFromMenu = async (row, label, expected) => {
+    await row.click({ button: 'right' })
+    await page.getByRole('menuitem', { name: label, exact: true }).click()
+    assert.equal(await page.evaluate(() => window.copiedTraffic), expected)
+    await page.getByRole('menu').waitFor({ state: 'hidden' })
+  }
+  await switchTo(/Socket/)
+  const copiedId = nextId++
+  await sendTraffic(copiedId, e => ({ ...e, message: { ...e.message, event: 'copy:event', label: 'Friendly label' } }))
+  const socketCopyRow = rows.filter({ hasText: 'copy:event' })
+  await socketCopyRow.click({ button: 'right' })
+  assert.deepEqual(await page.getByRole('menuitem').allTextContents(), ['Copy event name', 'Copy connection URL'])
+  await page.getByRole('menu').screenshot({ path: '/tmp/sniffer-socket-copy-menu.png' })
+  await page.keyboard.press('ArrowDown')
+  assert.equal(await page.getByRole('menuitem', { name: 'Copy connection URL' }).evaluate(el => el === document.activeElement), true)
+  await page.keyboard.press('Escape')
+  await copyFromMenu(socketCopyRow, 'Copy event name', 'copy:event')
+  await copyFromMenu(socketCopyRow, 'Copy connection URL', 'https://example.test')
+  await sendMessages([{ type: 'event', ...entry({ type: 'socket-event', id: 'copy-frame', connectionId: 'unknown', transport: 'ktor-ws', direction: 'in', event: 'message', payload: '42["chat:new",{}]', timestamp }) }])
+  const frameRow = rows.filter({ hasText: 'chat:new' })
+  await copyFromMenu(frameRow, 'Copy event name', 'chat:new')
+  await frameRow.click({ button: 'right' })
+  assert.equal(await page.getByRole('menuitem', { name: 'Copy connection URL' }).isDisabled(), true, 'Missing URLs do not copy connection IDs')
+  await page.locator('.brand').click()
+  await page.getByRole('menu').waitFor({ state: 'hidden' })
+  await switchTo(/API/)
+  const httpCopyRow = rows.first()
+  await httpCopyRow.click({ button: 'right' })
+  assert.deepEqual(await page.getByRole('menuitem').allTextContents(), ['Copy cURL', 'Copy URL', 'Copy path'])
+  await page.keyboard.press('Escape')
+  await copyFromMenu(httpCopyRow, 'Copy URL', 'https://example.test/items/0')
+  await copyFromMenu(httpCopyRow, 'Copy path', '/items/0')
   for (const [current, other] of [[/API/, /Socket/], [/Socket/, /API/]]) {
     await switchTo(current)
     await switchTo(other)

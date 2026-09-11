@@ -6,7 +6,7 @@ import type { TrafficFilter } from './trafficFilter'
 import { fmtTime, newRuleId } from './util'
 import { useDetailWidth, useListKeys, useUnreadRows } from './hooks'
 import { JsonView } from './JsonView'
-import { CopyButton, Highlight, KV, ScrollToBottomButton, Section, SlidersIcon, SortIcon } from './HttpView'
+import { CopyButton, Highlight, KV, RowMenu, ScrollToBottomButton, Section, SlidersIcon, SortIcon } from './HttpView'
 import { decodeEngineIoFrame, displayEventName, frameLabel } from './engineio'
 
 /** socket.io lifecycle events (io.socket Socket/Manager EVENT_* constants), tinted red in the list */
@@ -36,6 +36,7 @@ export function SocketView({ active, emptyState, mockCount, onOpenMocks, events,
   onClear: () => void
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; row: SocketRow } | null>(null)
   const [sortDesc, setSortDesc] = useState(() => localStorage.getItem('sniffer-sort-socket') === 'desc')
   const [connFilter, setConnFilter] = useState<string | null>(null)
   const [showScrollToBottom, setShowScrollToBottom] = useState(false)
@@ -126,7 +127,12 @@ export function SocketView({ active, emptyState, mockCount, onOpenMocks, events,
               return (
               <tr key={e.id} data-selected={e.id === selectedId || undefined}
                 data-latest={e.id === filtered[filtered.length - 1]?.id || undefined}
-                onClick={() => setSelectedId(e.id === selectedId ? null : e.id)}>
+                onClick={() => setSelectedId(e.id === selectedId ? null : e.id)}
+                onContextMenu={event => {
+                  event.preventDefault()
+                  setSelectedId(e.id)
+                  setMenu({ x: event.clientX, y: event.clientY, row: e })
+                }}>
                 <td className="mono dim">{fmtTime(e.ts)}</td>
                 <td className={e.direction === 'out' ? 'dir-out' : 'dir-in'}>
                   {e.direction === 'out' ? '↑' : '↓'}
@@ -158,6 +164,11 @@ export function SocketView({ active, emptyState, mockCount, onOpenMocks, events,
           }} />
         )}
       </div>
+
+      {active && menu && <RowMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)} items={[
+        { label: 'Copy event name', text: (menu.row.transport === 'ktor-ws' ? decodeEngineIoFrame(menu.row.payload)?.eventName : null) ?? menu.row.event, icon: 'event' },
+        { label: 'Copy connection URL', text: connUrls[menu.row.connectionId] ?? '', icon: 'url', disabled: !connUrls[menu.row.connectionId] },
+      ]} />}
 
       {selected && <div className="pane-resizer" onMouseDown={startDetailDrag} />}
       {selected && (
