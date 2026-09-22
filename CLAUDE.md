@@ -1,43 +1,36 @@
-# Sniffer — Working Agreement
+# Sniffer: Working Agreement
 
-Self-hosted Flipper alternative: monitor and mock an app's HTTP/Socket traffic.
-`client/` is a Kotlin Multiplatform SDK, `server/` is a Node daemon + React UI.
+Self-hosted Flipper alternative for monitoring and mocking an app's HTTP and Socket traffic.
+`client/` is a Kotlin Multiplatform SDK; `server/` is a Node daemon plus a React UI.
 
 ## Layout
 
 | Path | What |
 |------|------|
-| `client/` | KMP SDK. Plugin modules: `core` (required) + `okhttp` / `ktor` / `ktor-ws` / `socketio`, each with a `-noop` release twin. Also `sample` (Android, all plugins) and `sample-cmp` (Compose Multiplatform, **ktor-only**, Android + iOS). |
+| `client/` | KMP SDK. `core` (required) plus `okhttp` / `ktor` / `ktor-ws` / `socketio`, each with a `-noop` release twin. `sample` (Android, all plugins) and `sample-cmp` (Compose Multiplatform, ktor only, Android + iOS). |
 | `server/daemon` | Node/TS. WebSocket hub, per-device mock store, `adb reverse`, test endpoints. |
 | `server/ui` | React/TS. API / Socket / Mocks tabs. |
-| `PROTOCOL.md` | Wire protocol — the source of truth for both sides. |
+| `PROTOCOL.md` | Wire protocol; source of truth for both sides. |
 
 ## Golden rules
 
-1. **Protocol change ⇒ update `PROTOCOL.md` in the same change.** A new message field must land in three places together: `PROTOCOL.md`, the Kotlin data class in `client/core/.../Protocol.kt`, and the TS types in `server/ui/src/state.ts`. The daemon forwards rules/messages opaquely (`normalizeMocks` passes rule objects through) — don't assume it validates new fields.
-   **A mock-rule field travels further than the wire — walk every surface before shipping:**
-   the daemon store (`normalizeMocks`, starred split, `~/.sniffer/mocks.json`), the device sync
-   (does the daemon strip it, like `starred`, or does the SDK see it?), the UI editors, duplicate
-   detection (`httpSig`/`socketSig`) and `orderForSync`, and **export/import** (fields ride along
-   the JSON and re-enter through the PUT path). A field that is correct on the wire can still be
-   wrong on one of these.
-2. **Non-trivial logic ships with a test.** Pure logic (mock matching, placeholder expansion, protocol (de)serialization) → `client/core/src/commonTest`. Keep the existing `MockRegistryTest` / `MockPlaceholdersTest` style.
-3. **The SDK must never affect the host app.** Swallow errors, reconnect silently, cap buffers (1000 msgs offline). A monitoring bug must not surface in production traffic.
-4. **Keep `sample` and `sample-cmp` in parity** — same layout, headers, and action labels. The only allowed difference: CMP is ktor-only (no okhttp / socketio).
-5. **Commits:** split by feature; end messages with the `Co-Authored-By` trailer.
-   **Never push without explicit approval for that push** — committing locally is fine,
-   pushing (normal or force) always waits for the user's go-ahead.
+1. **A protocol change updates `PROTOCOL.md` in the same change.** A new message field lands in `PROTOCOL.md`, `client/core/.../Protocol.kt` and `server/ui/src/state.ts` together. The daemon passes rules and messages through (`normalizeMocks`) without validating new fields.
+   A new mock-rule field must also be checked in: the daemon store (`normalizeMocks`, starred split, `~/.sniffer/mocks.json`), device sync (stripped like `starred`, or seen by the SDK?), the UI editors, duplicate detection (`httpSig` / `socketSig`) and `orderForSync`, and export/import (fields re-enter through the PUT path).
+2. **Non-trivial logic ships with a test.** Pure logic (mock matching, placeholder expansion, protocol serialization) goes in `client/core/src/commonTest`, in the style of `MockRegistryTest` / `MockPlaceholdersTest`.
+3. **The SDK must never affect the host app.** Swallow errors, reconnect silently, cap buffers (1000 messages offline).
+4. **Keep `sample` and `sample-cmp` in parity:** same layout, headers and action labels. Only difference: CMP is ktor only.
+5. **Commits:** split by feature, end with the `Co-Authored-By` trailer. **Never push without explicit approval for that push.** Local commits are fine.
 
 ## Before you say "done"
 
-**Always report what changed, split by side, before declaring done:**
+Report changes split by side:
 
 ```
 server：<daemon / ui changes, or 無>
 client：<SDK / sample changes, or 無>
 ```
 
-The bar is **automated tests + typecheck + build passing** — not just compiling:
+Tests, typecheck and build must pass:
 
 ```bash
 cd client && ./gradlew :core:jvmTest :okhttp:test \
@@ -46,81 +39,49 @@ cd ../server/daemon && npm run typecheck
 cd ../ui && npm run build
 ```
 
-**Cover logic with a test, not a manual device run.** Mock matching, header/status/body
-application, placeholder expansion, and protocol (de)serialization all have (or should get)
-unit tests in `client/core` / `client/okhttp`. For SDK behaviour you can't unit-test, add a
-throwaway `JavaExec` harness in `client/ktor-ws` jvmTest (see `wsDebug` / `sseDebug`) that
-drives the real SDK against the daemon, assert, then delete it.
+Cover logic with unit tests in `client/core` / `client/okhttp`, not device runs. For SDK behaviour that cannot be unit tested, add a throwaway `JavaExec` harness in `client/ktor-ws` jvmTest (see `wsDebug` / `sseDebug`), assert against the real daemon, then delete it. Start an emulator or simulator only when nothing else can verify the change (on-device UI, adb reverse, platform glue).
 
-Only start the emulator/simulator when a change genuinely can't be verified another way (new
-on-device UI wiring, adb reverse, platform glue). It's slow — don't gate every change on it.
+**Traffic transformation is the compatibility risk.** try/catch only stops crashes; code that rewrites traffic (ktor tee and mock rebuild, okhttp tee and mock response, the ws and socketio wrappers) can still be wrong for unknown consumers. Transform only recognized cases and pass anything with an unknown marker (such as an engine-level response adapter) through untouched. Before an SDK release, run every sample button, including both SSE styles; add a button when a real app uses a new consumption style.
 
-**Transformation points are the compatibility risk.** Fences only stop the SDK from
-*crashing* the host; code that *transforms* traffic (ktor tee / mock call rebuild, okhttp
-tee / mock response, the ws and socketio wrappers) can be semantically wrong for consumers
-we don't know about, and no try/catch will catch that. Default-safe policy: transform only
-when the situation is positively recognized; anything carrying an unknown marker (e.g. an
-engine-level response adapter) passes through untouched. Before an SDK release, exercise
-the integration matrix — the sample buttons cover both SSE styles; add a button whenever a
-new consumption style appears in a real app.
+## Gotchas
 
-## Gotchas (already paid for — don't relearn)
-
-- **adb reverse** is how a device/emulator reaches `localhost:9091`. The daemon re-runs it every 5s; a freshly booted emulator needs ~6s before it connects.
-- **iOS over USB is the reverse direction**: usbmuxd can only dial *into* a device port, so the SDK listens on `127.0.0.1:9092` (`USB_PORT`, real devices only) and the daemon connects through `/var/run/usbmuxd` as the WebSocket *client* (`src/usbmux.ts`, polled every 5s) — after the handshake the `/device` handler is shared. A Mutex in `Sniffer` keeps one session live; a USB dial-in while wifi/simulator is connected is closed unanswered.
-- **Never `save()` / `peekBody()` a 101 upgrade or a `text/event-stream` response** — it freezes the live stream and kills the socket. WebSocket upgrades pass through untouched; SSE is teed (`teeEventStream`) so the body is captured as the app reads it.
-- **ktor's SSE *plugin* is engine-level and must not be touched at all**: `client.sse { }` responses carry an `SSESession` object as the body, not a byte stream — teeing/rebuilding that call breaks every SSE request ("Expected SSESession content but was ByteChannel"). Requests with the `SSERequestFlag` attribute pass through untouched. The tee only applies to raw `bodyAsChannel()` reads. The sample SSE button uses the plugin; the raw-read path is covered by the `:ktor-ws:sseDebug` harness.
-- **Ktor response status is captured in `onResponse`**, not from the caught exception. A downstream `HttpResponseValidator` (e.g. Eden's) can rethrow the error as a custom exception with no `cause`, so catching `ResponseException` is not enough. This is why the status is stashed in a per-call attribute holder.
-- **Mocks are per-device** on the daemon (`mockStore.devices[deviceId]`); `PUT /api/mocks` requires `deviceId`. Rules persist to `~/.sniffer/mocks.json`; recorded traffic is in-memory only (cleared on restart).
-- **`delayOnly` rule** = let the real request run, only inject latency; do not fake the response. The interceptor's timer starts before the injected delay so the reported duration includes it.
-- **Runtime host/port override** (no rebuild): Android `adb shell setprop debug.sniffer.port <n>` / `debug.sniffer.host <ip>`; iOS `SNIFFER_HOST` / `SNIFFER_PORT` env; JVM `-Dsniffer.port`. Precedence: override > `Sniffer.start(...)` args > default.
-- **`core` must not bundle a ktor client engine.** Every engine on the classpath registers for `HttpClient()` auto-discovery at the same priority, so a bundled CIO could become the host's default engine (CIO has no TLS on iOS). `Sniffer` dials the daemon with `HttpClient()` and borrows the host's engine; tests add CIO themselves. On Android the borrowed engine obeys the network security policy, so the host must allow cleartext to the daemon host (CIO used to bypass it). See README; the samples already set `usesCleartextTraffic`.
-- **KMP `commonMain` has no reflection and no `Date.now()` / `Math.random()`-style host APIs** — go through `expect`/`actual` (see `Platform.kt`).
-- **Android's ICU regex is stricter than the JVM's** — a bare `}` in a pattern compiles on JVM but throws `PatternSyntaxException` on Android, at class-init (`ExceptionInInitializerError` in the host). jvmTest cannot catch this; escape every literal brace and keep regexes out of hot init paths.
-- **Clearing traffic must survive SDK buffer replay**: a disconnected SDK buffers ≤1000 messages and dumps them on reconnect, resurrecting "cleared" entries. The daemon keeps per-kind clear watermarks (`clearedAt` in `server.ts`) and drops incoming messages timestamped before the last clear (5s clock-skew tolerance).
-- The web UI version is injected at build time from `server/daemon/package.json` (`__APP_VERSION__` in `vite.config.ts`) — don't hardcode it in the UI.
+- **adb reverse** lets devices reach `localhost:9091`. The daemon reruns it every 5 s; a fresh emulator needs about 6 s to connect.
+- **iOS over USB is reversed:** usbmuxd can only dial into a device port, so the SDK listens on `127.0.0.1:9092` (`USB_PORT`, real devices only) and the daemon connects through `/var/run/usbmuxd` as the WebSocket client (`src/usbmux.ts`, polled every 5 s). After the handshake the `/device` handler is shared. A Mutex in `Sniffer` keeps one live session; a USB dial-in during a wifi or simulator session is closed unanswered.
+- **Never `save()` / `peekBody()` a 101 upgrade or a `text/event-stream` response:** it freezes the stream and kills the socket. Upgrades pass through; SSE is teed (`teeEventStream`) so the body is captured as the app reads it.
+- **Never touch ktor's SSE plugin calls:** `client.sse { }` responses carry an `SSESession` body, not bytes, so teeing or rebuilding them breaks every SSE request ("Expected SSESession content but was ByteChannel"). Requests with `SSERequestFlag` pass through; the tee applies only to raw `bodyAsChannel()` reads. The sample SSE button covers the plugin; `:ktor-ws:sseDebug` covers raw reads.
+- **Ktor response status is captured in `onResponse`**, not from the caught exception: a downstream `HttpResponseValidator` (such as Eden's) can rethrow a custom exception with no `cause`. The status is kept in a per-call attribute holder.
+- **Mocks are per device** (`mockStore.devices[deviceId]`); `PUT /api/mocks` requires `deviceId`. Rules persist to `~/.sniffer/mocks.json`; traffic is in memory only.
+- **`delayOnly` rules** run the real request and only add latency. The timer starts before the delay, so the reported duration includes it.
+- **Runtime host/port override** without rebuilding: Android `adb shell setprop debug.sniffer.port <n>` / `debug.sniffer.host <ip>`; iOS `SNIFFER_HOST` / `SNIFFER_PORT`; JVM `-Dsniffer.port`. Precedence: override > `Sniffer.start(...)` args > default.
+- **`core` must not bundle a ktor engine.** All engines register for `HttpClient()` auto-discovery at the same priority, so a bundled CIO could become the host's default (CIO has no TLS on iOS). `Sniffer` uses `HttpClient()` and borrows the host's engine; tests add CIO themselves. On Android that engine obeys the network security policy, so the host must allow cleartext to the daemon (CIO used to bypass it). The samples set `usesCleartextTraffic`.
+- **KMP `commonMain` has no reflection and no host APIs** like `Date.now()` / `Math.random()`; use `expect` / `actual` (see `Platform.kt`).
+- **Android's ICU regex is stricter than the JVM's:** a bare `}` compiles on the JVM but throws `PatternSyntaxException` at class init on Android (`ExceptionInInitializerError` in the host). jvmTest cannot catch it; escape every literal brace and keep regexes out of hot init paths.
+- **Clearing traffic must survive buffer replay:** a reconnecting SDK dumps up to 1000 buffered messages. The daemon keeps per-kind clear watermarks (`clearedAt` in `server.ts`) and drops messages older than the last clear (5 s skew tolerance).
+- The UI version comes from `server/daemon/package.json` at build time (`__APP_VERSION__` in `vite.config.ts`); do not hardcode it.
 
 ## Releasing
 
-**NEVER publish (Maven/npm) or bump a version on your own.** Publishing is irreversible
-(Maven Central is immutable) and version numbering belongs to the maintainer. Even when a
-task seems to require a release, stop, explain why, and wait for an explicit go-ahead
-naming the version.
+**Never publish (Maven / npm) or bump a version on your own.** Maven Central is immutable and version numbers belong to the maintainer. If a task seems to need a release, stop, explain why, and wait for a go-ahead naming the version.
 
-Two channels; credentials never live in the repo.
+Credentials never live in the repo.
 
-**SDK → Maven Central** (`io.github.dev-weiqi.sniffer:*`, vanniktech maven-publish plugin):
+**SDK to Maven Central** (`io.github.dev-weiqi.sniffer:*`, vanniktech maven-publish):
 
-1. Bump `VERSION_NAME` in `client/gradle.properties` — the only version to touch
-   (root `build.gradle.kts` reads it; also update `snifferVersion` in README).
-2. `cd client && ./gradlew publishAndReleaseToMavenCentral` — builds, signs, uploads,
-   and releases all 8 library modules (samples excluded).
-3. Verify (Central validation takes ~5–10 min):
-   `curl -sI https://repo1.maven.org/maven2/io/github/dev-weiqi/sniffer/core/<v>/core-<v>.pom` → 200.
+1. Bump `VERSION_NAME` in `client/gradle.properties` (the only version to touch) and `snifferVersion` in README.
+2. `cd client && ./gradlew publishAndReleaseToMavenCentral` builds, signs, uploads and releases the library modules (samples excluded).
+3. Verify after about 5 to 10 minutes: `curl -sI https://repo1.maven.org/maven2/io/github/dev-weiqi/sniffer/core/<v>/core-<v>.pom` returns 200.
 
-Credentials in `~/.gradle/gradle.properties` (machine-local): `mavenCentralUsername/Password`
-(Sonatype user token from central.sonatype.com, GitHub login `dev-weiqi`) and
-`signingInMemoryKey` (GPG key `D16D24AA5054EA6728416BD43972135B03CC9821`, no passphrase,
-public key published to keys.openpgp.org). POM metadata lives in `client/gradle.properties`.
+Credentials in `~/.gradle/gradle.properties`: `mavenCentralUsername` / `mavenCentralPassword` (Sonatype user token, GitHub login `dev-weiqi`) and `signingInMemoryKey` (GPG key `D16D24AA5054EA6728416BD43972135B03CC9821`, no passphrase, public key on keys.openpgp.org). POM metadata is in `client/gradle.properties`.
 
-**Daemon → npm** (`@dev-weiqi/sniffer`, from `server/daemon`):
+**Daemon to npm** (`@dev-weiqi/sniffer`, from `server/daemon`):
 
-1. Bump `version` in `server/daemon/package.json`. Daemon and SDK version independently —
-   sync is not required or implied. Also update the pinned-install example in README
-   (`npm install -g @dev-weiqi/sniffer@<v>`) — the npm/maven badges auto-track, the
-   body text does not.
-2. `cd server/daemon && npm publish --access public` — `prepack` compiles TS to `dist/`
-   and bundles the built web UI into `ui-dist/` automatically.
-3. Verify: `npm view @dev-weiqi/sniffer version`, then install the tarball in a temp dir and
-   smoke-test `sniffer start` + `curl /api/state`.
+1. Bump `version` in `server/daemon/package.json` (independent of the SDK version) and the pinned example `npm install -g @dev-weiqi/sniffer@<v>` in README. Badges update themselves; body text does not.
+2. `cd server/daemon && npm publish --access public`. `prepack` compiles to `dist/` and bundles the UI into `ui-dist/`.
+3. Verify with `npm view @dev-weiqi/sniffer version`, then install the tarball in a temp dir and smoke test `sniffer start` plus `curl /api/state`.
 
-npm credentials live in `~/.npmrc` (machine-local): a granular access token scoped to
-`@dev-weiqi/sniffer` with bypass-2FA, so publishing is non-interactive. Rotate it at
-npmjs.com → Access Tokens when it expires.
+npm credentials are in `~/.npmrc`: a granular token scoped to `@dev-weiqi/sniffer` with bypass 2FA. Rotate it at npmjs.com when it expires.
 
-The daemon resolves the UI from `../ui/dist` (repo checkout) first, then `ui-dist/`
-(published package) — repo first, or a stale `ui-dist/` left by npm pack shadows fresh
-builds. `postpack` removes the staging dir; keep both layouts working if you move files.
+The daemon loads the UI from `../ui/dist` first, then `ui-dist/`, so a stale `ui-dist/` never shadows a fresh build. `postpack` removes the staging dir; keep both layouts working if files move.
 
 ## Style
 

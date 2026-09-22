@@ -1,6 +1,6 @@
 # Sniffer
 
-A self-hosted Flipper replacement: monitor and mock your app's HTTP and Socket traffic.
+A self-hosted Flipper replacement for monitoring and mocking an app's HTTP and Socket traffic.
 
 ```
 ┌─────────────────────┐         ws://host:9091/device        ┌──────────────────────┐
@@ -15,195 +15,100 @@ A self-hosted Flipper replacement: monitor and mock your app's HTTP and Socket t
 
 | Directory | Contents |
 |-----------|----------|
-| `client/` | Kotlin Multiplatform SDK (plugin-based; apps include only what they need) + samples |
-| `server/` | Node/TS daemon (device connections, in-memory traffic store, auto `adb reverse`, test endpoints) + React web UI |
+| `client/` | Kotlin Multiplatform SDK (plugin based) and samples |
+| `server/` | Node/TS daemon (device connections, in-memory traffic, auto `adb reverse`, test endpoints) and React web UI |
 
 ## Prerequisites
 
 - Node.js 20+, JDK 17+
-- Android: `adb` on PATH (USB devices and emulators are reached through the daemon's automatic `adb reverse`)
-- iOS: the app embeds a KMP shared module (networking via ktor); Xcode for the sample
+- Android: `adb` on PATH
+- iOS: a KMP shared module using ktor; Xcode for the sample
 
 ## Quick start
 
 ```bash
-npm run setup                 # first time only: install deps + build the UI
-npm start                     # start the daemon (auto adb reverse every 5 s)
-open http://localhost:9091    # open the interface
+npm run setup                 # first time: install deps and build the UI
+npm start                     # start the daemon
+open http://localhost:9091
 ```
 
-Then just launch your debug app — the SDK connects automatically.
-To try everything with the bundled samples:
+Launch your debug app and it connects. To try the samples:
 
 ```bash
-# Android (full demo: okhttp / ktor / socket.io / ktor-ws)
+# Android, full demo (okhttp / ktor / socket.io / ktor-ws)
 cd client && ./gradlew :sample:installDebug
 
-# Compose Multiplatform sample (ktor only) — Android target
+# Compose Multiplatform sample (ktor only), Android
 cd client && ./gradlew :sample-cmp:installDebug
 
-# Compose Multiplatform sample — iOS simulator (no Xcode project needed)
+# Compose Multiplatform sample, iOS simulator (no Xcode project needed)
 cd client/sample-cmp/ios && ./build-sim.sh
 xcrun simctl boot "iPhone 17" && xcrun simctl install booted build/SnifferCmpSample.app
-xcrun simctl launch booted dev.weiqi.sniffer.samplecmp.ios   # auto-runs the whole demo
+xcrun simctl launch booted dev.weiqi.sniffer.samplecmp.ios   # runs the whole demo
 ```
 
-`sample` is the full Android demo (okhttp / ktor / socket.io / ktor-ws, incl. SSE and
-mock scenarios). `sample-cmp` shares one Compose UI across Android and iOS with a
-ktor-only stack — on iOS it runs the whole demo automatically on launch.
+## Integrating the SDK
 
-## Integrating the SDK into your app
+Dependencies, the Android cleartext setting, `Sniffer.start` and client plugins are in the
+[README](../README.md#add-the-sdk). Details not covered there:
 
-### 1. Add dependencies (Android / KMP)
-
-Modules are plugin-based: `core` is required, pick the rest to match your stack.
-Every module has a matching `-noop` stand-in (same API, empty implementation) so
-release builds carry zero monitoring code.
-
-```kotlin
-debugImplementation("io.github.dev-weiqi.sniffer:core")
-releaseImplementation("io.github.dev-weiqi.sniffer:core-noop")
-
-// only if you use okhttp
-debugImplementation("io.github.dev-weiqi.sniffer:okhttp")
-releaseImplementation("io.github.dev-weiqi.sniffer:okhttp-noop")
-
-// only if you use ktor client (KMP common, works on iOS too)
-debugImplementation("io.github.dev-weiqi.sniffer:ktor")
-releaseImplementation("io.github.dev-weiqi.sniffer:ktor-noop")
-
-// only if you use socket.io
-debugImplementation("io.github.dev-weiqi.sniffer:socketio")
-releaseImplementation("io.github.dev-weiqi.sniffer:socketio-noop")
-
-// only if you use ktor WebSockets (KMP common)
-debugImplementation("io.github.dev-weiqi.sniffer:ktor-ws")
-releaseImplementation("io.github.dev-weiqi.sniffer:ktor-ws-noop")
-```
-
-> Published on Maven Central; append `:$snifferVersion` to each coordinate
-> (current version in the README).
-
-### 2. Start the connection (Application.onCreate / app init)
-
-```kotlin
-class MyApp : Application() {
-    override fun onCreate() {
-        super.onCreate()
-        // Android defaults to localhost:9091, reached via the daemon's adb reverse;
-        // works unchanged for emulators and USB devices
-        Sniffer.start(appId = packageName)
-    }
-}
-```
-
-> **Android must allow cleartext to the daemon.** The SDK dials `ws://localhost:9091`
-> with your app's ktor engine, and API 28+ blocks cleartext by default. Add
-> `android:usesCleartextTraffic="true"` to the variants that start Sniffer (a
-> `src/debug/AndroidManifest.xml` overlay is enough). Without it the app never appears
-> in the UI. iOS needs nothing.
-
-iOS (inside the KMP shared module) — the iOS **simulator** shares the Mac's
-loopback so `localhost` works; a **real device** needs your Mac's LAN IP:
-
-```kotlin
-Sniffer.start(appId = "com.example.app")                      // simulator
-Sniffer.start(appId = "com.example.app", host = "192.168.x.x") // real device
-```
-
-The SDK reconnects every 3 s, retries silently when the daemon is down, and
-buffers up to 1000 messages while disconnected. It never affects the app.
-
-Host and port can also be overridden at runtime, without rebuilding the app
-(override > `start()` args > defaults). The daemon side is `PORT=9092 npm start`.
+- The SDK reconnects every 3 s, retries silently while the daemon is down and buffers up
+  to 1000 messages offline.
+- A real iOS device reaches the daemon over USB with no setup, or over Wi-Fi with
+  `Sniffer.start(appId = ..., host = "<Mac LAN IP>")`.
+- Runtime overrides (override > `start()` args > defaults), no rebuild needed:
 
 ```bash
-# Android: debug.* system properties are settable via adb without root
+# Android: debug.* properties are settable without root; restart the app afterwards
 adb shell setprop debug.sniffer.port 9092
-adb shell setprop debug.sniffer.host 192.168.1.20   # then restart the app
+adb shell setprop debug.sniffer.host 192.168.1.20
 
-# iOS: set SNIFFER_HOST / SNIFFER_PORT in the Xcode scheme's environment variables
+# iOS: SNIFFER_HOST / SNIFFER_PORT in the Xcode scheme's environment variables
 # JVM: -Dsniffer.port=9092 or SNIFFER_PORT=9092
-```
-
-### 3. Install the plugins
-
-```kotlin
-// okhttp: one interceptor
-val client = OkHttpClient.Builder()
-    .addInterceptor(SnifferOkHttp.interceptor())
-    .build()
-
-// ktor: one plugin
-val ktor = HttpClient(CIO) {
-    install(SnifferKtor)
-}
-
-// socket.io: wrap once, use the wrapper from then on
-val socket = SnifferSocketIO.wrap(IO.socket("https://your-server"), "https://your-server")
-socket.on("chat:new") { args -> /* ... */ }
-socket.connect()
-socket.emit("chat:send", arrayOf("hello"), Ack { args -> /* ... */ })
-
-// ktor WebSocket: install(SnifferKtorWs) once, then use the client normally
-val session = ktor.webSocketSession("wss://your-server/ws")
-session.send("ping")
-for (frame in session.incoming) { /* ... */ }
+# daemon: PORT=9092 npm start
 ```
 
 ## Using the Web UI
 
-Top bar: connection dot, device picker (filters when several devices are
-connected), global search (URL / method / status / event / payload),
-light–dark theme toggle (defaults to light), clear button.
+The top bar has the connection dot, a device picker, global search (URL, method, status,
+event, payload), a light / dark toggle and a clear button.
 
 ### API tab
 
-- Live request/response table: time (click the header to toggle sort order),
-  method, status (color-coded), URL, size, duration; `okhttp` / `ktor` badges
-  mark the source library and a purple **MOCK** badge marks mocked entries.
-- Click a row for details: URL, query, request/response headers, bodies
-  (JSON pretty-printed, collapsible, copyable).
-- **Copy cURL**: reproduces the request as a runnable curl command.
-- **Mock this request**: prefills a mock rule from the request's method, path
-  and actual response body, then jumps to the Mocks tab.
+- Live table of time (click the header to flip sort), method, status, URL, size and
+  duration. `okhttp` / `ktor` badges show the library; a purple **MOCK** badge marks mocks.
+- Row details: URL, query, headers and bodies (JSON pretty printed, collapsible, copyable).
+- **Copy cURL** reproduces the request.
+- **Mock this request** prefills a rule from the method, path and real response body.
 
 ### Socket tab
 
-- Connection chips show each socket (socket.io / ktor-ws) and its state.
-- Event stream: ↑ = client emit, ↓ = server→client; click a row for the full
-  payload and ack.
-- On an outgoing event: **Mock this event's ack** prefills a socket rule.
-  On an incoming event: **Prefill push form** copies it into the push composer.
-- **Push Server → Client event**: choose a target (all connections of a device,
-  or one connection), enter event name and payload — the app's listener fires
-  as if the server had sent it (a ktor-ws connection receives a text frame).
+- Chips show each socket (socket.io / ktor-ws) and its state.
+- Event stream: ↑ client emit, ↓ server to client. Click a row for the payload and ack.
+- Outgoing event: **Mock this event's ack**. Incoming event: **Prefill push form**.
+- **Push Server → Client event** fires the app's listener as if the server sent it, to one
+  connection or all of a device's connections (ktor-ws receives a text frame).
 
 ### Mocks tab
 
-Rules live in the daemon per device and are pushed to that device immediately;
-they then run **on the device**, so they keep working offline.
+Rules are stored per device on the daemon, pushed immediately and run on the device, so
+they keep working offline.
 
-- **HTTP rules**: method (ANY = any) + exact request path match → respond with the
-  given status/headers/body, optional delay. Matched requests never touch the
-  network — the interceptor short-circuits locally. The body editor has
-  pretty-print / minify JSON helpers.
-- Mock bodies and socket payloads support placeholders expanded on the device
-  each time a rule matches: `${randomId}`, `${now}` (ISO-8601 UTC) and
-  `${randomString(min~max)}` (random length within the range).
-- **Socket rules** come in two flavors. **sio ack**: matches the emitted
-  socket.io event name; matched emits are **not sent to the server** and the SDK
-  calls the ack callback locally with your payload (JSON array = multiple ack
-  args). **ws reply**: matches outgoing ktor-ws text frames by substring;
-  matched frames are not sent and your fake reply is injected as an incoming
-  frame. Both support an optional delay.
+- **HTTP rules**: method (ANY = any) plus exact request path, answered with the given
+  status, headers and body, optional delay. Matched requests never reach the network.
+- Bodies and socket payloads expand `${randomId}`, `${now}` (ISO-8601 UTC) and
+  `${randomString(min~max)}` on each match.
+- **Socket rules**: *sio ack* matches the emitted event name, does not send it and calls
+  the ack locally with your payload (JSON array = multiple args). *ws reply* matches
+  outgoing ktor-ws text frames by substring, drops them and injects your reply as an
+  incoming frame. Both take an optional delay.
 - The checkbox disables a rule without deleting it. Press **Save** to apply.
 
-## Test endpoints (built into the daemon, used by the sample)
+## Test endpoints (daemon, used by the samples)
 
 | Endpoint | Behavior |
 |----------|----------|
-| `ANY /test/echo` | echoes method/headers/body |
+| `ANY /test/echo` | echoes method, headers and body |
 | `GET /test/users/:id` | fake user JSON |
 | `GET /test/slow?ms=1500` | responds after a delay |
 | `GET /test/error` | responds 500 |
@@ -213,30 +118,26 @@ they then run **on the device**, so they keep working offline.
 
 ## Troubleshooting
 
-- **Device doesn't show up**: check the daemon is running and `adb devices`
-  lists your device (the daemon runs `adb reverse tcp:9091 tcp:9091` every 5 s).
-  For iOS/real devices over LAN, verify the `host`, same network, and that
-  port 9091 isn't firewalled.
-- **UI shows plain text**: run `cd server/ui && npm run build`, then refresh.
-- **HTTPS bodies missing**: interception happens in the library (before TLS),
-  no certificate needed — a missing body usually means that client instance
-  doesn't have the plugin installed.
-- **SSE / streaming**: upgrade (101) and `text/event-stream` responses are
-  passed through untouched — headers and status are recorded, bodies are not
-  captured (buffering a live stream would break it).
-- **Entries gone after daemon restart**: traffic is in-memory (max 2000
-  stored messages) by design. Mock rules DO survive restarts — they are persisted to
-  `~/.sniffer/mocks.json`.
-- **Truncated bodies**: bodies over 1 MB keep only the first part and are
-  flagged; binary bodies record size only.
+- **Device missing**: check the daemon is running and `adb devices` lists the device (the
+  daemon runs `adb reverse tcp:9091 tcp:9091` every 5 s). On Android, check cleartext is
+  allowed. Over Wi-Fi, check `host`, the network and the firewall on port 9091.
+- **UI shows plain text**: `cd server/ui && npm run build`, then refresh.
+- **HTTPS bodies missing**: interception happens before TLS, so no certificate is needed.
+  The client instance is probably missing the plugin.
+- **SSE / streaming**: 101 upgrades pass through untouched. `text/event-stream` bodies are
+  captured as the app reads them, except ktor `client.sse { }` calls, which record status
+  and headers only.
+- **Entries gone after restart**: traffic is in memory (max 2000 stored messages). Mock
+  rules persist in `~/.sniffer/mocks.json`.
+- **Truncated bodies**: bodies over 1 MB are cut and flagged; binary bodies record size only.
 
 ## Development
 
 ```bash
-cd server/daemon && npm run typecheck        # daemon type check
-cd server/ui && npm run dev                  # UI dev mode (proxies to 9091)
-cd client && ./gradlew build             # all SDK modules + tests (incl. iOS targets)
+cd server/daemon && npm run typecheck    # daemon type check
+cd server/ui && npm run dev              # UI dev mode (proxies to 9091)
+cd client && ./gradlew build             # all SDK modules and tests, incl. iOS
 cd client && ./gradlew :ktor-ws:wsDebug  # ktor-ws smoke test (needs a running daemon)
 ```
 
-Wire protocol details: [PROTOCOL.md](../PROTOCOL.md).
+Wire protocol: [PROTOCOL.md](../PROTOCOL.md).

@@ -9,106 +9,73 @@
 </p>
 
 Sniffer is a Kotlin Multiplatform SDK and local monitor for inspecting and mocking
-mobile network traffic while you develop apps.
-
-It supports **OkHttp**, **Ktor Client**, **Socket.IO**, and **Ktor WebSocket**.
+mobile network traffic during development. It supports **OkHttp**, **Ktor Client**,
+**Socket.IO** and **Ktor WebSocket**.
 
 ![Sniffer API traffic panel](docs/assets/sniffer-api-preview.png)
 
-It follows the developer workflow that made
-[Flipper](https://github.com/facebook/flipper) useful: connect a debug app,
-watch traffic live, and change behavior from a desktop UI. Sniffer exists because
-our Flipper-based Android setup ran into the
-[Android 16 KB page-size migration](https://developer.android.com/guide/practices/page-sizes),
-while the upstream Flipper repository is now a public archive/read-only project.
-Sniffer keeps the network debugging pieces in a small stack we can maintain.
+It keeps the [Flipper](https://github.com/facebook/flipper) workflow (connect a debug
+app, watch traffic live, change behavior from a desktop UI) after Flipper was archived
+and our setup hit the
+[Android 16 KB page-size migration](https://developer.android.com/guide/practices/page-sizes).
 
 ## Install the monitor
 
-The daemon runs on your dev machine: it serves the browser UI, stores mock
-rules, and keeps `adb reverse` alive for Android devices.
+The daemon runs on your dev machine. It serves the browser UI, stores mock rules and
+keeps `adb reverse` alive for Android devices.
 
-**Prerequisites**
-
-- [Node.js](https://nodejs.org) 20+ (npm ships with it)
-- `adb` (Android platform-tools) on your PATH, for Android devices only; iOS needs nothing extra
+Requires [Node.js](https://nodejs.org) 20+, plus `adb` on your PATH for Android.
 
 ```bash
 npm install -g @dev-weiqi/sniffer
-```
-
-```bash
 sniffer start
 ```
 
-The UI opens in your browser at [http://localhost:9091](http://localhost:9091).
-Or skip the install and run it straight:
+The UI opens at [http://localhost:9091](http://localhost:9091). Without installing:
 
 ```bash
 npx @dev-weiqi/sniffer start
 ```
 
-If port 9091 is taken, Sniffer offers to free it for you. You can also pick
-another port:
+If port 9091 is taken, Sniffer offers to free it, or pick another port:
 
 ```bash
 PORT=9092 sniffer start
 ```
 
-By default the daemon binds to `127.0.0.1` only, so it is not exposed to your
-network. Android (via `adb reverse`), the iOS simulator and a **USB-connected
-iPhone** (via usbmuxd, see below) reach it over `localhost`, so they are unaffected.
-Only a **device connecting over Wi-Fi** to your machine's LAN address needs the
-daemon opened up:
+The daemon binds to `127.0.0.1` by default. Android (`adb reverse`), the iOS simulator
+and a USB-connected iPhone reach it over `localhost`. Only a device on Wi-Fi needs it
+opened up, together with `host` in the app (see [Start Sniffer](#start-sniffer)):
 
 ```bash
 SNIFFER_BIND=0.0.0.0 sniffer start
 ```
 
-`SNIFFER_BIND` (daemon: which interface to listen on) is the server-side twin of
-the client-side `host` you pass in the app (`Sniffer.start(host = ...)`, which
-tells the device where to find the daemon). For Wi-Fi you set both: open the
-daemon with `SNIFFER_BIND=0.0.0.0`, and point the app at your machine's LAN IP.
-
-To update an existing install to the latest version:
+Update, or pin a version:
 
 ```bash
 npm install -g @dev-weiqi/sniffer@latest
-```
-
-Or pin a specific version:
-
-```bash
 npm install -g @dev-weiqi/sniffer@0.6.16
 ```
 
 ## Desktop app
 
-A macOS desktop build bundles the daemon and UI into one window, with no Node.js
-or npm needed. Download the latest `.dmg` from the
-[Releases page](https://github.com/dev-weiqi/sniffer/releases)
-(`Sniffer-server-mac-aarch64.dmg` for Apple Silicon, `Sniffer-server-mac-x64.dmg`
-for Intel), drag `Sniffer.app` into `/Applications`, and launch. It runs the same
-daemon as the CLI; change port 9091 in the app's settings if needed.
+A macOS build bundles the daemon and UI in one window, no Node.js needed. Download the
+`.dmg` from [Releases](https://github.com/dev-weiqi/sniffer/releases)
+(`Sniffer-server-mac-aarch64.dmg` for Apple Silicon, `Sniffer-server-mac-x64.dmg` for
+Intel) and drag `Sniffer.app` into `/Applications`. The port is set in the app's settings.
 
-### "Sniffer is damaged and can't be opened" (macOS)
-
-The dmg is not notarized by Apple yet, so Gatekeeper blocks it after download.
-Drag `Sniffer.app` into `/Applications`, then clear the quarantine flag once:
+The dmg is not notarized yet. If macOS says "Sniffer is damaged", clear the quarantine
+flag once:
 
 ```bash
 xattr -d com.apple.quarantine /Applications/Sniffer.app
 ```
 
-After that it opens normally.
-
 ## Add the SDK
 
-Use `core` plus the transport modules your app actually uses. Add the matching
-`-noop` artifacts to release builds so production builds keep the same API with
-empty implementations.
-
-Supported client integrations:
+Add `core` plus the modules for the clients you use. Use the `-noop` twins in release
+builds: same API, empty implementation.
 
 | Client | Sniffer artifact |
 | --- | --- |
@@ -138,8 +105,7 @@ dependencies {
 }
 ```
 
-For Kotlin Multiplatform shared code, add the KMP modules you need to
-`commonMain`:
+For KMP shared code, add the modules to `commonMain`:
 
 ```kotlin
 commonMain.dependencies {
@@ -151,10 +117,9 @@ commonMain.dependencies {
 
 ### Android: allow cleartext to the daemon
 
-The SDK reaches the daemon over plain `ws://localhost:9091` with the ktor engine
-your app already ships. On Android that engine follows the network security
-policy, which blocks cleartext by default on API 28+. Allow it in the variants
-that start Sniffer:
+The SDK reaches the daemon over plain `ws://localhost:9091` with the ktor engine your
+app already ships. On Android that engine follows the network security policy, which
+blocks cleartext by default on API 28+. Allow it in the variants that start Sniffer:
 
 ```xml
 <!-- src/debug/AndroidManifest.xml -->
@@ -167,8 +132,8 @@ A `network_security_config` limited to the daemon host also works. iOS needs not
 
 ## Start Sniffer
 
-Start the SDK once when the app boots. The SDK reconnects automatically and does
-not throw into your app when the daemon is not running.
+Start the SDK once at app launch. It reconnects on its own and never throws into your
+app when the daemon is down.
 
 ```kotlin
 import dev.weiqi.sniffer.core.Sniffer
@@ -181,32 +146,28 @@ class App : Application() {
 }
 ```
 
-How the device reaches the daemon depends on where the app runs. The default
-`Sniffer.start(appId)` covers every row except Wi-Fi:
+The default `Sniffer.start(appId)` works everywhere except Wi-Fi:
 
 | App runs on | Link | Setup |
 |-------------|------|-------|
-| Android device / emulator | `adb reverse` → `localhost:9091` | none (adb on PATH) |
+| Android device / emulator | `adb reverse` to `localhost:9091` | none (adb on PATH) |
 | iOS simulator | `localhost:9091` (shares the Mac's loopback) | none |
 | iPhone over USB | daemon dials the app through usbmuxd | none |
-| Any device over Wi-Fi | app → your Mac's LAN IP | `SNIFFER_BIND=0.0.0.0` + `host` |
+| Any device over Wi-Fi | app to your Mac's LAN IP | `SNIFFER_BIND=0.0.0.0` + `host` |
 
-**iPhone over USB.** iOS has no `adb reverse`, so the direction is flipped: the
-SDK listens on the device's `127.0.0.1:9092` and the daemon connects into it via
-usbmuxd (built into macOS; nothing to install). Requirements: the phone is paired
-with this Mac (it is, if Xcode can deploy to it) and the app is in the foreground.
-The daemon polls every 5 s, so a freshly launched app shows up within a few
-seconds. Override the port on both sides with `SNIFFER_USB_PORT` if 9092 is taken.
-The USB link only carries Sniffer traffic: the app's own requests still go out over
-the phone's network, so `localhost` URLs in the app point at the phone, not your Mac.
+**iPhone over USB.** The SDK listens on the device's `127.0.0.1:9092` and the daemon
+connects in through usbmuxd (built into macOS). The phone must be paired with this Mac
+and the app in the foreground; it shows up within about 5 s. Set `SNIFFER_USB_PORT` on
+both sides if 9092 is taken. Only Sniffer traffic uses the USB link, so `localhost` in
+the app's own requests still means the phone.
 
-Over Wi-Fi instead, pass your Mac's LAN address:
+Over Wi-Fi, pass your Mac's LAN address:
 
 ```kotlin
 Sniffer.start(appId = "com.example.app", host = "192.168.1.20")
 ```
 
-Runtime overrides are available when you do not want to rebuild:
+Or override at runtime without rebuilding:
 
 ```bash
 adb shell setprop debug.sniffer.port 9092
@@ -232,15 +193,13 @@ import dev.weiqi.sniffer.ktor.SnifferKtor
 
 val ktor = HttpClient(CIO) {
     install(Auth) { /* ... */ }
-    install(SnifferKtor) // install LAST — see below
+    install(SnifferKtor) // install last, see below
 }
 ```
 
-> **Install `SnifferKtor` after every plugin that reacts to responses**
-> (`Auth`, retry, ...). ktor runs first-installed send interceptors outermost,
-> and a matched mock rule short-circuits the send chain — plugins installed
-> after Sniffer never see the mocked response. Installed last, a mocked 401
-> flows back through `Auth` and triggers its token refresh like a real one.
+> **Install `SnifferKtor` after every plugin that reacts to responses** (`Auth`, retry).
+> A matched mock short-circuits the send chain, so plugins installed after Sniffer never
+> see it. Installed last, a mocked 401 still triggers `Auth`'s token refresh.
 
 Socket.IO:
 
@@ -254,12 +213,9 @@ socket.connect()
 socket.emit("cart:update", mapOf("sku" to "pro"))
 ```
 
-Apps that multiplex everything over one generic event can pass a `label` lambda
-to `on`: it receives the args and returns a short tag the UI shows as
-`event(tag)` in the list. Only the tag inside the parentheses is app-controlled,
-and the real event name is always visible. The tag is display-only: listeners,
-the wire event name, and mock matching all use the real name. Return null for
-no tag:
+If your app multiplexes everything over one event, pass a `label` to `on`. It returns a
+short tag shown as `event(tag)` in the UI; the real event name is still used for
+listeners, the wire and mock matching. Return null for no tag:
 
 ```kotlin
 socket.on("message", label = { args ->
@@ -286,19 +242,17 @@ session.send("ping")
 
 ## Use the UI
 
-Open `http://localhost:9091`, launch your debug app, and select the connected
-device.
+Open `http://localhost:9091`, launch your debug app and select the device.
 
-- **API**: inspect live requests and responses, headers, JSON, images, animated
-  WebP responses, copied cURL commands, and mocked entries.
-- **Socket**: inspect Socket.IO and WebSocket connections, events, payloads,
-  acks, and pushed server-to-client messages.
-- **Mocks**: create per-device HTTP response rules, delay-only rules, Socket.IO
-  ack rules, WebSocket reply rules, and server-to-client push events.
+- **API**: live requests and responses, headers, JSON, images, animated WebP, cURL copy,
+  mocked entries.
+- **Socket**: Socket.IO and WebSocket connections, events, payloads, acks and pushed
+  server-to-client messages.
+- **Mocks**: per-device HTTP response rules, delay-only rules, Socket.IO ack rules,
+  WebSocket reply rules and push events.
 
-Rules are sent to the selected device and run inside the SDK. HTTP mocks
-short-circuit matched requests before the network. Socket ack rules answer the
-client locally. Mock bodies support the placeholders `${randomId}`, `${now}` and
+Rules run inside the SDK on the selected device. HTTP mocks answer before the network;
+socket ack rules answer locally. Mock bodies support `${randomId}`, `${now}` and
 `${randomString(min~max)}`.
 
 ## Modules
@@ -306,16 +260,14 @@ client locally. Mock bodies support the placeholders `${randomId}`, `${now}` and
 | Artifact | Use it for |
 | --- | --- |
 | `io.github.dev-weiqi.sniffer:core` | SDK connection, device identity, mock rule sync |
-| `io.github.dev-weiqi.sniffer:okhttp` | OkHttp request/response inspection and HTTP mocks |
-| `io.github.dev-weiqi.sniffer:ktor` | Ktor client inspection for Android/iOS/JVM |
-| `io.github.dev-weiqi.sniffer:socketio` | Socket.IO event inspection, ack mocks, push events |
-| `io.github.dev-weiqi.sniffer:ktor-ws` | Ktor WebSocket frame inspection and reply mocks |
+| `io.github.dev-weiqi.sniffer:okhttp` | OkHttp inspection and HTTP mocks |
+| `io.github.dev-weiqi.sniffer:ktor` | Ktor client inspection for Android, iOS and JVM |
+| `io.github.dev-weiqi.sniffer:socketio` | Socket.IO inspection, ack mocks, push events |
+| `io.github.dev-weiqi.sniffer:ktor-ws` | Ktor WebSocket inspection and reply mocks |
 
 Each artifact has a `-noop` twin with the same API.
 
-## Local Development
-
-From this repository:
+## Local development
 
 ```bash
 npm run setup
@@ -326,7 +278,7 @@ cd client
 ./gradlew :sample-cmp:installDebug
 ```
 
-Useful checks:
+Checks:
 
 ```bash
 cd server/daemon && npm run typecheck
@@ -334,4 +286,4 @@ cd server/ui && npm run build
 cd client && ./gradlew :core:jvmTest :okhttp:test :sample:compileDebugKotlin
 ```
 
-More detail: [docs/GUIDE.md](docs/GUIDE.md) and [PROTOCOL.md](PROTOCOL.md).
+More: [docs/GUIDE.md](docs/GUIDE.md) and [PROTOCOL.md](PROTOCOL.md).

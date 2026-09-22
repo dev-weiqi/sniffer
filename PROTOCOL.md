@@ -13,16 +13,14 @@ A single daemon port (default **9091**) hosts everything:
 | `/socket.io`| test socket.io server |
 | `/`         | UI static files |
 
-**USB (physical iOS device).** usbmuxd only lets the Mac open a connection *into* a
-device port, so the roles flip: the SDK listens on the device's `127.0.0.1:9092`
-(`SNIFFER_USB_PORT`, both sides), the daemon dials it through usbmuxd and performs the
-WebSocket *client* handshake (`GET /device`). From the first frame on the protocol below is
-identical. The SDK serves one session at a time: while an outbound (`/device`) session is
-live, USB dial-ins are closed unanswered and the daemon retries on its next 5s poll.
+**USB (physical iOS device).** usbmuxd can only connect *into* a device port, so roles
+flip: the SDK listens on `127.0.0.1:9092` (`SNIFFER_USB_PORT`, both sides) and the daemon
+dials it and performs the WebSocket client handshake (`GET /device`). After that the protocol
+is identical. The SDK serves one session at a time; while an outbound `/device` session is
+live, USB dial-ins are closed and the daemon retries on its next 5 s poll.
 
-Timestamps are epoch millis. Bodies are always strings; binary bodies carry no
-content (`body: null`). Bodies over **1 MB** are truncated and flagged
-`bodyTruncated: true`.
+Timestamps are epoch millis. Bodies are strings; binary bodies are `null`. Bodies over
+**1 MB** are truncated and flagged `bodyTruncated: true`.
 
 ## Device → Daemon
 
@@ -51,7 +49,7 @@ content (`body: null`). Bodies over **1 MB** are truncated and flagged
 // socket events; direction: "out" = client emit, "in" = server→client
 // ktor-ws frames use the fixed event name "message"
 // label (optional): short app-provided display tag (SDK label labeler on socket.on); the UI
-// renders event(label). "event" stays the real wire name — mock matching and injection always use "event"
+// renders event(label). "event" stays the real wire name; mock matching and injection always use "event"
 { "type": "socket-event", "id": "<uuid>", "connectionId": "<uuid>",
   "transport": "socketio", "direction": "out", "event": "chat:send",
   "payload": "[\"hello\"]", "mocked": false, "timestamp": 0, "label": null }
@@ -86,11 +84,11 @@ content (`body: null`). Bodies over **1 MB** are truncated and flagged
 // socket rule, transport "socketio": matched emits are not sent; a fake ack (JSON array of args)
 //   is returned locally. A non-blank [pushEvent] switches the rule to the event-reply mode: after
 //   [delayMs] the SDK injects [pushEvent] with [pushPayload] (JSON array of args, placeholders
-//   expanded) as a server→client event into the app's listeners and sends no fake ack —
-//   [ackPayload] is ignored — for request/response APIs that answer with a separate event
+//   expanded) as a server→client event into the app's listeners and sends no fake ack
+//   ([ackPayload] is ignored), for request/response APIs that answer with a separate event
 //   instead of an ack. transport "ktor-ws": [event] is a substring matched against outgoing
 //   text frames; matched frames are not sent and [ackPayload] is injected as a fake incoming
-//   frame ([pushEvent]/[pushPayload] are ignored — the reply frame already is the injection)
+//   frame ([pushEvent]/[pushPayload] are ignored; the reply frame already is the injection)
 // UI-only rule fields the daemon strips before sending to the device: "starred" (rule is shared
 //   with every device of the same appId, stored per appId on the daemon and merged in ahead of
 //   the device's own rules), plus "name" / "createdAt" pass through untouched (SDK ignores them)
@@ -116,7 +114,7 @@ content (`body: null`). Bodies over **1 MB** are truncated and flagged
 
 ## Daemon ↔ UI
 
-WebSocket `/ui`: a snapshot on connect, then a live stream:
+WebSocket `/ui` sends a snapshot on connect, then a live stream:
 
 ```jsonc
 { "type": "init", "devices": [ { "...": "hello fields", "connected": true } ],
