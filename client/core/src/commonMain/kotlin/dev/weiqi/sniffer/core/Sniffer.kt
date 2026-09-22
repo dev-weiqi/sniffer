@@ -1,7 +1,6 @@
 package dev.weiqi.sniffer.core
 
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.websocket.Frame
@@ -142,7 +141,10 @@ object Sniffer {
         pushHandlers = pushHandlers - connectionId
     }
 
-    private val client by lazy { HttpClient(CIO) { install(WebSockets) } }
+    // No engine of our own: the SDK borrows whichever engine the host app already ships. Bundling
+    // one (CIO) would register a second engine in ktor's auto-discovery and could silently change
+    // the host's default HttpClient() engine (on iOS that meant CIO, which has no TLS).
+    private val client by lazy { HttpClient { install(WebSockets) } }
 
     // outbound (wifi / adb reverse / simulator) and USB may both reach a daemon; one session drains the queue
     private val sessionLock = Mutex()

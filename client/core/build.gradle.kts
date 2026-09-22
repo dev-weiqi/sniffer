@@ -16,7 +16,6 @@ kotlin {
             api(libs.kotlinx.coroutines.core)
             api(libs.kotlinx.serialization.json)
             implementation(libs.ktor.client.core)
-            implementation(libs.ktor.client.cio)
             implementation(libs.ktor.client.websockets)
             // USB transport: the SDK is the WebSocket *server* side there (see UsbServer.kt)
             implementation(libs.ktor.network)
@@ -25,6 +24,13 @@ kotlin {
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
+        }
+        // tests need a real engine to dial the USB server / daemon; production code has none
+        jvmTest.dependencies {
+            implementation(libs.ktor.client.cio)
+        }
+        iosSimulatorArm64Test.dependencies {
+            implementation(libs.ktor.client.cio)
         }
     }
 }
