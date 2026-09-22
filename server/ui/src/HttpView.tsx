@@ -523,7 +523,7 @@ function PausedDetail({ hit, onResolve, onClose }: {
 }
 
 function ImagePreview({ contentType, base64 }: { contentType: string; base64: string }) {
-  const [dims, setDims] = useState<string | null>(null)
+  const [dims, setDims] = useState<{ width: number; height: number } | null>(null)
   const src = `data:${contentType};base64,${base64}`
   const webpInfo = contentType === 'image/webp' ? parseWebpAnimation(base64) : null
   if (webpInfo?.animated) {
@@ -532,8 +532,9 @@ function ImagePreview({ contentType, base64 }: { contentType: string; base64: st
   return (
     <div className="image-preview">
       <img className="body-image" alt="response" src={src}
-        onLoad={e => setDims(`${e.currentTarget.naturalWidth} × ${e.currentTarget.naturalHeight}`)} />
-      {dims && <div className="dim hint">{dims}</div>}
+        style={dims ? { maxWidth: `min(calc(100% - 20px), ${dims.width}px)` } : undefined}
+        onLoad={e => setDims({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })} />
+      {dims && <div className="dim hint">{dims.width} × {dims.height}</div>}
     </div>
   )
 }

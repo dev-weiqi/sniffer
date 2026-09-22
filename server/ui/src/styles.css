@@ -968,7 +968,11 @@ button.add { margin-top: 2px; }
 .jn-boolean { color: var(--accent); }
 .jn-null { color: var(--text-dim); }
 
-.body-image { max-width: 100%; max-height: 40vh; margin: 6px 10px; border-radius: 6px; border: 1px solid var(--border); display: block; }
+.body-image {
+  align-self: flex-start; width: auto; height: auto;
+  max-width: calc(100% - 20px); max-height: min(40vh, 320px); object-fit: contain;
+  margin: 6px 10px; border-radius: 6px; border: 1px solid var(--border); display: block;
+}
 .webp-player, .image-preview { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; }
 .webp-player canvas.body-image { background: var(--bg-alt); }
 .webp-controls {
