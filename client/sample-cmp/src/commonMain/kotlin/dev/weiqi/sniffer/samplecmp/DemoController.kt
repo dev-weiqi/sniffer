@@ -8,7 +8,6 @@ import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.client.call.body
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.sse.sse
-import io.ktor.client.engine.HttpClientEngineFactory
 import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.request.get
@@ -37,9 +36,6 @@ private const val ANIMATED_WEBP = "https://mathiasbynens.be/demo/animated-webp-s
 // a public JSON endpoint: reachable from a physical device, unlike the daemon's localhost test routes
 const val EXTERNAL_API = "https://httpbin.org/get"
 
-/** CIO on Android; Darwin on iOS, where CIO cannot do TLS. */
-internal expect fun httpEngine(): HttpClientEngineFactory<*>
-
 enum class LogKind { INFO, OK, ERROR, EVENT }
 
 class LogEntry(val time: String, val text: String, val kind: LogKind, val firstOfAction: Boolean)
@@ -56,12 +52,12 @@ class DemoController {
     private var actionStart = false
 
     private val ktor by lazy {
-        HttpClient(httpEngine()) {
+        HttpClient {
             install(SnifferKtor)
             install(SnifferKtorWs)
             install(io.ktor.client.plugins.sse.SSE)
             install(WebSockets)
-        }
+        }.also { log("ktor engine: ${it.engine::class.simpleName}", LogKind.INFO) }
     }
     private var ws: DefaultClientWebSocketSession? = null
     private var pendingWsAck: CompletableDeferred<String>? = null

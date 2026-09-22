@@ -20,6 +20,8 @@ kotlin {
             implementation(project(":ktor"))
             implementation(project(":ktor-ws"))
             implementation(libs.ktor.client.core)
+            // no engine picked by hand: mirrors a host app that relies on ktor's auto-discovery
+            implementation(libs.ktor.client.engine.defaults)
             implementation(libs.ktor.client.websockets)
             implementation(libs.kotlinx.coroutines.core)
             implementation(compose.runtime)
@@ -29,18 +31,14 @@ kotlin {
         }
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
-            implementation(libs.ktor.client.cio)
-        }
-        // CIO has no TLS on Kotlin/Native ("TLS sessions are not supported"): iOS needs the system engine
-        iosMain.dependencies {
-            implementation(libs.ktor.client.darwin)
         }
     }
 }
 
 android {
     namespace = "dev.weiqi.sniffer.samplecmp"
-    compileSdk = 36
+    // okhttp 5.5 (pulled in by engine-defaults on Android) needs compileSdk 37
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "dev.weiqi.sniffer.samplecmp"
