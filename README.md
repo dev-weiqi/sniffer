@@ -149,6 +149,25 @@ commonMain.dependencies {
 }
 ```
 
+### Android: allow cleartext to the daemon
+
+The SDK talks to the daemon over plain `ws://localhost:9091` through whatever
+ktor engine your app already ships (it bundles none of its own). On Android
+that engine honors the app's network security policy, and apps targeting
+API 28+ block cleartext by default, so an https-only app never registers with
+the daemon. Permit cleartext in the variants that start Sniffer, e.g. a
+debug-only manifest:
+
+```xml
+<!-- src/debug/AndroidManifest.xml -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:usesCleartextTraffic="true" />
+</manifest>
+```
+
+A `network_security_config` that whitelists only the daemon host works too.
+iOS needs nothing: ATS already exempts loopback connections.
+
 ## Start Sniffer
 
 Start the SDK once when the app boots. The SDK reconnects automatically and does
