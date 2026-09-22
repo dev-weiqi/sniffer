@@ -20,7 +20,7 @@ A self-hosted Flipper replacement: monitor and mock your app's HTTP and Socket t
 
 ## Prerequisites
 
-- Node.js 18+, JDK 17+
+- Node.js 20+, JDK 17+
 - Android: `adb` on PATH (USB devices and emulators are reached through the daemon's automatic `adb reverse`)
 - iOS: the app embeds a KMP shared module (networking via ktor); Xcode for the sample
 
@@ -61,29 +61,28 @@ Every module has a matching `-noop` stand-in (same API, empty implementation) so
 release builds carry zero monitoring code.
 
 ```kotlin
-debugImplementation("dev.weiqi.sniffer:core")
-releaseImplementation("dev.weiqi.sniffer:core-noop")
+debugImplementation("io.github.dev-weiqi.sniffer:core")
+releaseImplementation("io.github.dev-weiqi.sniffer:core-noop")
 
 // only if you use okhttp
-debugImplementation("dev.weiqi.sniffer:okhttp")
-releaseImplementation("dev.weiqi.sniffer:okhttp-noop")
+debugImplementation("io.github.dev-weiqi.sniffer:okhttp")
+releaseImplementation("io.github.dev-weiqi.sniffer:okhttp-noop")
 
 // only if you use ktor client (KMP common, works on iOS too)
-debugImplementation("dev.weiqi.sniffer:ktor")
-releaseImplementation("dev.weiqi.sniffer:ktor-noop")
+debugImplementation("io.github.dev-weiqi.sniffer:ktor")
+releaseImplementation("io.github.dev-weiqi.sniffer:ktor-noop")
 
 // only if you use socket.io
-debugImplementation("dev.weiqi.sniffer:socketio")
-releaseImplementation("dev.weiqi.sniffer:socketio-noop")
+debugImplementation("io.github.dev-weiqi.sniffer:socketio")
+releaseImplementation("io.github.dev-weiqi.sniffer:socketio-noop")
 
 // only if you use ktor WebSockets (KMP common)
-debugImplementation("dev.weiqi.sniffer:ktor-ws")
-releaseImplementation("dev.weiqi.sniffer:ktor-ws-noop")
+debugImplementation("io.github.dev-weiqi.sniffer:ktor-ws")
+releaseImplementation("io.github.dev-weiqi.sniffer:ktor-ws-noop")
 ```
 
-> Not published to Maven yet — use a composite build, `mavenLocal`
-> (add publish config and `./gradlew publishToMavenLocal`), or a direct
-> project dependency as in `client/sample/build.gradle.kts`.
+> Published on Maven Central; append `:$snifferVersion` to each coordinate
+> (current version in the README).
 
 ### 2. Start the connection (Application.onCreate / app init)
 
@@ -185,13 +184,13 @@ light–dark theme toggle (defaults to light), clear button.
 Rules live in the daemon per device and are pushed to that device immediately;
 they then run **on the device**, so they keep working offline.
 
-- **HTTP rules**: method (ANY = any) + URL substring match → respond with the
+- **HTTP rules**: method (ANY = any) + exact request path match → respond with the
   given status/headers/body, optional delay. Matched requests never touch the
   network — the interceptor short-circuits locally. The body editor has
   pretty-print / minify JSON helpers.
 - Mock bodies and socket payloads support placeholders expanded on the device
-  each time a rule matches: `${id}` and `${randomString(length)}`. Replace
-  `length` with the number you want for that rule.
+  each time a rule matches: `${randomId}`, `${now}` (ISO-8601 UTC) and
+  `${randomString(min~max)}` (random length within the range).
 - **Socket rules** come in two flavors. **sio ack**: matches the emitted
   socket.io event name; matched emits are **not sent to the server** and the SDK
   calls the ack callback locally with your payload (JSON array = multiple ack
@@ -225,8 +224,8 @@ they then run **on the device**, so they keep working offline.
 - **SSE / streaming**: upgrade (101) and `text/event-stream` responses are
   passed through untouched — headers and status are recorded, bodies are not
   captured (buffering a live stream would break it).
-- **Entries gone after daemon restart**: traffic is in-memory (max 5000
-  entries) by design. Mock rules DO survive restarts — they are persisted to
+- **Entries gone after daemon restart**: traffic is in-memory (max 2000
+  stored messages) by design. Mock rules DO survive restarts — they are persisted to
   `~/.sniffer/mocks.json`.
 - **Truncated bodies**: bodies over 1 MB keep only the first part and are
   flagged; binary bodies record size only.

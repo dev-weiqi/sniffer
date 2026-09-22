@@ -298,8 +298,8 @@ device.
 
 Rules are sent to the selected device and run inside the SDK. HTTP mocks
 short-circuit matched requests before the network. Socket ack rules answer the
-client locally. Mock bodies support placeholders such as `${id}` and
-`${randomString(length)}`.
+client locally. Mock bodies support the placeholders `${randomId}`, `${now}` and
+`${randomString(min~max)}`.
 
 ## Modules
 
