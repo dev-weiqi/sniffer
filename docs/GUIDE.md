@@ -99,12 +99,10 @@ class MyApp : Application() {
 ```
 
 > **Android must allow cleartext to the daemon.** The SDK dials `ws://localhost:9091`
-> with the ktor engine your app already has (it ships none of its own), and on Android
-> that engine obeys the network security policy — API 28+ blocks cleartext by default.
-> Add `android:usesCleartextTraffic="true"` to the `<application>` of the variants that
-> start Sniffer (a `src/debug/AndroidManifest.xml` overlay is enough), or whitelist the
-> daemon host in a `network_security_config`. Without it the app silently never shows up
-> in the UI. iOS needs nothing: ATS exempts loopback.
+> with your app's ktor engine, and API 28+ blocks cleartext by default. Add
+> `android:usesCleartextTraffic="true"` to the variants that start Sniffer (a
+> `src/debug/AndroidManifest.xml` overlay is enough). Without it the app never appears
+> in the UI. iOS needs nothing.
 
 iOS (inside the KMP shared module) — the iOS **simulator** shares the Mac's
 loopback so `localhost` works; a **real device** needs your Mac's LAN IP:
