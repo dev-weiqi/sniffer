@@ -533,6 +533,14 @@ button.filter-btn { width: 20px; height: 20px; padding: 0; align-items: center; 
 .bp-armed-summary { display: flex; align-items: baseline; gap: 6px; padding: 10px 12px; }
 .bp-armed-summary strong { color: var(--warn); font-size: 24px; line-height: 1; }
 .bp-armed-summary span { color: var(--text-dim); font-size: 12px; }
+.bp-armed-warning {
+  display: flex; gap: 8px; margin: 0 10px 12px; padding: 9px;
+  border: 1px solid color-mix(in srgb, var(--warn) 20%, transparent); border-radius: 5px;
+  background: color-mix(in srgb, var(--warn) 6%, var(--bg-panel)); font-size: 11px; line-height: 1.5;
+}
+.bp-armed-warning svg { flex: none; color: var(--warn); margin-top: 1px; }
+.bp-armed-warning strong { color: var(--warn); font-weight: 600; }
+.bp-armed-warning p { margin-top: 3px; color: var(--text-dim); }
 .bp-armed-rules { display: grid; gap: 8px; padding: 0 12px 12px; }
 .bp-armed-rule { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; font-size: 11px; }
 .bp-armed-method { font-weight: 800; }

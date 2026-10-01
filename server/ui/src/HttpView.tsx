@@ -7,7 +7,7 @@ import { copyText, fmtDuration, fmtSize, fmtTime, prettyJson, splitHighlight, sp
 import { newRuleId } from './util'
 import { useDetailWidth, useFollowLatestRow, useListKeys, useUnreadRows } from './hooks'
 import { JsonView } from './JsonView'
-import { HeadersEditor } from './MocksView'
+import { HeadersEditor, WarningIcon } from './MocksView'
 import { base64ToBytes, formatWebpSummary, parseWebpAnimation, type WebpAnimationInfo } from './webp'
 
 export type ResolveEdits = { status?: number; headers?: Record<string, string>; body?: string }
@@ -161,6 +161,13 @@ export function HttpView({ active, followLatest, emptyState, mockCount, onOpenMo
               <div className="bp-armed-popover" id="armed-breakpoints" role="tooltip">
                 <div className="bp-armed-summary">
                   <strong>{armedBreakpoints.length}</strong><span>response breakpoints armed</span>
+                </div>
+                <div className="bp-armed-warning">
+                  <WarningIcon />
+                  <div>
+                    <strong>Breakpoints do not pause SSE streams or mocked responses.</strong>
+                    <p>Breakpoints apply to regular HTTP text responses only.</p>
+                  </div>
                 </div>
                 <div className="bp-armed-rules">
                   {armedBreakpoints.map(rule => (
