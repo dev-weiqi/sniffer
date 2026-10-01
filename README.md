@@ -55,7 +55,7 @@ Update, or pin a version:
 
 ```bash
 npm install -g @dev-weiqi/sniffer@latest
-npm install -g @dev-weiqi/sniffer@0.6.16
+npm install -g @dev-weiqi/sniffer@0.6.17
 ```
 
 ## Desktop app
@@ -85,7 +85,7 @@ builds: same API, empty implementation.
 | Ktor WebSocket | `io.github.dev-weiqi.sniffer:ktor-ws` |
 
 ```kotlin
-val snifferVersion = "0.6.4"
+val snifferVersion = "0.6.5"
 
 dependencies {
     debugImplementation("io.github.dev-weiqi.sniffer:core:$snifferVersion")
