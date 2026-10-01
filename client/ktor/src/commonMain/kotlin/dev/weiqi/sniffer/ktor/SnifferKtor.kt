@@ -21,6 +21,7 @@ import io.ktor.client.call.save
 import io.ktor.client.plugins.ResponseException
 import io.ktor.client.request.HttpRequestData
 import io.ktor.client.request.HttpResponseData
+import io.ktor.client.request.ResponseAdapterAttributeKey
 import io.ktor.client.utils.EmptyContent
 import io.ktor.utils.io.ByteChannel
 import io.ktor.utils.io.InternalAPI
@@ -33,6 +34,7 @@ import kotlinx.coroutines.flow.onCompletion
 import io.ktor.client.plugins.isSaved
 import io.ktor.client.plugins.sse.SSESession
 import io.ktor.client.plugins.sse.SSEClientException
+import io.ktor.client.plugins.sse.SSEClientContent
 import io.ktor.http.HttpProtocolVersion
 import io.ktor.util.date.GMTDate
 import io.ktor.utils.io.ByteReadChannel
@@ -129,18 +131,27 @@ private suspend fun mockHttpCall(
         url = request.url.build(),
         method = request.method,
         headers = request.headers.build(),
-        body = EmptyContent,
+        body = request.body as? OutgoingContent ?: EmptyContent,
         // parentless on purpose: nothing completes a fabricated call's job (see teeEventStream)
         executionContext = Job(),
         attributes = request.attributes,
     )
+    val status = HttpStatusCode.fromValue(rule.status)
+    val channel = ByteReadChannel(bodyText.encodeToByteArray())
+    val callContext = currentCoroutineContext() + Job()
+    // Reuse Ktor's SSE parser and session lifecycle instead of returning a raw channel.
+    val body = if (requestData.body is SSEClientContent) {
+        request.attributes.getOrNull(ResponseAdapterAttributeKey)?.adapt(
+            requestData, status, headers, channel, requestData.body, callContext,
+        ) ?: channel
+    } else channel
     val responseData = HttpResponseData(
-        statusCode = HttpStatusCode.fromValue(rule.status),
+        statusCode = status,
         requestTime = GMTDate(),
         headers = headers,
         version = HttpProtocolVersion.HTTP_1_1,
-        body = ByteReadChannel(bodyText.encodeToByteArray()),
-        callContext = currentCoroutineContext() + Job(),
+        body = body,
+        callContext = callContext,
     )
     return HttpClientCall(client, requestData, responseData)
 }
@@ -192,6 +203,7 @@ internal fun boundedTextBody(contentType: ContentType?, contentLength: Long?): B
             contentType?.contentSubtype?.contains("event-stream", true) != true
 
 /** HttpClient { install(SnifferKtor) } */
+@OptIn(InternalAPI::class)
 val SnifferKtor = createClientPlugin("SnifferKtor") {
     Sniffer.registerCapability("http")
     Sniffer.registerCapability("breakpoint")
@@ -243,40 +255,10 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
         val id = newId()
         val start = now()
 
-        // ktor's SSE plugin (client.sse { … }) produces an engine-level SSESession body;
-        // rebuilding or teeing that call destroys the session and every SSE request fails
-        // with "Expected SSESession content but was ByteChannel". Report what we can and
-        // hand the call through completely untouched.
-        // Default-safe policy: any request wired to an engine-level response adapter (SSE
-        // today, anything similar tomorrow) gets reported but never transformed or mocked.
+        // Real engine-adapted responses must keep their session objects intact.
+        // SSE mocks use Ktor's adapter; unknown adapters remain unmocked.
         val handsOff = request.attributes.allKeys.any {
             it.name == "SSERequestFlag" || it.name == "ResponseAdapterAttributeKey"
-        }
-        if (handsOff) {
-            runCatching {
-                val reqBody = capBody(requestBodyText(request.body))
-                Sniffer.report(
-                    HttpRequestMsg(
-                        id = id, method = request.method.value, url = request.url.buildString(),
-                        headers = request.headers.build().flattenEntries().toMap(),
-                        body = reqBody.body, bodySize = reqBody.size, bodyTruncated = reqBody.truncated,
-                        library = "ktor", timestamp = now(),
-                    )
-                )
-            }
-            request.attributes.put(SnifferSseIdKey, id)
-            val sseCall = proceed(request)
-            runCatching {
-                Sniffer.report(
-                    HttpResponseMsg(
-                        id = id, status = sseCall.response.status.value,
-                        headers = sseCall.response.headers.flattenEntries().toMap(),
-                        body = null, bodySize = 0, bodyTruncated = false,
-                        durationMs = now() - start, mocked = false, error = null, timestamp = now(),
-                    )
-                )
-            }
-            return@on sseCall
         }
 
         val statusHolder = ResponseStatusHolder()
@@ -297,7 +279,8 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
                 )
             )
 
-            val rule = MockRegistry.matchHttp(request.method.value, url)
+            val rule = if (!handsOff || request.body is SSEClientContent)
+                MockRegistry.matchHttp(request.method.value, url) else null
             if (rule != null && !rule.delayOnly) {
                 if (rule.delayMs > 0) delay(rule.delayMs)
                 val body = expandMockPlaceholders(rule.body)
@@ -318,6 +301,23 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
         } catch (t: Throwable) {
             if (t is CancellationException) throw t
             // fall through to the real request
+        }
+
+        if (handsOff) {
+            request.attributes.put(SnifferSseIdKey, id)
+            val sseCall = proceed(request)
+            runCatching {
+                Sniffer.report(
+                    HttpResponseMsg(
+                        id = id, status = sseCall.response.status.value,
+                        headers = sseCall.response.headers.flattenEntries().toMap(),
+                        body = null, bodySize = 0, bodyTruncated = false,
+                        durationMs = now() - start, mocked = false, error = null, timestamp = now(),
+                        delayedMs = injectedDelayMs,
+                    )
+                )
+            }
+            return@on sseCall
         }
 
         val call = try {

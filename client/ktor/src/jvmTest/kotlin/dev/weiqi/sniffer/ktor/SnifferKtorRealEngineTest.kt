@@ -3,6 +3,9 @@ package dev.weiqi.sniffer.ktor
 import com.sun.net.httpserver.HttpServer
 import dev.weiqi.sniffer.core.DeviceMessage
 import dev.weiqi.sniffer.core.HttpResponseMsg
+import dev.weiqi.sniffer.core.HttpMockRule
+import dev.weiqi.sniffer.core.MockRegistry
+import dev.weiqi.sniffer.core.MockRules
 import dev.weiqi.sniffer.core.Sniffer
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -26,11 +29,16 @@ import io.ktor.client.statement.bodyAsText
 import java.net.InetSocketAddress
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -60,7 +68,116 @@ class SnifferKtorRealEngineTest {
     @AfterTest
     fun cleanup() {
         server?.stop(0)
+        MockRegistry.update(MockRules())
         setReportSink(null)
+    }
+
+    @Test
+    fun sse_mock_and_real_connections_coexist(): Unit = runBlocking {
+        val hits = AtomicInteger()
+        val http = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        http.createContext("/events") { exchange ->
+            hits.incrementAndGet()
+            exchange.responseHeaders.add("content-type", "text/event-stream")
+            exchange.sendResponseHeaders(200, 0)
+            exchange.responseBody.use { it.write("data: real\n\n".toByteArray()) }
+        }
+        http.start()
+        server = http
+        val url = "http://127.0.0.1:${http.address.port}/events"
+        val mockBody = "id: 7\nevent: message\ndata: 模擬\ndata: second line\n\ndata: done\n\n"
+        for (engine in listOf(CIO, OkHttp)) for (snifferFirst in listOf(false, true)) {
+            val reports = mutableListOf<DeviceMessage>()
+            setReportSink { reports += it }
+            val client = HttpClient(engine) {
+                if (snifferFirst) { install(SnifferKtor); install(SSE) }
+                else { install(SSE); install(SnifferKtor) }
+                install(Logging) {
+                    level = LogLevel.ALL
+                    logger = object : Logger { override fun log(message: String) = Unit }
+                }
+            }
+            try {
+                for (enabled in listOf(true, false)) {
+                    reports.clear()
+                    val before = hits.get()
+                    MockRegistry.update(MockRules(http = listOf(HttpMockRule(
+                        id = "sse", urlPattern = "/events", enabled = enabled,
+                        headers = mapOf("content-type" to "text/event-stream"), body = mockBody,
+                    ))))
+                    withTimeout(5_000) {
+                        client.sse(url) {
+                            val events = incoming.toList()
+                            assertEquals(if (enabled) listOf("模擬\r\nsecond line", "done") else listOf("real"),
+                                events.map { it.data }, "$engine, snifferFirst=$snifferFirst, enabled=$enabled")
+                            if (enabled) {
+                                assertEquals("7", events.first().id)
+                                assertEquals("message", events.first().event)
+                            }
+                        }
+                    }
+                    assertEquals(if (enabled) 0 else 1, hits.get() - before, "only real SSE may reach the server")
+                    assertEquals(enabled, report(reports).mocked)
+                    if (enabled) assertEquals(mockBody, report(reports).body)
+
+                    // Cancel while the app is consuming a live session, then reuse the client.
+                    val received = CompletableDeferred<Unit>()
+                    val session = launch {
+                        client.sse(url) {
+                            incoming.collect { received.complete(Unit); awaitCancellation() }
+                        }
+                    }
+                    try {
+                        withTimeout(5_000) { received.await(); session.cancelAndJoin() }
+                        assertTrue(session.isCancelled)
+                    } finally { session.cancel() }
+                }
+            } finally { client.close() }
+        }
+    }
+
+    @Test
+    fun sse_mock_errors_and_no_content_preserve_ktor_behavior(): Unit = runBlocking {
+        val url = startServer(200)
+        val mockBody = """{"error":"mocked"}"""
+        for (engine in listOf(CIO, OkHttp)) for (snifferFirst in listOf(false, true)) {
+            val reports = mutableListOf<DeviceMessage>()
+            setReportSink { reports += it }
+            val client = HttpClient(engine) {
+                if (snifferFirst) { install(SnifferKtor); install(SSE) }
+                else { install(SSE); install(SnifferKtor) }
+                install(Logging) {
+                    level = LogLevel.ALL
+                    logger = object : Logger { override fun log(message: String) = Unit }
+                }
+            }
+            try {
+                for (status in listOf(400, 200, 204)) {
+                    reports.clear()
+                    MockRegistry.update(MockRules(http = listOf(HttpMockRule(
+                        id = "sse", urlPattern = "/api/chat", status = status,
+                        headers = mapOf("content-type" to "application/json"),
+                        body = if (status == 204) "" else mockBody,
+                    ))))
+                    withTimeout(5_000) {
+                        val failure = runCatching {
+                            client.sse(url, request = {
+                                method = HttpMethod.Post
+                                setBody(TextContent("{}", ContentType.Application.Json))
+                            }) { assertTrue(incoming.toList().isEmpty()) }
+                        }.exceptionOrNull()
+                        if (status == 204) assertNull(failure)
+                        else {
+                            val error = assertIs<SSEClientException>(failure)
+                            assertEquals(status, error.response?.status?.value)
+                            assertEquals(mockBody, error.response?.bodyAsText())
+                        }
+                    }
+                    assertTrue(report(reports).mocked)
+                    assertEquals(status, report(reports).status)
+                }
+            } finally { client.close() }
+        }
     }
 
     /** Serves [status] + [errorJson] with a real content-length, like the reported API does. */
