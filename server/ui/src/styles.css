@@ -721,6 +721,7 @@ tr.bp-row td { background: color-mix(in srgb, var(--err) 10%, var(--bg-panel)); 
   padding: 10px; margin-bottom: 8px; background: var(--bg-panel);
   display: flex; flex-direction: column; gap: 8px;
 }
+.rule-card :is(input, select, textarea) { color: var(--text); }
 /* dim only the editable content when a rule is disabled; keep the enable toggle and
    Delete button fully bright and clickable (opacity on the whole card would grey them out) */
 .rule-card[data-disabled] .rule-row .grow,
