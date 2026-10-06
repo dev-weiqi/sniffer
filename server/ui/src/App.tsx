@@ -678,6 +678,7 @@ export default function App() {
         <MocksView scope={mocksOpen}
           deviceId={deviceId}
           appId={selectedDevice.appId ?? null}
+          supportsQueryMocks={selectedDevice.capabilities.includes('http-query-mocks')}
           mocks={selectedMocks}
           conns={state.socketConns}
           pendingRule={pendingRule}

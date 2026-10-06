@@ -45,6 +45,23 @@ const stripped = stripUiOnlyFields({
 assert(!('starred' in (stripped.http[0] as Record<string, unknown>)), 'stripUiOnlyFields removes HTTP starred marker')
 assert(!('starred' in (stripped.socket[0] as Record<string, unknown>)), 'stripUiOnlyFields removes socket starred marker')
 
+const queryMocks = {
+  http: [
+    { id: 'fallback' },
+    { id: 'empty', queryParams: {} },
+    { id: 'page', queryParams: { page: '2' }, starred: true },
+    ...[null, [], 'page=2', { page: 2 }, { '': '2' }].map(queryParams => ({ id: 'invalid', queryParams })),
+  ],
+  socket: [{ id: 'socket' }],
+}
+const legacyWire = stripUiOnlyFields(queryMocks, ['http'])
+assertEqual(legacyWire.http.length, 2, 'legacy clients only receive path-only rules')
+const queryWire = stripUiOnlyFields(queryMocks, ['http', 'http-query-mocks'])
+assertEqual(queryWire.http.length, 3, 'query clients receive valid query rules; malformed constraints are rejected')
+assertEqual((queryWire.http[2] as { queryParams: { page: string } }).queryParams.page, '2', 'query survives device sync')
+assert(!('starred' in (queryWire.http[2] as object)), 'shared query rules lose only the UI marker')
+assertEqual(queryWire.socket.length, 1, 'capability filtering leaves socket rules intact')
+
 const migration = migrateStarredToSharedStore({
   devices: {
     d1: {

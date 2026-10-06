@@ -32,6 +32,7 @@ class SnifferHandshakeTest {
         val hellos = Sniffer.handshakeMessages(hello).filterIsInstance<Hello>()
         assertEquals(1, hellos.size)
         assertEquals(true, hellos.single().capabilities.contains("http"))
+        assertEquals(true, hellos.single().capabilities.contains("http-query-mocks"))
     }
 
     @Test

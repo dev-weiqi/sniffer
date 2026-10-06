@@ -11,6 +11,41 @@ import kotlin.test.assertTrue
 
 class ProtocolTest {
     @Test
+    fun query_mocks_decode_and_match_before_path_only_fallback() {
+        val rules = SnifferJson.decodeFromString<MockRules>("""{"http":[
+            {"id":"fallback","urlPattern":"/items","method":"GET"},
+            {"id":"one","urlPattern":"/items","method":"GET","queryParams":{"page":"1"}},
+            {"id":"two","urlPattern":"/items","method":"GET","queryParams":{"page":"2","size":"20"}},
+            {"id":"duplicate","urlPattern":"/items","method":"GET","queryParams":{"size":"20","page":"2"}},
+            {"id":"off","urlPattern":"/items","enabled":false,"queryParams":{"page":"3"}},
+            {"id":"encoded","urlPattern":"/items","queryParams":{"q":"茶 +&","flag":""}}
+        ],"socket":[]}""")
+        MockRegistry.update(rules)
+        try {
+            val cases = listOf(
+                "?page=1" to "one", "?extra=x&page=1#page=2" to "one",
+                "?size=20&%70age=%32" to "two", "?page=2" to "fallback",
+                "?page=3" to "fallback", "?page=20" to "fallback", "?PAGE=1" to "fallback",
+                "" to "fallback", "#fragment?page=1" to "fallback",
+                "?page=9&page=1" to "one",
+                "?q=%E8%8C%B6+%2B%26&flag=" to "encoded",
+                "?q=%E8%8C%B6%20%2B%26&flag" to "encoded",
+                "?q=%E8%8C%B6+%2B%26" to "fallback",
+            )
+            for ((query, expected) in cases) {
+                assertEquals(expected, MockRegistry.matchHttp("get", "https://host/items$query")?.id, query)
+                assertEquals(expected, MockRegistry.matchHttp("GET", "/items$query")?.id, query)
+            }
+            assertNull(MockRegistry.matchHttp("POST", "/items?page=1"))
+            assertNull(MockRegistry.matchHttp("GET", "/items/child?page=1"))
+            MockRegistry.update(rules.copy(http = rules.http.filter { it.id != "fallback" }))
+            assertNull(MockRegistry.matchHttp("GET", "/items?page=99"))
+        } finally {
+            MockRegistry.update(MockRules())
+        }
+    }
+
+    @Test
     fun deviceMessage_encodes_with_type_discriminator() {
         val msg: DeviceMessage = HttpRequestMsg(
             id = "r1", method = "GET", url = "http://x/y", headers = mapOf("a" to "b"),

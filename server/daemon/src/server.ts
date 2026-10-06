@@ -112,8 +112,7 @@ function mergedMocksByDevice(): Record<string, Mocks> {
 function sendMocksToDevice(deviceId: string) {
   const device = devices.get(deviceId)
   if (!device?.connected) return
-  // `starred` is a UI/daemon concern — the SDK wire format stays unchanged
-  const merged = stripUiOnlyFields(mocksFor(deviceId))
+  const merged = stripUiOnlyFields(mocksFor(deviceId), device.info.capabilities)
   device.ws.send(JSON.stringify({ type: 'mock-rules', http: merged.http, socket: merged.socket }))
 }
 

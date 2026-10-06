@@ -159,6 +159,7 @@ data class HttpMockRule(
     val delayMs: Long = 0,
     // delayOnly: let the real request run but inject [delayMs]; do not fake the response
     val delayOnly: Boolean = false,
+    val queryParams: Map<String, String> = emptyMap(),
 )
 
 @Serializable
