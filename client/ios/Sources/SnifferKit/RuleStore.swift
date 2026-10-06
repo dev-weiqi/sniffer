@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 
 final class RuleStore {
     static let shared = RuleStore()
@@ -65,14 +66,54 @@ final class RuleStore {
         }
     }
 
-    func socket(transport: String, event: String) -> SocketMockRule? {
+    func socket(transport: String, event: String, payload: String? = nil) -> SocketMockRule? {
         lock.withLock {
-            socketRules.first {
-                $0.enabled
-                    && $0.transport == transport
-                    && (transport == "ktor-ws" ? event.contains($0.event) : event == $0.event)
+            var fallback: SocketMockRule?
+            lazy var actual: Any? = {
+                guard let payload, let value = parseJSON(payload) else { return nil }
+                return transport == "socketio" ? (value as? [Any])?.first : value
+            }()
+            for rule in socketRules {
+                guard rule.enabled, rule.transport == transport,
+                      transport == "ktor-ws" ? (rule.event.isEmpty || event.contains(rule.event)) : event == rule.event else { continue }
+                let condition = rule.payloadMatch?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let expected: [String: Any]
+                if condition.isEmpty {
+                    expected = [:]
+                } else {
+                    guard let object = parseJSON(condition) as? [String: Any] else { continue }
+                    expected = object
+                }
+                if expected.isEmpty {
+                    if fallback == nil { fallback = rule }
+                } else if matchesJSON(expected, actual) {
+                    return rule
+                }
             }
+            return fallback
         }
+    }
+
+    private func parseJSON(_ text: String) -> Any? {
+        try? JSONSerialization.jsonObject(with: Data(text.utf8), options: [.fragmentsAllowed])
+    }
+
+    private func matchesJSON(_ expected: Any, _ actual: Any?, partial: Bool = true) -> Bool {
+        guard let actual else { return false }
+        if let object = expected as? [String: Any] {
+            guard let value = actual as? [String: Any], partial || object.count == value.count else { return false }
+            return object.allSatisfy { matchesJSON($0.value, value[$0.key], partial: partial) }
+        }
+        if let array = expected as? [Any] {
+            guard let value = actual as? [Any], array.count == value.count else { return false }
+            return zip(array, value).allSatisfy { matchesJSON($0.0, $0.1, partial: false) }
+        }
+        if let number = expected as? NSNumber {
+            guard let value = actual as? NSNumber,
+                  (CFGetTypeID(number) == CFBooleanGetTypeID()) == (CFGetTypeID(value) == CFBooleanGetTypeID()) else { return false }
+            return number.doubleValue == value.doubleValue
+        }
+        return (expected as? NSObject)?.isEqual(actual) == true
     }
 
     func breakpoint(method: String, url: URL?, phase: String) -> BreakpointRule? {
