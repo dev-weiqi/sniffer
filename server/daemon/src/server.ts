@@ -243,10 +243,7 @@ deviceWss.on('connection', ws => {
       return
     }
     if (deviceId && devices.get(deviceId)?.ws === ws) {
-      const accepted = entryStore.pushEntry(deviceId, msg)
-      if (accepted && msg.type === 'firebase-event' && msg.severity === 'fatal') {
-        ws.send(JSON.stringify({ type: 'firebase-ack', id: msg.id }))
-      }
+      entryStore.pushEntry(deviceId, msg)
     }
   })
   ws.on('close', () => {

@@ -7,7 +7,7 @@ const DEFAULT_MAX_STORED_MESSAGES = 2000
 const DEFAULT_CLEAR_SKEW_MS = 5000
 const HTTP_ENTRY_TYPES = new Set(['http-request', 'http-response'])
 const SOCKET_ENTRY_TYPES = new Set(['socket-event', 'socket-ack'])
-const FIREBASE_ENTRY_TYPES = new Set(['firebase-event', 'firebase-analytics-event'])
+const FIREBASE_ENTRY_TYPES = new Set(['firebase-analytics-event'])
 type EntryKind = 'http' | 'socket' | 'firebase'
 
 export function createEntryStore(
@@ -50,6 +50,7 @@ export function createEntryStore(
 
   return {
     pushEntry(deviceId: string, message: Record<string, unknown>) {
+      if (message.type === 'firebase-event') return false
       const isFirebase = FIREBASE_ENTRY_TYPES.has(message.type as string)
       if (isFirebase && !validFirebaseEvent(message)) return false
       const ts = typeof message.timestamp === 'number' ? message.timestamp : Infinity
@@ -61,7 +62,6 @@ export function createEntryStore(
       const watermark = marks
         ? (isHttp ? marks.http : isSocket ? marks.socket : isFirebase ? marks.firebase : 0)
         : (isHttp ? clearedAt.http : isSocket ? clearedAt.socket : isFirebase ? clearedAt.firebase : 0)
-      // Acknowledge cleared or duplicate fatals too, so the SDK can retire its durable copy.
       if (isFirebase ? watermark > 0 && ts <= watermark : ts < watermark - clearSkewMs) return true
       if (isFirebase && entries.some(e => e.deviceId === deviceId &&
         e.message.type === message.type && e.message.id === message.id)) return true
@@ -117,23 +117,11 @@ function validFirebaseEvent(m: Record<string, unknown>): boolean {
   const string = (value: unknown, max: number) => typeof value === 'string' && value.length <= max
   const object = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value)
-  if (m.type === 'firebase-analytics-event') {
-    try {
-      return string(m.id, 128) && (m.id as string).length > 0 && string(m.name, 4096) &&
-        typeof m.timestamp === 'number' && Number.isFinite(m.timestamp) && m.timestamp > 0 &&
-        string(m.userId ?? '', 1024) && object(m.params) && JSON.stringify(m.params).length <= 524288 &&
-        (m.firebaseSdkCalled === undefined || typeof m.firebaseSdkCalled === 'boolean') &&
-        (m.truncated === undefined || typeof m.truncated === 'boolean')
-    } catch { return false }
-  }
-  return string(m.id, 128) && (m.id as string).length > 0 &&
-    ['fatal', 'non-fatal', 'log'].includes(m.severity as string) &&
-    typeof m.timestamp === 'number' && Number.isFinite(m.timestamp) && m.timestamp > 0 &&
-    string(m.message, 4096) && string(m.exception ?? '', 1024) &&
-    string(m.stackTrace ?? '', 65536) && string(m.userId ?? '', 1024) && string(m.thread ?? '', 1024) &&
-    (m.truncated === undefined || typeof m.truncated === 'boolean') &&
-    (m.keys === undefined || (object(m.keys) && Object.keys(m.keys).length <= 64 &&
-      Object.entries(m.keys).every(([key, value]) => string(key, 1024) && string(value, 1024)))) &&
-    (m.logs === undefined || (Array.isArray(m.logs) && m.logs.length <= 64 && m.logs.every(log =>
-      object(log) && string(log.message, 4096) && typeof log.timestamp === 'number' && Number.isFinite(log.timestamp))))
+  try {
+    return string(m.id, 128) && (m.id as string).length > 0 && string(m.name, 4096) &&
+      typeof m.timestamp === 'number' && Number.isFinite(m.timestamp) && m.timestamp > 0 &&
+      string(m.userId ?? '', 1024) && object(m.params) && JSON.stringify(m.params).length <= 524288 &&
+      (m.firebaseSdkCalled === undefined || typeof m.firebaseSdkCalled === 'boolean') &&
+      (m.truncated === undefined || typeof m.truncated === 'boolean')
+  } catch { return false }
 }

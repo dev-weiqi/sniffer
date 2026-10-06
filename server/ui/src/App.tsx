@@ -363,7 +363,7 @@ export default function App() {
         r.payload.toLowerCase().includes(q)))
   }, [state.socketEvents, state.connUrls, deviceId, deferredSearch, socketFilter])
 
-  const analyticsRows = useMemo(() => state.firebase.filter(row => row.severity === 'analytics'), [state.firebase])
+  const analyticsRows = state.firebase
   const filteredFirebase = useMemo(() => {
     const q = deferredSearch.trim().toLowerCase()
     return analyticsRows.filter(row => row.deviceId === deviceId && (!q ||

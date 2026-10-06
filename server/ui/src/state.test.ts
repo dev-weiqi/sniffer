@@ -430,7 +430,8 @@ try {
 
 console.log('state.test: all assertions passed')
 
-const firebaseEvent = { type: 'firebase-event', id: 'f1', severity: 'fatal', timestamp: 100, message: 'crash' }
+const firebaseEvent = { type: 'firebase-analytics-event', id: 'f1', timestamp: 100, name: 'screen_view', params: { screen: 'home' } }
+assertEqual(dispatch(initialState, { type: 'event', deviceId: 'd1', message: { type: 'firebase-event', id: 'old', severity: 'fatal' } }).firebase.length, 0, 'removed crash events are ignored')
 let contextState = initialState
 for (const [deviceId, userId] of [['d1', 'alice'], ['d2', 'bob']]) contextState = dispatch(contextState, {
   type: 'event', deviceId, message: { type: 'http-request', id: 'shared', timestamp: 1, method: 'GET', url: '/', userId },
@@ -441,7 +442,7 @@ assertEqual(contextState.http[1].status, undefined, 'same request ID on another 
 contextState = dispatch(contextState, { type: 'event', deviceId: 'd1', message: { type: 'http-request', id: 'legacy', timestamp: 2, method: 'GET', url: '/' } })
 assertEqual(contextState.http[2].userId, undefined, 'legacy API identity stays unknown rather than anonymous')
 let firebaseState = dispatch(initialState, { type: 'init', entries: [{ deviceId: 'd1', message: firebaseEvent }] })
-assertEqual(firebaseState.firebase[0].message, 'crash', 'snapshot restores Firebase')
+assertEqual(firebaseState.firebase[0].message, 'screen_view', 'snapshot restores Firebase')
 firebaseState = dispatch(firebaseState, { type: 'event', deviceId: 'd1', message: firebaseEvent })
 assertEqual(firebaseState.firebase.length, 1, 'Firebase replay is idempotent')
 for (let i = 0; i < 510; i++) firebaseState = dispatch(firebaseState, {

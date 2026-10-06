@@ -129,29 +129,6 @@ data class FirebaseAnalyticsEventMsg(
 ) : DeviceMessage
 
 @Serializable
-@SerialName("firebase-event")
-data class FirebaseEventMsg(
-    val id: String,
-    val severity: String, // "fatal" | "non-fatal" | "log"
-    val message: String,
-    val timestamp: Long,
-    val exception: String = "",
-    val stackTrace: String = "",
-    val userId: String = "",
-    val keys: Map<String, String> = emptyMap(),
-    val logs: List<FirebaseLog> = emptyList(),
-    val thread: String = "",
-    val truncated: Boolean = false,
-) : DeviceMessage
-
-@Serializable
-data class FirebaseLog(val timestamp: Long, val message: String)
-
-@Serializable
-@SerialName("firebase-ack")
-data class FirebaseAck(val id: String) : DaemonMessage
-
-@Serializable
 @SerialName("mock-rules")
 data class MockRules(
     val http: List<HttpMockRule> = emptyList(),

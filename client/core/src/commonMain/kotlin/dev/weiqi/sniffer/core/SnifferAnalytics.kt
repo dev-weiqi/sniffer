@@ -76,3 +76,5 @@ object SnifferAnalytics {
 
     internal fun userIdSnapshot(): String? = firebaseLocked { userId }
 }
+
+internal expect fun <T> firebaseLocked(block: () -> T): T

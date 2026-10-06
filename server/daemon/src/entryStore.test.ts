@@ -86,26 +86,28 @@ for (const userId of [{}, 42, 'x'.repeat(1025)]) {
   assertEqual(userStore.pushEntry('d1', { type: 'http-request', id: 'user', timestamp: 1, userId }), false, 'invalid HTTP user context is rejected')
 }
 assertEqual(userStore.snapshot()[1].message.userId, 'alice', 'user context survives storage')
-const fatal = { type: 'firebase-event', id: 'f1', severity: 'fatal', message: 'crash', timestamp: 100 }
-assertEqual(firebaseStore.pushEntry('d1', fatal), true, 'valid fatal is acknowledged')
-assertEqual(firebaseStore.pushEntry('d1', fatal), true, 'replay is acknowledged')
+const analytics = { type: 'firebase-analytics-event', id: 'f1', name: 'screen_view', params: { screen: 'home' }, timestamp: 100 }
+assertEqual(firebaseStore.pushEntry('d1', { type: 'firebase-event', id: 'old', severity: 'fatal', message: 'crash', timestamp: 100 }), false, 'removed crash events are rejected')
+assertEqual(firebaseStore.snapshot().length, 0, 'removed crash events are not stored')
+assertEqual(firebaseStore.pushEntry('d1', analytics), true, 'valid analytics is accepted')
+assertEqual(firebaseStore.pushEntry('d1', analytics), true, 'replay is accepted')
 assertEqual(firebaseStore.snapshot().length, 1, 'replay is deduplicated')
-assertEqual(firebaseStore.pushEntry('d2', fatal), true, 'same id on another device is independent')
+assertEqual(firebaseStore.pushEntry('d2', analytics), true, 'same id on another device is independent')
 assertEqual(firebaseStore.snapshot().length, 2, 'dedup is per device')
 for (const invalid of [
-  { severity: 'unknown' }, { timestamp: Infinity }, { message: {} }, { stackTrace: 'x'.repeat(65537) },
-  { keys: { screen: {} } }, { logs: [{ timestamp: 'bad', message: 'log' }] }, { id: '' },
-]) assertEqual(firebaseStore.pushEntry('d1', { ...fatal, ...invalid }), false, 'invalid event is rejected')
+  { name: {} }, { name: 'x'.repeat(4097) }, { timestamp: Infinity }, { params: [] },
+  { params: { value: 'x'.repeat(524288) } }, { firebaseSdkCalled: 'bad' }, { truncated: 'bad' }, { id: '' },
+]) assertEqual(firebaseStore.pushEntry('d1', { ...analytics, ...invalid }), false, 'invalid event is rejected')
 firebaseStore.pushEntry('d1', { type: 'http-request', id: 'http', timestamp: 101 })
 firebaseStore.clearFirebase()
 assertEqual(firebaseStore.snapshot().length, 1, 'Firebase clear preserves HTTP')
-assertEqual(firebaseStore.pushEntry('d1', fatal), true, 'cleared replay still acknowledged')
-assertEqual(firebaseStore.snapshot().length, 1, 'cleared fatal cannot reappear')
-firebaseStore.pushEntry('d1', { ...fatal, id: 'new', timestamp: 102 })
+assertEqual(firebaseStore.pushEntry('d1', analytics), true, 'cleared replay still accepted')
+assertEqual(firebaseStore.snapshot().length, 1, 'cleared analytics cannot reappear')
+firebaseStore.pushEntry('d1', { ...analytics, id: 'new', timestamp: 102 })
 assertEqual(firebaseStore.snapshot().length, 2, 'new records survive device clock skew')
 firebaseStore.clearAll()
-firebaseStore.pushEntry('d1', { ...fatal, id: 'old' })
+firebaseStore.pushEntry('d1', { ...analytics, id: 'old' })
 assertEqual(firebaseStore.snapshot().length, 0, 'clearAll includes Firebase watermark')
-firebaseStore.pushEntry('d1', { ...fatal, id: 'newer', timestamp: 103 })
+firebaseStore.pushEntry('d1', { ...analytics, id: 'newer', timestamp: 103 })
 firebaseStore.removeDeviceEntries('d1')
 assertEqual(firebaseStore.snapshot().length, 0, 'device deletion includes Firebase')

@@ -105,7 +105,7 @@ object Sniffer {
         }
         // Snapshot at request capture, before buffering: account changes must not relabel an in-flight call.
         val captured = if (msg is HttpRequestMsg && msg.userId == null) {
-            msg.copy(userId = SnifferAnalytics.userIdSnapshot() ?: SnifferFirebaseCrashlytics.userIdSnapshot())
+            msg.copy(userId = SnifferAnalytics.userIdSnapshot().orEmpty())
         } else msg
         reportSinkForTests?.invoke(captured)
         queue.trySend(captured)
@@ -118,7 +118,7 @@ object Sniffer {
      * stays blind to those sockets until the app restarts, and saved push events lose their target.
      */
     internal fun handshakeMessages(hello: Hello): List<DeviceMessage> =
-        listOf(hello.copy(capabilities = capabilities.toList())) + liveConnections.values + SnifferFirebaseCrashlytics.pendingEvents()
+        listOf(hello.copy(capabilities = capabilities.toList())) + liveConnections.values
 
     /**
      * Pauses the calling response until the daemon resolves breakpoint [hit], returning how to
@@ -203,7 +203,6 @@ internal fun handleDaemonMessage(
 ) {
     val msg = runCatching { SnifferJson.decodeFromString<DaemonMessage>(text) }.getOrNull() ?: return
     when (msg) {
-        is FirebaseAck -> SnifferFirebaseCrashlytics.acknowledge(msg.id)
         is MockRules -> MockRegistry.update(msg)
         is BreakpointRules -> BreakpointRegistry.update(msg.rules)
         is BreakpointResolveMsg -> Breakpoints.resolve(

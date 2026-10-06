@@ -134,16 +134,10 @@ export interface FirebaseRow {
   id: string
   deviceId: string
   ts: number
-  severity: 'fatal' | 'non-fatal' | 'log' | 'analytics'
   params?: Record<string, unknown>
   firebaseSdkCalled?: boolean
   message: string
-  exception: string
-  stackTrace: string
   userId: string
-  keys: Record<string, string>
-  logs: { timestamp: number; message: string }[]
-  thread: string
   truncated: boolean
 }
 
@@ -207,17 +201,12 @@ function appendCapped<T>(rows: T[], row: T): T[] {
 
 function applyDeviceMessage(state: State, deviceId: string, m: Msg): State {
   switch (m.type) {
-    case 'firebase-event':
     case 'firebase-analytics-event': {
       if (state.firebase.some(r => r.deviceId === deviceId && r.id === m.id)) return state
       const row: FirebaseRow = {
         id: m.id, deviceId, ts: m.timestamp,
-        severity: m.type === 'firebase-analytics-event' ? 'analytics' : m.severity,
-        message: m.type === 'firebase-analytics-event' ? m.name : m.message,
-        params: m.type === 'firebase-analytics-event' ? m.params ?? {} : undefined,
-        firebaseSdkCalled: m.type === 'firebase-analytics-event' ? m.firebaseSdkCalled === true : undefined,
-        exception: m.exception ?? '', stackTrace: m.stackTrace ?? '', userId: m.userId ?? '',
-        keys: m.keys ?? {}, logs: m.logs ?? [], thread: m.thread ?? '', truncated: m.truncated ?? false,
+        message: m.name, params: m.params ?? {}, firebaseSdkCalled: m.firebaseSdkCalled === true,
+        userId: m.userId ?? '', truncated: m.truncated ?? false,
       }
       return { ...state, firebase: appendCapped(state.firebase, row) }
     }
