@@ -657,8 +657,8 @@ tr.bp-row td { background: color-mix(in srgb, var(--err) 10%, var(--bg-panel)); 
 }
 
 .modal.mocks-modal {
-  width: min(1100px, calc(100vw - 40px));
-  height: min(720px, calc(100vh - 90px));
+  width: min(1280px, calc(100vw - 40px));
+  height: min(840px, calc(100vh - 60px));
   padding: 0;
   display: flex; flex-direction: column;
   overflow: hidden;
@@ -718,8 +718,11 @@ tr.bp-row td { background: color-mix(in srgb, var(--err) 10%, var(--bg-panel)); 
 .mocks-list-sub { font-size: 12px; color: var(--text-dim); overflow-wrap: anywhere; }
 .mocks-list-star { color: var(--warn); margin-top: 2px; }
 .mocks-list-empty { padding: 14px 12px; }
-.mocks-detail { overflow: auto; padding: 12px 14px; min-width: 0; }
+.mocks-detail { overflow: auto; padding: 16px 20px; min-width: 0; }
 .mocks-detail .rule-card { border: none; padding: 0; margin: 0; background: none; }
+.mocks-detail .mock-rule-editor { min-height: 100%; gap: 12px; }
+.mock-rule-editor > :not(.rule-response-editor) { flex-shrink: 0; }
+.mock-rule-editor > .rule-response-editor { flex: 1 0 260px; min-height: 260px; }
 .mocks-detail .rule-row { flex-wrap: wrap; align-items: center; }
 .mocks-detail .rule-row .grow { flex: 1 1 120px; min-width: min(100%, 90px); }
 .mocks-detail .rule-row select { max-width: 100%; }
@@ -736,10 +739,13 @@ tr.bp-row td { background: color-mix(in srgb, var(--err) 10%, var(--bg-panel)); 
 .rule-card[data-disabled] .rule-row .field,
 .rule-card[data-disabled] .rule-row select,
 .rule-card[data-disabled] .rule-tabs,
+.rule-card[data-disabled] .rule-conditions > summary,
+.rule-card[data-disabled] .condition-panel .condition-heading,
 .rule-card[data-disabled] textarea,
 .rule-card[data-disabled] .headers-editor,
 .rule-card[data-disabled] .rule-body-tools,
 .rule-card[data-disabled] .hint { opacity: .45; }
+.rule-card[data-disabled] .condition-heading .hint { opacity: 1; }
 .rule-row { display: flex; gap: 8px; align-items: center; min-width: 0; }
 .rule-row .grow { flex: 1 1 0; min-width: 0; }
 .push-send-row { display: flex; justify-content: flex-end; }
@@ -757,9 +763,23 @@ button.add { margin-top: 2px; }
   font-size: 13px; color: var(--text-dim); white-space: nowrap;
 }
 .payload-condition { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-dim); }
+.rule-conditions { border-block: 1px solid var(--border); padding: 10px 0; }
+.rule-conditions > summary { cursor: pointer; }
+.rule-conditions > summary .condition-heading { display: inline-flex; }
+.modal-backdrop.mocks-backdrop { align-items: center; padding: 20px; }
+.condition-content { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; }
+.condition-panel { display: flex; flex-direction: column; gap: 6px; min-height: 186px; padding: 12px; border: 1px solid var(--border); border-radius: 6px; }
+.rule-conditions .query-params { margin: 0; padding: 12px; }
+.rule-conditions .query-params .hint, .condition-panel .headers-editor { margin-bottom: 0; }
+.rule-section-label { padding: 3px 10px; border-radius: 6px; font-size: 13px; font-weight: 600; background: var(--bg-alt); }
 .condition-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .condition-heading > :first-child { font-size: 13px; font-weight: 600; color: var(--text); }
 .condition-heading .hint { font-size: 12px; font-weight: 400; color: var(--text-dim); }
+.rule-placeholders { margin-left: auto; }
+.rule-placeholders > summary { cursor: pointer; font-size: 12px; color: var(--text-dim); }
+.rule-placeholders[open] { width: 100%; }
+.rule-placeholders > .rule-body-tools { padding-top: 6px; }
+.rule-placeholders .tools-sep { display: none; }
 .rule-body-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 /* two kinds of control live here: actions that rewrite the whole payload, and tokens you drop
    at the cursor. The tokens are literal text, so they are styled as code rather than as buttons. */
@@ -1191,8 +1211,6 @@ button.modal-primary:hover {
 .firebase-event:hover { background: transparent; }
 .firebase-event time { padding-top: 11px; font-size: 12px; font-variant-numeric: tabular-nums; }
 .firebase-event-dot { margin-top: 16px; width: 9px; height: 9px; border-radius: 50%; background: color-mix(in srgb, var(--text-dim) 50%, var(--bg-panel)); }
-.firebase-event[data-level="fatal"] .firebase-event-dot { background: var(--err); }
-.firebase-event[data-level="non-fatal"] .firebase-event-dot { background: var(--warn); }
 .firebase-event[data-level="http"] .firebase-event-dot { background: var(--info); }
 .firebase-event[data-latest] .firebase-event-dot { background: var(--accent); }
 .firebase-event[data-kind="firebase"] { align-items: center; }
@@ -1231,12 +1249,7 @@ button.modal-primary:hover {
 .firebase-timeline-note { padding: 8px 12px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 11px; }
 .beta-badge { display: inline-block; padding: 1px 5px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border)); border-radius: 4px; color: var(--accent); background: var(--accent-soft); font-size: 10px; font-weight: 600; line-height: 1.4; vertical-align: middle; }
 .firebase-level { color: var(--text); font-size: 12px; font-weight: 600; }
-.firebase-level[data-level="fatal"], .firebase-error { color: var(--err); }
-:root:not([data-theme="dark"]) .firebase-event[data-selected] .firebase-level[data-level="fatal"] { color: color-mix(in srgb, var(--err) 92%, black); }
-.firebase-level[data-level="non-fatal"] { color: var(--warn); }
-.firebase-stack { padding: 10px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
-.firebase-log { display: flex; gap: 10px; align-items: baseline; }
-.firebase-log span { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.firebase-error { color: var(--err); }
 .firebase-panel tr:focus-visible, .firebase-panel button:focus-visible, .tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 @media (max-width: 1100px) {
   .topbar { flex-wrap: wrap; }
@@ -1271,4 +1284,3 @@ button.modal-primary:hover {
 
 .condition-tabs { margin-bottom: 2px; }
 .condition-tabs button { font-weight: 600; }
-[aria-label="Body conditions"][role="tabpanel"] .rule-body-tools { margin-top: 6px; }

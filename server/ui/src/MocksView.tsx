@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { HttpMockRule, Mocks, SocketConn, SocketMockRule } from './state'
 import { api } from './state'
 import { newRuleId, prettyJson, prettySocketRule, unwrapJsonString, wrapJsonString } from './util'
@@ -418,7 +418,7 @@ export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supports
   const totalCount = scope === 'http' ? draft.http.length : draft.socket.length
 
   return (
-    <div className="modal-backdrop" onMouseDown={onClose}>
+    <div className="modal-backdrop mocks-backdrop" onMouseDown={onClose}>
       <div className="modal mocks-modal" role="dialog" aria-modal="true" aria-label={title}
         onMouseDown={e => e.stopPropagation()}>
         <div className="mocks-modal-head">
@@ -461,7 +461,7 @@ export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supports
             />
             <div className="mocks-detail">
               {httpAt < 0 ? <div className="empty">No HTTP rules yet — add one to start mocking</div> : (
-                <HttpRuleEditor key={draft.http[httpAt].id} rule={draft.http[httpAt]} dup={httpDups.has(draft.http[httpAt].id)}
+                <HttpRuleEditor deviceId={deviceId} key={`${deviceId}:${draft.http[httpAt].id}`} rule={draft.http[httpAt]} dup={httpDups.has(draft.http[httpAt].id)}
                   supportsQueryMocks={supportsQueryMocks} supportsBodyMocks={supportsBodyMocks}
                   onDuplicate={() => {
                     const copy = { ...draft.http[httpAt], id: newRuleId(), createdAt: Date.now() }
@@ -494,7 +494,7 @@ export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supports
             />
             <div className="mocks-detail">
               {socketAt < 0 ? <div className="empty">No socket rules yet — add one to start mocking</div> : (
-                <SocketRuleEditor supportsSocketPayloadMocks={supportsSocketPayloadMocks} key={draft.socket[socketAt].id} rule={draft.socket[socketAt]} dup={socketDups.has(draft.socket[socketAt].id)}
+                <SocketRuleEditor deviceId={deviceId} supportsSocketPayloadMocks={supportsSocketPayloadMocks} key={`${deviceId}:${draft.socket[socketAt].id}`} rule={draft.socket[socketAt]} dup={socketDups.has(draft.socket[socketAt].id)}
                   onDuplicate={() => {
                     const copy = { ...draft.socket[socketAt], id: newRuleId(), createdAt: Date.now() }
                     update({ ...draft, socket: [...draft.socket.slice(0, socketAt + 1), copy, ...draft.socket.slice(socketAt + 1)] })
@@ -1009,7 +1009,45 @@ function PushRecordCard({ record, conns, deviceId, canStar, onChange, onDelete, 
   )
 }
 
-function HttpRuleEditor({ rule, dup, supportsQueryMocks, supportsBodyMocks, onChange, onDelete, onDuplicate }: {
+type ConditionView = { open: boolean; tab: 'query' | 'body' }
+
+function useConditionView(key: string, defaultTab: ConditionView['tab'] = 'query') {
+  const [view, setView] = useState<ConditionView>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(key) ?? 'null')
+      return { open: saved?.open === true, tab: saved?.tab === 'query' || saved?.tab === 'body' ? saved.tab : defaultTab }
+    } catch { return { open: false, tab: defaultTab } }
+  })
+  const update = (patch: Partial<ConditionView>) => {
+    const next = { ...view, ...patch }
+    if (next.open === view.open && next.tab === view.tab) return
+    setView(next)
+    try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* private mode */ }
+  }
+  return [view, update] as const
+}
+
+function RequestConditions({ open, onToggle, count, summary, children }: {
+  open: boolean
+  onToggle: (open: boolean) => void
+  count: number | string
+  summary: string
+  children: ReactNode
+}) {
+  return (
+    <details className="rule-conditions" open={open} onToggle={e => onToggle(e.currentTarget.open)}>
+      <summary><span className="condition-heading">
+        <span>Request conditions<span className="count">{count}</span>
+        </span>
+        <span className="hint">{summary}</span>
+      </span></summary>
+      {children}
+    </details>
+  )
+}
+
+function HttpRuleEditor({ deviceId, rule, dup, supportsQueryMocks, supportsBodyMocks, onChange, onDelete, onDuplicate }: {
+  deviceId: string
   rule: HttpMockRule
   dup: boolean
   supportsQueryMocks: boolean
@@ -1018,9 +1056,13 @@ function HttpRuleEditor({ rule, dup, supportsQueryMocks, supportsBodyMocks, onCh
   onDelete: () => void
   onDuplicate: () => void
 }) {
-  const [conditionTab, setConditionTab] = useState<'query' | 'body'>(rule.bodyMatch ? 'body' : 'query')
+  const [conditionView, setConditionView] = useConditionView(
+    `sniffer-mock-conditions:${JSON.stringify([deviceId, 'http', rule.id])}`, rule.bodyMatch ? 'body' : 'query')
+  const conditionTab = conditionView.tab
+  const setConditionTab = (tab: ConditionView['tab']) => setConditionView({ tab })
   const conditionError = payloadMatchError(rule.bodyMatch)
   const bodyCount = conditionError ? 0 : Object.keys(JSON.parse(rule.bodyMatch?.trim() || '{}')).length
+  const queryCount = Object.keys(rule.queryParams ?? {}).length
   const [sub, setSub] = useState<'body' | 'headers'>('body')
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const urlRef = useRef<HTMLInputElement>(null)
@@ -1033,7 +1075,7 @@ function HttpRuleEditor({ rule, dup, supportsQueryMocks, supportsBodyMocks, onCh
     if (el && document.activeElement !== el) el.scrollLeft = el.scrollWidth
   }, [rule.urlPattern])
   return (
-    <div className="rule-card" data-disabled={!rule.enabled || undefined}>
+    <div className="rule-card mock-rule-editor" data-disabled={!rule.enabled || undefined}>
       <div className="rule-name-row">
         <TagIcon />
         <input className="rule-name" placeholder="name this rule… (optional)" value={rule.name ?? ''}
@@ -1056,56 +1098,62 @@ function HttpRuleEditor({ rule, dup, supportsQueryMocks, supportsBodyMocks, onCh
       {dup && (
         <div className="hint dup-warning"><WarningIcon />Another enabled rule has the same matcher — the newest one takes effect.</div>
       )}
-      <div className="rule-tabs condition-tabs" role="tablist" aria-label="Request conditions"
-        onKeyDown={e => {
-          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return
-          e.preventDefault()
-          e.stopPropagation()
-          const next = e.key === 'Home' ? 'query' : e.key === 'End' ? 'body' : conditionTab === 'query' ? 'body' : 'query'
-          setConditionTab(next)
-          e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next === 'query' ? 0 : 1]?.focus()
-        }}>
-        <button type="button" role="tab" aria-selected={conditionTab === 'query'} tabIndex={conditionTab === 'query' ? 0 : -1}
-          aria-controls={`conditions-${rule.id}`}
-          data-active={conditionTab === 'query' || undefined} onClick={() => setConditionTab('query')}>
-          Query parameters<span className="count">{Object.keys(rule.queryParams ?? {}).length}</span>
-        </button>
-        <button type="button" role="tab" aria-selected={conditionTab === 'body'} tabIndex={conditionTab === 'body' ? 0 : -1}
-          aria-controls={`conditions-${rule.id}`}
-          data-active={conditionTab === 'body' || undefined} onClick={() => setConditionTab('body')}>
-          Body conditions<span className="count">{conditionError ? '!' : bodyCount}</span>
-        </button>
-      </div>
-      {conditionTab === 'query' ? (
-        <section id={`conditions-${rule.id}`} className="query-params" role="tabpanel" aria-label="Query parameters">
-          <div className="condition-heading">
-            <span className="headers-label">Query parameters</span>
-            <span className="hint">Match specified parameters. Blank to skip.</span>
+      <RequestConditions open={conditionView.open} onToggle={open => setConditionView({ open })} count={conditionError ? '!' : queryCount + bodyCount}
+        summary={conditionError ? 'Invalid body condition' : queryCount + bodyCount === 0 ? 'Fallback · no conditions' :
+          [queryCount > 0 && `${queryCount} query`, bodyCount > 0 && `${bodyCount} body`].filter(Boolean).join(' · ')}>
+        <div className="condition-content">
+          <div className="rule-tabs condition-tabs" role="tablist" aria-label="Request conditions"
+            onKeyDown={e => {
+              if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return
+              e.preventDefault()
+              e.stopPropagation()
+              const next = e.key === 'Home' ? 'query' : e.key === 'End' ? 'body' : conditionTab === 'query' ? 'body' : 'query'
+              setConditionTab(next)
+              e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next === 'query' ? 0 : 1]?.focus()
+            }}>
+            <button type="button" role="tab" aria-selected={conditionTab === 'query'} tabIndex={conditionTab === 'query' ? 0 : -1}
+              aria-controls={`conditions-${rule.id}`}
+              data-active={conditionTab === 'query' || undefined} onClick={() => setConditionTab('query')}>
+              Query parameters<span className="count">{queryCount}</span>
+            </button>
+            <button type="button" role="tab" aria-selected={conditionTab === 'body'} tabIndex={conditionTab === 'body' ? 0 : -1}
+              aria-controls={`conditions-${rule.id}`}
+              data-active={conditionTab === 'body' || undefined} onClick={() => setConditionTab('body')}>
+              Body conditions<span className="count">{conditionError ? '!' : bodyCount}</span>
+            </button>
           </div>
-          <HeadersEditor kind="query" value={rule.queryParams ?? {}}
-            onChange={queryParams => onChange({ ...rule, queryParams })} />
-        </section>
-      ) : (
-        <section id={`conditions-${rule.id}`} role="tabpanel" aria-label="Body conditions">
-          <label className="payload-condition">
-            <span className="condition-heading">
-              <span>Body conditions</span>
-              <span className="hint" title="Query and body conditions must all match. Other object fields are ignored. Arrays match exactly.">
-                Match specified fields. Blank to skip.
-              </span>
-            </span>
-            <textarea className="mono" rows={4} aria-label="Body conditions" aria-invalid={!!conditionError}
-              placeholder='{"page": 1}' value={typeof rule.bodyMatch === 'string' ? rule.bodyMatch : rule.bodyMatch == null ? '' : JSON.stringify(rule.bodyMatch)}
-              onChange={e => onChange({ ...rule, bodyMatch: e.target.value || undefined })} />
-          </label>
-          <div className="rule-body-tools">
-            <JsonTool label="Pretty JSON" body={rule.bodyMatch ?? ''} transform={v => JSON.stringify(v, null, 2)}
-              onResult={bodyMatch => onChange({ ...rule, bodyMatch })} />
-          </div>
-        </section>
-      )}
+          {conditionTab === 'query' ? (
+            <section id={`conditions-${rule.id}`} className="condition-panel query-params" role="tabpanel" aria-label="Query parameters">
+              <div className="condition-heading">
+                <span>Query parameters</span>
+                <span className="hint">Match specified parameters. Blank to skip.</span>
+              </div>
+              <HeadersEditor kind="query" value={rule.queryParams ?? {}}
+                onChange={queryParams => onChange({ ...rule, queryParams })} />
+            </section>
+          ) : (
+            <section id={`conditions-${rule.id}`} className="condition-panel" role="tabpanel" aria-label="Body conditions">
+              <label className="payload-condition">
+                <span className="condition-heading">
+                  <span>Body conditions</span>
+                  <span className="hint" title="Query and body conditions must all match. Other object fields are ignored. Arrays match exactly.">
+                    Match specified fields. Blank to skip.
+                  </span>
+                </span>
+                <textarea className="mono" rows={4} aria-label="Body conditions" aria-invalid={!!conditionError}
+                  placeholder='{"page": 1}' value={typeof rule.bodyMatch === 'string' ? rule.bodyMatch : rule.bodyMatch == null ? '' : JSON.stringify(rule.bodyMatch)}
+                  onChange={e => onChange({ ...rule, bodyMatch: e.target.value || undefined })} />
+              </label>
+              <div className="rule-body-tools">
+                <JsonTool label="Pretty JSON" body={rule.bodyMatch ?? ''} transform={v => JSON.stringify(v, null, 2)}
+                  onResult={bodyMatch => onChange({ ...rule, bodyMatch })} />
+              </div>
+            </section>
+          )}
+        </div>
+      </RequestConditions>
       {conditionError && <div className="hint dup-warning" role="alert">{conditionError}</div>}
-      {!supportsQueryMocks && Object.keys(rule.queryParams ?? {}).length > 0 && (
+      {!supportsQueryMocks && queryCount > 0 && (
         <p className="hint warn">Update the device SDK to use query matching. This rule is not sent to this device.</p>
       )}
       {!supportsBodyMocks && bodyCount > 0 && (
@@ -1122,19 +1170,19 @@ function HttpRuleEditor({ rule, dup, supportsQueryMocks, supportsBodyMocks, onCh
         )}
         <span className="spacer" />
         {!rule.delayOnly && (
-          <label className="field">status
+          <label className="field">Status
             <NumberField className="mono w-status" value={rule.status} fallback={200}
               onCommit={n => onChange({ ...rule, status: n })} />
           </label>
         )}
-        <label className="field">delay ms
+        <label className="field">Delay ms
           <NumberField className="mono w-delay" value={rule.delayMs} fallback={0}
             onCommit={n => onChange({ ...rule, delayMs: n })} />
         </label>
         <label className="field checkbox-field" title="Let the real request run, only inject the delay">
           <input type="checkbox" checked={rule.delayOnly}
             onChange={e => onChange({ ...rule, delayOnly: e.target.checked })} />
-          delay only
+          Delay only
         </label>
       </div>
       {rule.delayOnly ? (
@@ -1143,13 +1191,15 @@ function HttpRuleEditor({ rule, dup, supportsQueryMocks, supportsBodyMocks, onCh
         <>
           {sub === 'body' ? (
             <>
-              <textarea ref={bodyRef} className="mono" rows={14} placeholder="response body"
+              <textarea ref={bodyRef} className="mono rule-response-editor" rows={14} aria-label="Response body" placeholder="response body"
                 value={bodyView.text} onChange={e => bodyView.onText(e.target.value)} />
               <div className="rule-body-tools">
                 <JsonTool label="Pretty JSON" body={bodyView.text} transform={v => JSON.stringify(v, null, 2)}
                   onResult={bodyView.onText} />
                 <JsonStringToggle view={bodyView} />
-                <PlaceholderTools value={bodyView.text} onValue={bodyView.onText} taRef={bodyRef} />
+                <details className="rule-placeholders"><summary>Insert placeholder</summary>
+                  <div className="rule-body-tools"><PlaceholderTools value={bodyView.text} onValue={bodyView.onText} taRef={bodyRef} /></div>
+                </details>
               </div>
             </>
           ) : (
@@ -1322,14 +1372,17 @@ function JsonStringToggle({ view }: { view: JsonStringView }) {
   )
 }
 
-function SocketRuleEditor({ rule, dup, supportsSocketPayloadMocks, onChange, onDelete, onDuplicate }: {
+function SocketRuleEditor({ deviceId, rule, dup, supportsSocketPayloadMocks, onChange, onDelete, onDuplicate }: {
   supportsSocketPayloadMocks: boolean
+  deviceId: string
   rule: SocketMockRule
   dup: boolean
   onChange: (r: SocketMockRule) => void
   onDelete: () => void
   onDuplicate: () => void
 }) {
+  const [conditionView, setConditionView] = useConditionView(
+    `sniffer-mock-conditions:${JSON.stringify([deviceId, 'socket', rule.id])}`)
   const ackRef = useRef<HTMLTextAreaElement>(null)
   const pushRef = useRef<HTMLTextAreaElement>(null)
   const ackView = useJsonStringView(rule.ackPayload, ackPayload => onChange({ ...rule, ackPayload }), 'args')
@@ -1337,9 +1390,10 @@ function SocketRuleEditor({ rule, dup, supportsSocketPayloadMocks, onChange, onD
   const conditionError = payloadMatchError(rule.payloadMatch)
   const hasPayloadConditions = !conditionError && typeof rule.payloadMatch === 'string' &&
     Object.keys(JSON.parse(rule.payloadMatch.trim() || '{}')).length > 0
+  const payloadCount = hasPayloadConditions ? Object.keys(JSON.parse(rule.payloadMatch!)).length : 0
   const mode = rule.transport === 'ktor-ws' ? 'ws' : rule.pushEvent != null ? 'sio-event' : 'sio-ack'
   return (
-    <div className="rule-card" data-disabled={!rule.enabled || undefined}>
+    <div className="rule-card mock-rule-editor" data-disabled={!rule.enabled || undefined}>
       <div className="rule-name-row">
         <TagIcon />
         <input className="rule-name" placeholder="name this rule… (optional)" value={rule.name ?? ''}
@@ -1370,21 +1424,28 @@ function SocketRuleEditor({ rule, dup, supportsSocketPayloadMocks, onChange, onD
       {dup && (
         <div className="hint dup-warning"><WarningIcon />Another enabled rule has the same matcher — the newest one takes effect.</div>
       )}
-      <label className="payload-condition">
-        <span className="condition-heading">
-          <span>Payload conditions</span>
-          <span className="hint" title="All specified fields must match. Other object fields are ignored. Arrays match exactly. Blank or {} is a fallback.">
-            Match fields in {rule.transport === 'socketio' ? 'the first argument' : 'the JSON frame'}. Leave blank for fallback.
-          </span>
-        </span>
-        <textarea className="mono" rows={3} aria-label="Payload conditions"
-          placeholder='{"page": 1}' value={typeof rule.payloadMatch === 'string' ? rule.payloadMatch : rule.payloadMatch == null ? '' : JSON.stringify(rule.payloadMatch)} aria-invalid={!!conditionError}
-          onChange={e => onChange({ ...rule, payloadMatch: e.target.value || undefined })} />
-      </label>
-      <div className="rule-body-tools">
-        <JsonTool label="Pretty JSON" body={rule.payloadMatch ?? ''} transform={v => JSON.stringify(v, null, 2)}
-          onResult={payloadMatch => onChange({ ...rule, payloadMatch })} />
-      </div>
+      <RequestConditions open={conditionView.open} onToggle={open => setConditionView({ open })} count={conditionError ? '!' : payloadCount}
+        summary={conditionError ? 'Invalid payload condition' : payloadCount > 0 ? `${payloadCount} payload` : 'Fallback · no conditions'}>
+        <div className="condition-content">
+          <section className="condition-panel">
+            <label className="payload-condition">
+              <span className="condition-heading">
+                <span>Payload conditions</span>
+                <span className="hint" title="All specified fields must match. Other object fields are ignored. Arrays match exactly.">
+                  Match fields in {rule.transport === 'socketio' ? 'the first argument' : 'the JSON frame'}.
+                </span>
+              </span>
+              <textarea className="mono" rows={4} aria-label="Payload conditions"
+                placeholder='{"page": 1}' value={typeof rule.payloadMatch === 'string' ? rule.payloadMatch : rule.payloadMatch == null ? '' : JSON.stringify(rule.payloadMatch)} aria-invalid={!!conditionError}
+                onChange={e => onChange({ ...rule, payloadMatch: e.target.value || undefined })} />
+            </label>
+            <div className="rule-body-tools">
+              <JsonTool label="Pretty JSON" body={rule.payloadMatch ?? ''} transform={v => JSON.stringify(v, null, 2)}
+                onResult={payloadMatch => onChange({ ...rule, payloadMatch })} />
+            </div>
+          </section>
+        </div>
+      </RequestConditions>
       {conditionError && <div className="hint dup-warning" role="alert">{conditionError}</div>}
       {!supportsSocketPayloadMocks && hasPayloadConditions && (
         <div className="hint dup-warning">Update this device’s SDK to use payload conditions.</div>
@@ -1392,42 +1453,49 @@ function SocketRuleEditor({ rule, dup, supportsSocketPayloadMocks, onChange, onD
       {mode === 'sio-event' ? (
         <>
           <div className="rule-tabs">
-            <button type="button" data-active>Response event</button>
-            <input className="mono w-event" placeholder="event pushed back…"
-              value={rule.pushEvent ?? ''} onChange={e => onChange({ ...rule, pushEvent: e.target.value })} />
+            <span className="rule-section-label">Response body</span>
+            <label className="field">Event
+              <input className="mono w-event" placeholder="event pushed back…"
+                value={rule.pushEvent ?? ''} onChange={e => onChange({ ...rule, pushEvent: e.target.value })} />
+            </label>
             <span className="spacer" />
-            <label className="field">delay ms
+            <label className="field">Delay ms
               <NumberField className="mono w-delay" value={rule.delayMs} fallback={0}
                 onCommit={n => onChange({ ...rule, delayMs: n })} />
             </label>
           </div>
-          <textarea ref={pushRef} className="mono" rows={14}
+          <textarea ref={pushRef} className="mono rule-response-editor" rows={14} aria-label="Response body"
             placeholder="pushed payload (JSON array = multiple args)"
             value={pushView.text} onChange={e => pushView.onText(e.target.value)} />
           <div className="rule-body-tools">
             <JsonTool label="Pretty JSON" body={pushView.text} transform={v => JSON.stringify(v, null, 2)}
               onResult={pushView.onText} />
             <JsonStringToggle view={pushView} />
-            <PlaceholderTools value={pushView.text} onValue={pushView.onText} taRef={pushRef} />
+            <details className="rule-placeholders"><summary>Insert placeholder</summary>
+              <div className="rule-body-tools"><PlaceholderTools value={pushView.text} onValue={pushView.onText} taRef={pushRef} /></div>
+            </details>
           </div>
         </>
       ) : (
         <>
           <div className="rule-tabs">
+            <span className="rule-section-label">Response body</span>
             <span className="spacer" />
-            <label className="field">delay ms
+            <label className="field">Delay ms
               <NumberField className="mono w-delay" value={rule.delayMs} fallback={0}
                 onCommit={n => onChange({ ...rule, delayMs: n })} />
             </label>
           </div>
-          <textarea ref={ackRef} className="mono" rows={14}
+          <textarea ref={ackRef} className="mono rule-response-editor" rows={14} aria-label="Response body"
             placeholder={rule.transport === 'socketio' ? 'ack payload (JSON array = multiple args)' : 'fake reply frame (raw text)'}
             value={ackView.text} onChange={e => ackView.onText(e.target.value)} />
           <div className="rule-body-tools">
             <JsonTool label="Pretty JSON" body={ackView.text} transform={v => JSON.stringify(v, null, 2)}
               onResult={ackView.onText} />
             <JsonStringToggle view={ackView} />
-            <PlaceholderTools value={ackView.text} onValue={ackView.onText} taRef={ackRef} />
+            <details className="rule-placeholders"><summary>Insert placeholder</summary>
+              <div className="rule-body-tools"><PlaceholderTools value={ackView.text} onValue={ackView.onText} taRef={ackRef} /></div>
+            </details>
           </div>
         </>
       )}
