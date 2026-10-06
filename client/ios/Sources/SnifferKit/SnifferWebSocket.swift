@@ -47,7 +47,12 @@ public final class SnifferWebSocket: @unchecked Sendable {
 
     public func send(_ message: URLSessionWebSocketTask.Message) async throws {
         let payload = message.payload
-        let rule = RuleStore.shared.socket(transport: "ktor-ws", event: payload)
+        let rule: SocketMockRule?
+        if case .string(let text) = message {
+            rule = RuleStore.shared.socket(transport: "ktor-ws", event: text, payload: text)
+        } else {
+            rule = nil
+        }
         reportEvent(direction: "out", event: "message", payload: payload, mocked: rule != nil)
 
         guard let rule else {
