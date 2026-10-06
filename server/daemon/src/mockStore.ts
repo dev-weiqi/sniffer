@@ -27,12 +27,21 @@ export function mergeMocks(own: Mocks, shared: Mocks): Mocks {
   return { http: [...shared.http, ...own.http], socket: [...shared.socket, ...own.socket] }
 }
 
-export function stripUiOnlyFields(mocks: Mocks): Mocks {
+export function stripUiOnlyFields(mocks: Mocks, capabilities: string[] = []): Mocks {
   const strip = (rules: unknown[]) => rules.map(r => {
     const { starred: _, ...rest } = r as Record<string, unknown>
     return rest
   })
-  return { http: strip(mocks.http), socket: strip(mocks.socket) }
+  const http = mocks.http.filter(r => {
+    const query = (r as { queryParams?: unknown } | null)?.queryParams
+    if (query === undefined) return true
+    if (!query || typeof query !== 'object' || Array.isArray(query)) return false
+    const entries = Object.entries(query)
+    if (entries.some(([key, value]) => !key.trim() || typeof value !== 'string')) return false
+    // Older SDKs ignore unknown fields; never turn a conditional mock into a path-only mock.
+    return entries.length === 0 || capabilities.includes('http-query-mocks')
+  })
+  return { http: strip(http), socket: strip(mocks.socket) }
 }
 
 export function migrateStarredToSharedStore(

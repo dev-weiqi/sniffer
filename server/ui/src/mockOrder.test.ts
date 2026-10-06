@@ -1,5 +1,6 @@
 import {
   EMPTY_ORDER,
+  httpMatcherSignature,
   applyOrder,
   byOrder,
   loadIds,
@@ -15,6 +16,14 @@ function assert(condition: unknown, message: string): asserts condition {
 
 const rule = (id: string) => ({ id })
 const idsOf = (items: { id: string }[]) => items.map(r => r.id).join(',')
+
+const matcher = { method: 'GET', urlPattern: '/items' }
+assert(httpMatcherSignature(matcher) === httpMatcherSignature({ ...matcher, queryParams: {} }), 'empty query preserves legacy matcher')
+assert(httpMatcherSignature({ ...matcher, queryParams: { page: '1' } }) !==
+  httpMatcherSignature({ ...matcher, queryParams: { page: '2' } }), 'different pages are not duplicate matchers')
+assert(httpMatcherSignature({ ...matcher, queryParams: { page: '1', size: '20' } }) ===
+  httpMatcherSignature({ ...matcher, method: 'get', queryParams: { size: '20', page: '1' } }), 'parameter order and method case do not affect duplicates')
+assert(httpMatcherSignature(matcher) !== httpMatcherSignature({ ...matcher, queryParams: { page: '' } }), 'missing and empty query values differ')
 
 // ---- byOrder ----
 // The case this exists for: the daemon merges starred rules ahead of the device's own, so a

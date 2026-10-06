@@ -918,9 +918,12 @@ button.add { margin-top: 2px; }
 .clear-btn:hover { border-color: var(--err); color: var(--err); background: var(--hover); }
 
 .headers-label { font-size: 12px; margin: 2px 0 4px; }
+.query-params { margin: 12px 0 16px; padding: 12px 0; border-block: 1px solid var(--border); }
+.query-params .hint { margin-bottom: 8px; }
 .headers-editor { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
 .header-row { display: flex; gap: 6px; align-items: center; }
 .header-row > input:first-child { width: 200px; }
+.query-params .header-row > input { flex: 1 1 0; min-width: 0; width: 0; }
 
 .section-icon { color: var(--accent); flex-shrink: 0; }
 .rule-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-bottom: 8px; }

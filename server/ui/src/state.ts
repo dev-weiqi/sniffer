@@ -21,6 +21,8 @@ export interface HttpMockRule {
   enabled: boolean
   method: string | null
   urlPattern: string
+  /** All specified decoded query values must match; other parameters are ignored. */
+  queryParams?: Record<string, string>
   status: number
   headers: Record<string, string>
   body: string

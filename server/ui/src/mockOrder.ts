@@ -5,6 +5,15 @@
     Which rules exist stays the daemon's business; where they sit is a display concern, so it
     lives here (localStorage, per device) alongside the filters and push records. */
 
+import type { HttpMockRule } from './state.js'
+
+export function httpMatcherSignature(rule: Pick<HttpMockRule, 'method' | 'urlPattern' | 'queryParams'>): string {
+  return JSON.stringify([
+    rule.method?.toUpperCase() ?? 'ANY', rule.urlPattern,
+    Object.entries(rule.queryParams ?? {}).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0),
+  ])
+}
+
 export interface MockOrder {
   http: string[]
   socket: string[]

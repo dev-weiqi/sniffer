@@ -108,6 +108,14 @@ Timestamps are epoch millis. Bodies are strings; binary bodies are `null`. Bodie
                 "ackPayload": "[{\"ok\":true}]", "delayMs": 0 } ] }
 // http rule: method null = any; urlPattern is an exact match against the request path
 //   (scheme, host, query and fragment stripped). Empty pattern matches nothing.
+// Optional queryParams: { "page": "2" } requires every specified decoded key/value to match.
+//   Extra request parameters are ignored. Keys and values are case-sensitive strings; percent
+//   escapes are decoded and + means space. A repeated key matches if any value equals the rule.
+//   An empty string matches ?key or ?key=, but not a missing key.
+//   Matching rules with nonempty queryParams win before path-only fallback rules, regardless of
+//   list position; the first matching rule wins within each group. No match means real traffic.
+//   SDKs advertise "http-query-mocks" in hello.capabilities. The daemon omits conditional rules
+//   for older SDKs, which would otherwise ignore queryParams and match every page.
 // body and ackPayload support placeholders expanded on the device at match time:
 //   ${randomId}, ${now} (ISO-8601 UTC), ${randomString(min~max)}
 //   min/max are user-provided whole numbers; the string length is random within [min, max]

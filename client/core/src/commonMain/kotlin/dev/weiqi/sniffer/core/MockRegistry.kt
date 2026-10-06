@@ -1,6 +1,7 @@
 package dev.weiqi.sniffer.core
 
 import kotlin.concurrent.Volatile
+import io.ktor.http.decodeURLQueryComponent
 
 /** Currently active mock rules. The daemon replaces the full set on every update. */
 object MockRegistry {
@@ -16,11 +17,25 @@ object MockRegistry {
     // pattern matches nothing (a bare path always starts with "/").
     fun matchHttp(method: String, url: String): HttpMockRule? {
         val path = pathOf(url)
-        return rules.http.firstOrNull {
-            it.enabled &&
-                (it.method == null || it.method.equals(method, ignoreCase = true)) &&
-                path == it.urlPattern
+        val query by lazy {
+            runCatching {
+                url.substringBefore('#').substringAfter('?', "").split('&').map {
+                    it.substringBefore('=').decodeURLQueryComponent(plusIsSpace = true) to
+                        it.substringAfter('=', "").decodeURLQueryComponent(plusIsSpace = true)
+                }
+            }.getOrNull()
         }
+        var fallback: HttpMockRule? = null
+        for (rule in rules.http) {
+            if (!rule.enabled || rule.urlPattern.isEmpty() || path != rule.urlPattern ||
+                (rule.method != null && !rule.method.equals(method, ignoreCase = true))) continue
+            if (rule.queryParams.isEmpty()) {
+                if (fallback == null) fallback = rule
+            } else if (rule.queryParams.all { (key, value) ->
+                key.isNotBlank() && query?.contains(key to value) == true
+            }) return rule
+        }
+        return fallback
     }
 
     private fun pathOf(url: String): String {

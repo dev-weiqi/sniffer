@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { HttpMockRule, Mocks, SocketConn, SocketMockRule } from './state'
 import { api } from './state'
 import { newRuleId, prettyJson, prettySocketRule, unwrapJsonString, wrapJsonString } from './util'
-import { applyOrder, byOrder, loadIds, loadOrder, orderOf, saveIds, saveOrder } from './mockOrder'
+import { applyOrder, byOrder, httpMatcherSignature as httpSig, loadIds, loadOrder, orderOf, saveIds, saveOrder } from './mockOrder'
 import { pointAt, resolvePushTarget } from './pushTarget'
 import { buildExportRules, countImportedRules, createFullExportSelection, importedCopies, parseImportedRules, type ExportRuleSelection, type ExportRulesSource, type PushEventRule } from './exportMocks'
 import { useConfirm } from './Confirm'
@@ -15,7 +15,6 @@ const PlaceholderTokens = [
   { key: 'randomString', syntax: '${randomString(min~max)}', label: 'lorem string, random length in the range you enter' },
 ]
 
-const httpSig = (r: HttpMockRule) => `${r.method ?? 'ANY'}|${r.urlPattern}`
 const socketSig = (r: SocketMockRule) => `${r.transport}|${r.event}`
 
 /** ids of enabled rules whose matcher collides with another enabled rule */
@@ -208,11 +207,12 @@ function saveSelection(sel: MockSelection) {
   try { localStorage.setItem(selectionKey, JSON.stringify(sel)) } catch { /* private mode */ }
 }
 
-export function MocksView({ scope, deviceId, appId, mocks, conns, pendingRule, pendingSocketRule, pushPrefill, onPendingConsumed, onClose }: {
+export function MocksView({ scope, deviceId, appId, supportsQueryMocks, mocks, conns, pendingRule, pendingSocketRule, pushPrefill, onPendingConsumed, onClose }: {
   /** which panel opened it: the API panel manages HTTP rules, the Socket panel the socket ones */
   scope: 'http' | 'socket'
   deviceId: string | null
   appId: string | null
+  supportsQueryMocks: boolean
   mocks: Mocks
   conns: SocketConn[]
   pendingRule: HttpMockRule | null
@@ -372,7 +372,7 @@ export function MocksView({ scope, deviceId, appId, mocks, conns, pendingRule, p
     id: r.id,
     badge: r.method ?? 'ANY',
     label: r.name || r.urlPattern || '(new rule)',
-    sub: r.name ? r.urlPattern : undefined,
+    sub: [r.name ? r.urlPattern : '', new URLSearchParams(r.queryParams).toString()].filter(Boolean).join('?') || undefined,
     enabled: r.enabled,
     starred: r.starred,
     dup: httpDups.has(r.id),
@@ -460,6 +460,7 @@ export function MocksView({ scope, deviceId, appId, mocks, conns, pendingRule, p
             <div className="mocks-detail">
               {httpAt < 0 ? <div className="empty">No HTTP rules yet — add one to start mocking</div> : (
                 <HttpRuleEditor key={draft.http[httpAt].id} rule={draft.http[httpAt]} dup={httpDups.has(draft.http[httpAt].id)}
+                  supportsQueryMocks={supportsQueryMocks}
                   onDuplicate={() => {
                     const copy = { ...draft.http[httpAt], id: newRuleId(), createdAt: Date.now() }
                     update({ ...draft, http: [...draft.http.slice(0, httpAt + 1), copy, ...draft.http.slice(httpAt + 1)] })
@@ -1004,9 +1005,10 @@ function PushRecordCard({ record, conns, deviceId, canStar, onChange, onDelete, 
   )
 }
 
-function HttpRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
+function HttpRuleEditor({ rule, dup, supportsQueryMocks, onChange, onDelete, onDuplicate }: {
   rule: HttpMockRule
   dup: boolean
+  supportsQueryMocks: boolean
   onChange: (r: HttpMockRule) => void
   onDelete: () => void
   onDuplicate: () => void
@@ -1046,6 +1048,15 @@ function HttpRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
       {dup && (
         <div className="hint dup-warning"><WarningIcon />Another enabled rule has the same matcher — the newest one takes effect.</div>
       )}
+      <section className="query-params" aria-label="Query parameters">
+        <div className="headers-label">Query parameters</div>
+        <p className="hint">All specified values must match. Other parameters are ignored. Rules without parameters are fallbacks.</p>
+        <HeadersEditor kind="query" value={rule.queryParams ?? {}}
+          onChange={queryParams => onChange({ ...rule, queryParams })} />
+        {!supportsQueryMocks && Object.keys(rule.queryParams ?? {}).length > 0 && (
+          <p className="hint warn">Update the device SDK to use query matching. This rule is not sent to this device.</p>
+        )}
+      </section>
       <div className="rule-tabs">
         {!rule.delayOnly && (
           <>
@@ -1097,29 +1108,29 @@ function HttpRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
 }
 
 // Editable response headers (key/value rows). Empty-key rows are dropped from the saved rule.
-export function HeadersEditor({ value, onChange }: {
+export function HeadersEditor({ value, onChange, kind = 'header' }: {
   value: Record<string, string>
   onChange: (h: Record<string, string>) => void
+  kind?: 'header' | 'query'
 }) {
+  const label = kind === 'query' ? 'parameter' : 'header'
   const [rows, setRows] = useState<[string, string][]>(() => Object.entries(value))
   const commit = (next: [string, string][]) => {
     setRows(next)
-    const obj: Record<string, string> = {}
-    for (const [k, v] of next) if (k.trim()) obj[k] = v
-    onChange(obj)
+    onChange(Object.fromEntries(next.filter(([key]) => key.trim())))
   }
   return (
     <div className="headers-editor">
       {rows.map(([k, v], i) => (
         <div className="header-row" key={i}>
-          <input className="mono" placeholder="Header" value={k}
+          <input className="mono" placeholder={kind === 'query' ? 'Parameter, e.g. page' : 'Header'} aria-label={`${label} name ${i + 1}`} value={k}
             onChange={e => commit(rows.map((r, j): [string, string] => (j === i ? [e.target.value, r[1]] : r)))} />
-          <input className="grow mono" placeholder="Value" value={v}
+          <input className="grow mono" placeholder={kind === 'query' ? 'Equals' : 'Value'} aria-label={`${label} value ${i + 1}`} value={v}
             onChange={e => commit(rows.map((r, j): [string, string] => (j === i ? [r[0], e.target.value] : r)))} />
-          <button className="ghost" title="Remove header" onClick={() => commit(rows.filter((_, j) => j !== i))}>✕</button>
+          <button className="ghost" title={`Remove ${label}`} onClick={() => commit(rows.filter((_, j) => j !== i))}>✕</button>
         </div>
       ))}
-      <button className="ghost add" onClick={() => commit([...rows, ['', '']])}>+ Add header</button>
+      <button className="ghost add" onClick={() => commit([...rows, ['', '']])}>+ Add {label}</button>
     </div>
   )
 }
