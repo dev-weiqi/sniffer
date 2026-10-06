@@ -452,3 +452,9 @@ assertEqual(dispatch(firebaseState, { type: 'http-entries-cleared' }).firebase.l
 assertEqual(dispatch(firebaseState, { type: 'firebase-entries-cleared' }).firebase.length, 0, 'Firebase clear')
 assertEqual(dispatch(firebaseState, { type: 'entries-cleared' }).firebase.length, 0, 'clearAll includes Firebase')
 assertEqual(dispatch(firebaseState, { type: 'device-deleted', deviceId: 'd1' }).firebase.length, 0, 'delete device includes Firebase')
+
+const truncatedState = dispatch(initialState, { type: 'event', deviceId: 'd1', message: {
+  type: 'http-request', id: 'truncated-body', method: 'POST', url: 'https://host/messages',
+  body: '{"limit":20}', bodySize: 2000000, bodyTruncated: true,
+} })
+assertEqual(truncatedState.http[0]?.reqTruncated, true, 'request truncation flag survives for mock prefill')

@@ -32,8 +32,20 @@ export function stripUiOnlyFields(mocks: Mocks, capabilities: string[] = []): Mo
     const { starred: _, ...rest } = r as Record<string, unknown>
     return rest
   })
+  const supportsCondition = (condition: unknown, capability: string): boolean => {
+    if (condition == null) return true
+    if (typeof condition !== 'string') return false
+    if (!condition.trim()) return true
+    try {
+      const expected = JSON.parse(condition)
+      if (!expected || typeof expected !== 'object' || Array.isArray(expected)) return false
+      return Object.keys(expected).length === 0 || capabilities.includes(capability)
+    } catch { return false }
+  }
   const http = mocks.http.filter(r => {
-    const query = (r as { queryParams?: unknown } | null)?.queryParams
+    const rule = r as { queryParams?: unknown; bodyMatch?: unknown } | null
+    if (!supportsCondition(rule?.bodyMatch, 'http-body-mocks')) return false
+    const query = rule?.queryParams
     if (query === undefined) return true
     if (!query || typeof query !== 'object' || Array.isArray(query)) return false
     const entries = Object.entries(query)
@@ -41,17 +53,9 @@ export function stripUiOnlyFields(mocks: Mocks, capabilities: string[] = []): Mo
     // Older SDKs ignore unknown fields; never turn a conditional mock into a path-only mock.
     return entries.length === 0 || capabilities.includes('http-query-mocks')
   })
-  const socket = mocks.socket.filter(r => {
-    const condition = (r as { payloadMatch?: unknown } | null)?.payloadMatch
-    if (condition == null) return true
-    if (typeof condition !== 'string') return false
-    if (!condition.trim()) return true
-    try {
-      const expected = JSON.parse(condition)
-      if (!expected || typeof expected !== 'object' || Array.isArray(expected)) return false
-      return Object.keys(expected).length === 0 || capabilities.includes('socket-payload-mocks')
-    } catch { return false }
-  })
+  const socket = mocks.socket.filter(r => supportsCondition(
+    (r as { payloadMatch?: unknown } | null)?.payloadMatch, 'socket-payload-mocks',
+  ))
   return { http: strip(http), socket: strip(socket) }
 }
 

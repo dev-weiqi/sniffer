@@ -198,6 +198,8 @@ data class HttpMockRule(
     // delayOnly: let the real request run but inject [delayMs]; do not fake the response
     val delayOnly: Boolean = false,
     val queryParams: Map<String, String> = emptyMap(),
+    // JSON object of required request body fields; blank means no body constraint.
+    val bodyMatch: String? = null,
 )
 
 @Serializable

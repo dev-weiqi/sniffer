@@ -54,7 +54,8 @@ function orderForSync(mocks: Mocks): Mocks {
     (placeholders on their own, raw ws reply frames) is left byte-for-byte alone. */
 function beautified(mocks: Mocks): Mocks {
   return {
-    http: mocks.http.map(r => ({ ...r, body: prettyJson(r.body) })),
+    http: mocks.http.map(r => ({ ...r, body: prettyJson(r.body),
+      bodyMatch: typeof r.bodyMatch === 'string' ? prettyJson(r.bodyMatch) : r.bodyMatch })),
     socket: mocks.socket.map(prettySocketRule),
   }
 }
@@ -205,12 +206,13 @@ function saveSelection(sel: MockSelection) {
   try { localStorage.setItem(selectionKey, JSON.stringify(sel)) } catch { /* private mode */ }
 }
 
-export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supportsSocketPayloadMocks, mocks, conns, pendingRule, pendingSocketRule, pushPrefill, onPendingConsumed, onClose }: {
+export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supportsBodyMocks, supportsSocketPayloadMocks, mocks, conns, pendingRule, pendingSocketRule, pushPrefill, onPendingConsumed, onClose }: {
   /** which panel opened it: the API panel manages HTTP rules, the Socket panel the socket ones */
   scope: 'http' | 'socket'
   deviceId: string | null
   appId: string | null
   supportsQueryMocks: boolean
+  supportsBodyMocks: boolean
   supportsSocketPayloadMocks: boolean
   mocks: Mocks
   conns: SocketConn[]
@@ -371,7 +373,8 @@ export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supports
     id: r.id,
     badge: r.method ?? 'ANY',
     label: r.name || r.urlPattern || '(new rule)',
-    sub: [r.name ? r.urlPattern : '', new URLSearchParams(r.queryParams).toString()].filter(Boolean).join('?') || undefined,
+    sub: [[r.name ? r.urlPattern : '', new URLSearchParams(r.queryParams).toString()].filter(Boolean).join('?'),
+      typeof r.bodyMatch === 'string' ? r.bodyMatch.trim() : ''].filter(Boolean).join(' · ') || undefined,
     enabled: r.enabled,
     starred: r.starred,
     dup: httpDups.has(r.id),
@@ -459,7 +462,7 @@ export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supports
             <div className="mocks-detail">
               {httpAt < 0 ? <div className="empty">No HTTP rules yet — add one to start mocking</div> : (
                 <HttpRuleEditor key={draft.http[httpAt].id} rule={draft.http[httpAt]} dup={httpDups.has(draft.http[httpAt].id)}
-                  supportsQueryMocks={supportsQueryMocks}
+                  supportsQueryMocks={supportsQueryMocks} supportsBodyMocks={supportsBodyMocks}
                   onDuplicate={() => {
                     const copy = { ...draft.http[httpAt], id: newRuleId(), createdAt: Date.now() }
                     update({ ...draft, http: [...draft.http.slice(0, httpAt + 1), copy, ...draft.http.slice(httpAt + 1)] })
@@ -659,7 +662,8 @@ function exportCategories(source: ExportRulesSource): ExportCategory[] {
   return [
     { key: 'http', title: 'HTTP rules', rows: source.http.map(r => ({
       id: r.id, label: r.name || r.urlPattern || '(new rule)',
-      sub: [`${r.method ?? 'ANY'} ${r.urlPattern}`, new URLSearchParams(r.queryParams).toString()].filter(Boolean).join('?'), badge: String(r.status),
+      sub: [[`${r.method ?? 'ANY'} ${r.urlPattern}`, new URLSearchParams(r.queryParams).toString()].filter(Boolean).join('?'),
+        typeof r.bodyMatch === 'string' ? r.bodyMatch.trim() : ''].filter(Boolean).join(' · '), badge: String(r.status),
     })) },
     { key: 'socket', title: 'Socket rules', rows: source.socket.map(r => ({
       id: r.id, label: r.name || r.event || '(new rule)',
@@ -1005,14 +1009,18 @@ function PushRecordCard({ record, conns, deviceId, canStar, onChange, onDelete, 
   )
 }
 
-function HttpRuleEditor({ rule, dup, supportsQueryMocks, onChange, onDelete, onDuplicate }: {
+function HttpRuleEditor({ rule, dup, supportsQueryMocks, supportsBodyMocks, onChange, onDelete, onDuplicate }: {
   rule: HttpMockRule
   dup: boolean
   supportsQueryMocks: boolean
+  supportsBodyMocks: boolean
   onChange: (r: HttpMockRule) => void
   onDelete: () => void
   onDuplicate: () => void
 }) {
+  const [conditionTab, setConditionTab] = useState<'query' | 'body'>(rule.bodyMatch ? 'body' : 'query')
+  const conditionError = payloadMatchError(rule.bodyMatch)
+  const bodyCount = conditionError ? 0 : Object.keys(JSON.parse(rule.bodyMatch?.trim() || '{}')).length
   const [sub, setSub] = useState<'body' | 'headers'>('body')
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const urlRef = useRef<HTMLInputElement>(null)
@@ -1048,23 +1056,65 @@ function HttpRuleEditor({ rule, dup, supportsQueryMocks, onChange, onDelete, onD
       {dup && (
         <div className="hint dup-warning"><WarningIcon />Another enabled rule has the same matcher — the newest one takes effect.</div>
       )}
-      <section className="query-params" aria-label="Query parameters">
-        <div className="condition-heading">
-          <span className="headers-label">Query parameters</span>
-          <span className="hint" title="All specified values must match. Other parameters are ignored. Rules without parameters are fallbacks.">
-            Match specified parameters. Leave blank for fallback.
-          </span>
-        </div>
-        <HeadersEditor kind="query" value={rule.queryParams ?? {}}
-          onChange={queryParams => onChange({ ...rule, queryParams })} />
-        {!supportsQueryMocks && Object.keys(rule.queryParams ?? {}).length > 0 && (
-          <p className="hint warn">Update the device SDK to use query matching. This rule is not sent to this device.</p>
-        )}
-      </section>
+      <div className="rule-tabs condition-tabs" role="tablist" aria-label="Request conditions"
+        onKeyDown={e => {
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return
+          e.preventDefault()
+          e.stopPropagation()
+          const next = e.key === 'Home' ? 'query' : e.key === 'End' ? 'body' : conditionTab === 'query' ? 'body' : 'query'
+          setConditionTab(next)
+          e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next === 'query' ? 0 : 1]?.focus()
+        }}>
+        <button type="button" role="tab" aria-selected={conditionTab === 'query'} tabIndex={conditionTab === 'query' ? 0 : -1}
+          aria-controls={`conditions-${rule.id}`}
+          data-active={conditionTab === 'query' || undefined} onClick={() => setConditionTab('query')}>
+          Query parameters<span className="count">{Object.keys(rule.queryParams ?? {}).length}</span>
+        </button>
+        <button type="button" role="tab" aria-selected={conditionTab === 'body'} tabIndex={conditionTab === 'body' ? 0 : -1}
+          aria-controls={`conditions-${rule.id}`}
+          data-active={conditionTab === 'body' || undefined} onClick={() => setConditionTab('body')}>
+          Body conditions<span className="count">{conditionError ? '!' : bodyCount}</span>
+        </button>
+      </div>
+      {conditionTab === 'query' ? (
+        <section id={`conditions-${rule.id}`} className="query-params" role="tabpanel" aria-label="Query parameters">
+          <div className="condition-heading">
+            <span className="headers-label">Query parameters</span>
+            <span className="hint">Match specified parameters. Blank to skip.</span>
+          </div>
+          <HeadersEditor kind="query" value={rule.queryParams ?? {}}
+            onChange={queryParams => onChange({ ...rule, queryParams })} />
+        </section>
+      ) : (
+        <section id={`conditions-${rule.id}`} role="tabpanel" aria-label="Body conditions">
+          <label className="payload-condition">
+            <span className="condition-heading">
+              <span>Body conditions</span>
+              <span className="hint" title="Query and body conditions must all match. Other object fields are ignored. Arrays match exactly.">
+                Match specified fields. Blank to skip.
+              </span>
+            </span>
+            <textarea className="mono" rows={4} aria-label="Body conditions" aria-invalid={!!conditionError}
+              placeholder='{"page": 1}' value={typeof rule.bodyMatch === 'string' ? rule.bodyMatch : rule.bodyMatch == null ? '' : JSON.stringify(rule.bodyMatch)}
+              onChange={e => onChange({ ...rule, bodyMatch: e.target.value || undefined })} />
+          </label>
+          <div className="rule-body-tools">
+            <JsonTool label="Pretty JSON" body={rule.bodyMatch ?? ''} transform={v => JSON.stringify(v, null, 2)}
+              onResult={bodyMatch => onChange({ ...rule, bodyMatch })} />
+          </div>
+        </section>
+      )}
+      {conditionError && <div className="hint dup-warning" role="alert">{conditionError}</div>}
+      {!supportsQueryMocks && Object.keys(rule.queryParams ?? {}).length > 0 && (
+        <p className="hint warn">Update the device SDK to use query matching. This rule is not sent to this device.</p>
+      )}
+      {!supportsBodyMocks && bodyCount > 0 && (
+        <p className="hint warn">Update the device SDK to use body conditions. This rule is not sent to this device.</p>
+      )}
       <div className="rule-tabs">
         {!rule.delayOnly && (
           <>
-            <button type="button" data-active={sub === 'body' || undefined} onClick={() => setSub('body')}>Body</button>
+            <button type="button" data-active={sub === 'body' || undefined} onClick={() => setSub('body')}>Response body</button>
             <button type="button" data-active={sub === 'headers' || undefined} onClick={() => setSub('headers')}>
               Headers{headerCount > 0 && <span className="count">{headerCount}</span>}
             </button>

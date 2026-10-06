@@ -1,5 +1,6 @@
 import {
   copyText,
+  httpMockFromRequest,
   fmtDuration,
   fmtSize,
   fmtTime,
@@ -205,3 +206,16 @@ console.log('util.test: all assertions passed')
   assert(wrapJsonString('42') === null, 'a scalar cannot be wrapped')
   assert(wrapJsonString('"already a string"') === null, 'a bare string cannot be wrapped')
 }
+
+const prefilled = httpMockFromRequest({ ...row, url: 'https://host/messages?locale=zh-TW&q=%E8%8C%B6+tea',
+  reqBody: '{"session_id":"session","limit":20}', respBody: '{"items":[]}', status: 201 })
+assertEqual(prefilled.urlPattern, '/messages', 'prefill keeps exact path')
+assertEqual(prefilled.queryParams?.q, '茶 tea', 'prefill decodes query parameters')
+assertEqual(prefilled.queryParams?.locale, 'zh-TW', 'prefill includes query')
+assertEqual(JSON.parse(prefilled.bodyMatch!).limit, 20, 'prefill copies typed body condition')
+assertEqual(JSON.parse(prefilled.body).items.length, 0, 'response remains separate from request condition')
+assertEqual(prefilled.status, 201, 'prefill keeps response status')
+for (const reqBody of ['{', '[]', 'null', '"text"', 'a=1', null]) {
+  assertEqual(httpMockFromRequest({ ...row, reqBody }).bodyMatch, undefined, 'unsupported bodies are not JSON conditions')
+}
+assertEqual(httpMockFromRequest({ ...row, reqTruncated: true }).bodyMatch, undefined, 'truncated JSON is not a condition')

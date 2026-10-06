@@ -372,6 +372,11 @@ Rules run inside the SDK on the selected device. HTTP mocks answer before the ne
 socket ack rules answer locally. Mock bodies support `${randomId}`, `${now}` and
 `${randomString(min~max)}`.
 
+HTTP rules can combine **Query parameters** and JSON **Body conditions**. Every specified
+condition must match; other object fields are ignored. **Mock this request** prefills the query
+and complete JSON object body separately from the response. The device SDK must support the
+selected conditions; update older SDKs before using body matching.
+
 ## Modules
 
 | Artifact | Use it for |

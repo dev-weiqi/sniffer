@@ -1,4 +1,4 @@
-import type { HttpRow, SocketMockRule } from './state.js'
+import type { HttpMockRule, HttpRow, SocketMockRule } from './state.js'
 
 export function fmtTime(ts: number): string {
   const d = new Date(ts)
@@ -150,4 +150,23 @@ export function splitHighlight(text: string, query: string): Array<{ text: strin
   }
   if (from < text.length) out.push({ text: text.slice(from), match: false })
   return out
+}
+
+/** Seed request constraints separately from the mocked response. */
+export function httpMockFromRequest(row: HttpRow): HttpMockRule {
+  let bodyMatch: string | undefined
+  if (row.reqBody && !row.reqTruncated) {
+    try {
+      const value = JSON.parse(row.reqBody)
+      if (value && typeof value === 'object' && !Array.isArray(value)) bodyMatch = JSON.stringify(value, null, 2)
+    } catch { /* Only complete JSON objects can be used as body conditions. */ }
+  }
+  const { path, query } = urlParts(row.url)
+  return {
+    id: newRuleId(), enabled: true, method: row.method, urlPattern: path,
+    queryParams: Object.fromEntries(query), bodyMatch,
+    status: row.status && row.status > 0 ? row.status : 200,
+    headers: { 'content-type': row.respHeaders?.['content-type'] ?? 'application/json' },
+    body: prettyJson(row.respBody), delayMs: 0, delayOnly: false,
+  }
 }

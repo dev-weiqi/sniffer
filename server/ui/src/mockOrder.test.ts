@@ -102,3 +102,7 @@ assert(byOrder(['a'], []).length === 0, 'an empty list stays empty')
 }
 
 console.log('mockOrder.test: all assertions passed')
+
+assert(httpMatcherSignature({ ...matcher, bodyMatch: '{"limit":20}' }) !== httpMatcherSignature({ ...matcher, bodyMatch: '{"limit":40}' }), 'HTTP body variants are distinct')
+assert(httpMatcherSignature({ ...matcher, bodyMatch: '{"limit":20,"filter":{"a":true,"b":1}}' }) === httpMatcherSignature({ ...matcher, bodyMatch: '{"filter":{"b":1,"a":true},"limit":20.0}' }), 'HTTP body JSON formatting and key order do not create duplicates')
+assert(httpMatcherSignature(matcher) === httpMatcherSignature({ ...matcher, bodyMatch: ' {} ' }), 'empty HTTP body condition is fallback')

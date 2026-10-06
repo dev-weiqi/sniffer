@@ -74,6 +74,36 @@ class SnifferKtorTest {
         setReportSink(null)
     }
 
+    @Test
+    fun post_body_conditions_match_serialized_content_and_preserve_unmatched_requests() = runBlocking {
+        val forwarded = mutableListOf<String>()
+        val client = HttpClient(MockEngine { request ->
+            val text = when (val body = request.body) {
+                is TextContent -> body.text
+                is ByteArrayContent -> body.bytes().decodeToString()
+                else -> error("unexpected body")
+            }
+            forwarded += text
+            respond(text, headers = headersOf(HttpHeaders.ContentType, "application/json"))
+        }) { install(SnifferKtor) }
+        MockRegistry.update(MockRules(http = listOf(HttpMockRule(
+            id = "body", method = "POST", urlPattern = "/messages", queryParams = mapOf("locale" to "zh-TW"),
+            bodyMatch = """{"session_id":"session","limit":20}""", body = "mocked",
+        ))))
+        val json = """{"session_id":"session","limit":20}"""
+        try {
+            for (content in listOf(TextContent(json, ContentType.Application.Json), ByteArrayContent(json.encodeToByteArray(), ContentType.Application.Json))) {
+                assertEquals("mocked", client.post("http://host/messages?locale=zh-TW") { setBody(content) }.bodyAsText())
+                assertEquals(json, client.post("http://host/messages?locale=en-US") { setBody(content) }.bodyAsText())
+            }
+            val different = """{"session_id":"session","limit":40}"""
+            assertEquals(different, client.post("http://host/messages?locale=zh-TW") { setBody(TextContent(different, ContentType.Application.Json)) }.bodyAsText())
+            val large = " ".repeat(MAX_BODY_CHARS) + json
+            assertEquals(large, client.post("http://host/messages?locale=zh-TW") { setBody(TextContent(large, ContentType.Application.Json)) }.bodyAsText())
+            assertEquals(listOf(json, json, different, large), forwarded)
+        } finally { client.close() }
+    }
+
     private fun armResponseBreakpoint() =
         BreakpointRegistry.update(listOf(BreakpointRule(id = "b1", urlPattern = "/bp", phase = "response")))
 

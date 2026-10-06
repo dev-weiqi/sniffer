@@ -1268,3 +1268,7 @@ button.modal-primary:hover {
   .topbar .tabs button { flex: 1; padding: 4px 6px; gap: 4px; font-size: 14px; }
   .topbar .tabs .count { margin-left: 0; padding: 1px 4px; }
 }
+
+.condition-tabs { margin-bottom: 2px; }
+.condition-tabs button { font-weight: 600; }
+[aria-label="Body conditions"][role="tabpanel"] .rule-body-tools { margin-top: 6px; }

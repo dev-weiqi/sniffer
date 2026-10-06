@@ -280,7 +280,7 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
             )
 
             val rule = if (!handsOff || request.body is SSEClientContent)
-                MockRegistry.matchHttp(request.method.value, url) else null
+                MockRegistry.matchHttp(request.method.value, url, reqBodyRaw.takeUnless { reqBody.truncated }) else null
             if (rule != null && !rule.delayOnly) {
                 if (rule.delayMs > 0) delay(rule.delayMs)
                 val body = expandMockPlaceholders(rule.body)

@@ -4,7 +4,7 @@ import { FilterMenu } from './FilterMenu'
 import { TrafficEmpty, type TrafficEmptyProps } from './TrafficEmpty'
 import type { TrafficFilter } from './trafficFilter'
 import { copyText, fmtDuration, fmtSize, fmtTime, prettyJson, splitHighlight, splitLinks, statusClass, statusLabel, toCurl, urlParts } from './util'
-import { newRuleId } from './util'
+import { httpMockFromRequest } from './util'
 import { useDetailWidth, useFollowLatestRow, useListKeys, useUnreadRows } from './hooks'
 import { JsonView } from './JsonView'
 import { HeadersEditor, WarningIcon } from './MocksView'
@@ -388,16 +388,7 @@ export function HttpDetail({ row, query, onMock, onArm, onClose }: {
   const { query: queryParams } = urlParts(row.url)
   const responseIsJson = Boolean(row.respBody && !row.respBase64 && !isSse(row) && isValidJson(row.respBody))
 
-  const mockThis = () => onMock(
-    {
-      id: newRuleId(), enabled: true, method: row.method,
-      // the SDK matches the request path exactly, so seed the path — a full URL never matches
-      urlPattern: urlParts(row.url).path, status: row.status && row.status > 0 ? row.status : 200,
-      headers: { 'content-type': row.respHeaders?.['content-type'] ?? 'application/json' },
-      body: row.respBody ?? '', delayMs: 0, delayOnly: false,
-    },
-    row.deviceId,
-  )
+  const mockThis = () => onMock(httpMockFromRequest(row), row.deviceId)
 
   return (
     <aside className="detail-pane" aria-label="API request details">

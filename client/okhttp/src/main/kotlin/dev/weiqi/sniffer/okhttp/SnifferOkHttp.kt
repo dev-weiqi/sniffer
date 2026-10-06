@@ -76,8 +76,8 @@ internal class SnifferInterceptor(
         // response pass through untouched.
         var injectedDelayMs = 0L
         try {
-            reportRequest(id, request)
-            val rule = MockRegistry.matchHttp(request.method, request.url.toString())
+            val requestBody = reportRequest(id, request)
+            val rule = MockRegistry.matchHttp(request.method, request.url.toString(), requestBody)
             if (rule != null) {
                 if (rule.delayMs > 0) Thread.sleep(rule.delayMs)
                 if (rule.delayOnly) injectedDelayMs = rule.delayMs
@@ -170,7 +170,7 @@ internal class SnifferInterceptor(
         return builder.build()
     }
 
-    private fun reportRequest(id: String, request: Request) {
+    private fun reportRequest(id: String, request: Request): String? {
         val reqBodyRaw = request.body?.let { body ->
             val len = runCatching { body.contentLength() }.getOrDefault(-1L)
             if (body.isOneShot() || body.isDuplex() || !isTextual(body.contentType()?.toString())) null
@@ -190,6 +190,7 @@ internal class SnifferInterceptor(
                 library = "okhttp", timestamp = now(),
             )
         )
+        return reqBodyRaw.takeUnless { reqBody.truncated }
     }
 
     private fun mockResponse(id: String, request: Request, rule: dev.weiqi.sniffer.core.HttpMockRule): Response {

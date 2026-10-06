@@ -23,6 +23,8 @@ export interface HttpMockRule {
   urlPattern: string
   /** All specified decoded query values must match; other parameters are ignored. */
   queryParams?: Record<string, string>
+  /** JSON object of required request body fields; blank means no body constraint. */
+  bodyMatch?: string
   status: number
   headers: Record<string, string>
   body: string
@@ -90,6 +92,7 @@ export interface HttpRow {
   reqHeaders: Record<string, string>
   reqBody: string | null
   reqSize: number
+  reqTruncated?: boolean
   status?: number
   respHeaders?: Record<string, string>
   respBody?: string | null
@@ -222,7 +225,7 @@ function applyDeviceMessage(state: State, deviceId: string, m: Msg): State {
       const row: HttpRow = {
         id: m.id, deviceId, ts: m.timestamp, method: m.method, url: m.url,
         library: m.library, reqHeaders: m.headers ?? {}, reqBody: m.body,
-        reqSize: m.bodySize ?? 0,
+        reqSize: m.bodySize ?? 0, reqTruncated: m.bodyTruncated === true,
         userId: typeof m.userId === 'string' ? m.userId : undefined,
       }
       return { ...state, http: appendCapped(state.http, row) }

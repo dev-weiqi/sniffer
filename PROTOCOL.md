@@ -112,10 +112,19 @@ Timestamps are epoch millis. Bodies are strings; binary bodies are `null`. Bodie
 //   Extra request parameters are ignored. Keys and values are case-sensitive strings; percent
 //   escapes are decoded and + means space. A repeated key matches if any value equals the rule.
 //   An empty string matches ?key or ?key=, but not a missing key.
-//   Matching rules with nonempty queryParams win before path-only fallback rules, regardless of
+//   Matching rules with nonempty queryParams or bodyMatch win before path-only fallback rules, regardless of
 //   list position; the first matching rule wins within each group. No match means real traffic.
 //   SDKs advertise "http-query-mocks" in hello.capabilities. The daemon omits conditional rules
 //   for older SDKs, which would otherwise ignore queryParams and match every page.
+// Optional bodyMatch: a string containing a JSON object, e.g. "{\"limit\":20}".
+//   All query and body conditions must match. Objects use recursive subset matching; arrays
+//   match exactly, including object fields inside arrays. JSON types matter; missing != null.
+//   Absent/null/blank bodyMatch or {} imposes no body constraint. Invalid conditions never match.
+//   Only complete, safely readable JSON request bodies within the capture limit are matched;
+//   missing, truncated, binary, or non-replayable bodies cannot satisfy a nonempty body condition.
+//   SDKs advertise "http-body-mocks". The daemon omits body-conditioned rules for older SDKs;
+//   a rule using both queryParams and bodyMatch requires both capabilities. Invalid drafts stay
+//   in storage/export but are never synced. No matching rule means the original request proceeds.
 // body and ackPayload support placeholders expanded on the device at match time:
 //   ${randomId}, ${now} (ISO-8601 UTC), ${randomString(min~max)}
 //   min/max are user-provided whole numbers; the string length is random within [min, max]

@@ -367,6 +367,39 @@ class SnifferInterceptorTest {
         assertEquals(listOf("abc", "unknown", "oversized"), results)
     }
 
+    @Test
+    fun post_body_conditions_mock_or_forward_without_consuming_one_shot_bodies() {
+        val json = """{"session_id":"session","limit":20}"""
+        MockRegistry.update(MockRules(http = listOf(HttpMockRule(
+            id = "body", method = "POST", urlPattern = "/messages", queryParams = mapOf("locale" to "zh-TW"),
+            bodyMatch = """{"session_id":"session","limit":20}""", body = "mocked",
+        ))))
+        var realCalls = 0
+        val client = clientReturning { request ->
+            realCalls++
+            response(request, body = request.bodyString().toResponseBody("application/json".toMediaType()))
+        }
+        fun send(body: RequestBody, query: String = "zh-TW") = client.newCall(
+            Request.Builder().url("http://example.test/messages?locale=$query").post(body).build()
+        ).execute().use { it.body.string() }
+        assertEquals("mocked", send(json.toRequestBody("application/json".toMediaType())))
+        assertEquals(0, realCalls)
+        assertEquals(json, send(json.toRequestBody("application/json".toMediaType()), "en-US"))
+        val different = """{"session_id":"session","limit":40}"""
+        assertEquals(different, send(different.toRequestBody("application/json".toMediaType())))
+        var writes = 0
+        val oneShot = object : RequestBody() {
+            override fun contentType() = "application/json".toMediaType()
+            override fun contentLength() = json.length.toLong()
+            override fun isOneShot() = true
+            override fun writeTo(sink: okio.BufferedSink) { writes++; sink.writeUtf8(json) }
+        }
+        assertEquals(json, send(oneShot))
+        assertEquals(1, writes)
+        assertEquals(json, send(json.toRequestBody("application/octet-stream".toMediaType())))
+        assertEquals(4, realCalls)
+    }
+
     private fun clientReturning(block: (Request) -> Response): OkHttpClient =
         OkHttpClient.Builder()
             .addInterceptor(SnifferOkHttp.interceptor())

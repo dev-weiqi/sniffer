@@ -21,7 +21,10 @@ object MockRegistry {
     // Exact-path match: [urlPattern] must equal the request's path (scheme, host, query and
     // fragment stripped). "/api/" no longer catches "/api/systems/v1/app-version". An empty
     // pattern matches nothing (a bare path always starts with "/").
-    fun matchHttp(method: String, url: String): HttpMockRule? {
+    fun matchHttp(method: String, url: String): HttpMockRule? = matchHttp(method, url, null)
+
+    fun matchHttp(method: String, url: String, body: String?): HttpMockRule? {
+        val actual by lazy { body?.takeIf { it.length <= MAX_BODY_CHARS }?.let(::parseJson) }
         val path = pathOf(url)
         val query by lazy {
             runCatching {
@@ -35,11 +38,14 @@ object MockRegistry {
         for (rule in rules.http) {
             if (!rule.enabled || rule.urlPattern.isEmpty() || path != rule.urlPattern ||
                 (rule.method != null && !rule.method.equals(method, ignoreCase = true))) continue
-            if (rule.queryParams.isEmpty()) {
+            val condition = rule.bodyMatch?.takeUnless { it.isBlank() }
+            val expected = condition?.let { parseJson(it) as? JsonObject }
+            if (condition != null && expected == null) continue
+            if (rule.queryParams.isEmpty() && expected.isNullOrEmpty()) {
                 if (fallback == null) fallback = rule
             } else if (rule.queryParams.all { (key, value) ->
                 key.isNotBlank() && query?.contains(key to value) == true
-            }) return rule
+            } && (expected.isNullOrEmpty() || matchesJson(expected, actual))) return rule
         }
         return fallback
     }

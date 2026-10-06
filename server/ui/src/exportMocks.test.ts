@@ -20,6 +20,7 @@ const mocks: Mocks = {
       method: 'GET',
       urlPattern: '/users',
       queryParams: { page: '2', size: '20' },
+      bodyMatch: '{"limit":20}',
       status: 200,
       headers: { 'content-type': 'application/json' },
       body: '{}',
@@ -154,3 +155,6 @@ assert(copies[0].event === 'a' && copies[1].event === 'b', 'every other field su
 assert(importedCopies([], freshId).length === 0, 'copying an empty category is empty')
 
 console.log('exportMocks.test: all assertions passed')
+
+assert(roundTrip!.http[0].bodyMatch === '{"limit":20}', 'HTTP body condition survives export/import')
+assert(importedCopies(roundTrip!.http, () => 'new')[0].bodyMatch === '{"limit":20}', 'HTTP body condition survives copying')

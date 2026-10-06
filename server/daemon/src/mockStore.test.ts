@@ -124,3 +124,18 @@ writeFileSync(file, '{')
 assertEqual(Object.keys(loadMockStore(file).devices).length, 0, 'loadMockStore handles malformed JSON')
 
 console.log('mockStore.test: all assertions passed')
+
+const bodyMocks = { http: [
+  { id: 'fallback' }, { id: 'blank', bodyMatch: ' ' }, { id: 'empty', bodyMatch: '{}' },
+  { id: 'body', bodyMatch: '{"limit":20}', starred: true },
+  { id: 'both', queryParams: { page: '1' }, bodyMatch: '{"limit":20}' },
+  ...[false, 1, [], {}, '[]', 'null', '{', '2'].map(bodyMatch => ({ id: 'invalid', bodyMatch })),
+], socket: [] }
+assertEqual(stripUiOnlyFields(bodyMocks, ['http-query-mocks']).http.length, 3, 'query-only SDKs cannot receive body conditions')
+assertEqual(stripUiOnlyFields(bodyMocks, ['http-body-mocks']).http.length, 4, 'both conditions require both capabilities')
+const bodyWire = stripUiOnlyFields(bodyMocks, ['http-query-mocks', 'http-body-mocks'])
+assertEqual(bodyWire.http.length, 5, 'valid HTTP conditions survive sync')
+assertEqual((bodyWire.http[3] as { bodyMatch: string }).bodyMatch, '{"limit":20}', 'HTTP body survives device sync')
+assert(!('starred' in (bodyWire.http[3] as object)), 'HTTP body shared rule strips UI marker')
+const bodyStore = parseMockStoreJson(JSON.stringify({ devices: { d1: bodyMocks }, shared: {} }))
+assertEqual((bodyStore.devices.d1.http[3] as { bodyMatch: string }).bodyMatch, '{"limit":20}', 'HTTP body survives persistence')

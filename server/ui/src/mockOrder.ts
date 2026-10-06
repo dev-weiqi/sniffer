@@ -7,10 +7,11 @@
 
 import type { HttpMockRule, SocketMockRule } from './state.js'
 
-export function httpMatcherSignature(rule: Pick<HttpMockRule, 'method' | 'urlPattern' | 'queryParams'>): string {
+export function httpMatcherSignature(rule: Pick<HttpMockRule, 'method' | 'urlPattern' | 'queryParams' | 'bodyMatch'>): string {
   return JSON.stringify([
     rule.method?.toUpperCase() ?? 'ANY', rule.urlPattern,
     Object.entries(rule.queryParams ?? {}).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0),
+    conditionSignature(rule.bodyMatch),
   ])
 }
 
@@ -21,10 +22,11 @@ export function payloadMatchError(text: unknown): string | null {
     const value = typeof text === 'string' ? JSON.parse(text) : null
     if (value && typeof value === 'object' && !Array.isArray(value)) return null
   } catch { /* show the same actionable error for malformed JSON and wrong root types */ }
-  return 'Enter a JSON object, for example {"page": 2}. This rule is inactive until corrected.'
+  return 'Enter a JSON object, for example {"page": 1}. This rule is inactive until corrected.'
 }
 
-export function socketMatcherSignature(rule: Pick<SocketMockRule, 'transport' | 'event' | 'payloadMatch'>): string {
+function conditionSignature(text: unknown): unknown {
+  if (text != null && typeof text !== 'string') return ['invalid', text]
   const canonical = (value: unknown): unknown => {
     if (Array.isArray(value)) return value.map(canonical)
     if (value && typeof value === 'object') return Object.fromEntries(
@@ -32,9 +34,12 @@ export function socketMatcherSignature(rule: Pick<SocketMockRule, 'transport' | 
     )
     return value
   }
-  let condition: unknown = rule.payloadMatch ?? ''
-  try { condition = canonical(JSON.parse(rule.payloadMatch?.trim() || '{}')) } catch { /* keep invalid drafts distinct */ }
-  return JSON.stringify([rule.transport, rule.event, condition])
+  try { return canonical(JSON.parse(typeof text === 'string' ? text.trim() || '{}' : '{}')) }
+  catch { return text }
+}
+
+export function socketMatcherSignature(rule: Pick<SocketMockRule, 'transport' | 'event' | 'payloadMatch'>): string {
+  return JSON.stringify([rule.transport, rule.event, conditionSignature(rule.payloadMatch)])
 }
 
 export interface MockOrder {
