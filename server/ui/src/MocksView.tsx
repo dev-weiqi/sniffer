@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { HttpMockRule, Mocks, SocketConn, SocketMockRule } from './state'
 import { api } from './state'
 import { newRuleId, prettyJson, prettySocketRule, unwrapJsonString, wrapJsonString } from './util'
-import { applyOrder, byOrder, httpMatcherSignature as httpSig, loadIds, loadOrder, orderOf, saveIds, saveOrder } from './mockOrder'
+import { applyOrder, byOrder, httpMatcherSignature as httpSig, socketMatcherSignature as socketSig, payloadMatchError, loadIds, loadOrder, orderOf, saveIds, saveOrder } from './mockOrder'
 import { pointAt, resolvePushTarget } from './pushTarget'
 import { buildExportRules, countImportedRules, createFullExportSelection, importedCopies, parseImportedRules, type ExportRuleSelection, type ExportRulesSource, type PushEventRule } from './exportMocks'
 import { useConfirm } from './Confirm'
@@ -14,8 +14,6 @@ const PlaceholderTokens = [
   { key: 'now', syntax: '${now}', label: 'current time, ISO-8601 UTC' },
   { key: 'randomString', syntax: '${randomString(min~max)}', label: 'lorem string, random length in the range you enter' },
 ]
-
-const socketSig = (r: SocketMockRule) => `${r.transport}|${r.event}`
 
 /** ids of enabled rules whose matcher collides with another enabled rule */
 function duplicateIds<T extends { id: string; enabled: boolean }>(rules: T[], sig: (r: T) => string): Set<string> {
@@ -207,12 +205,13 @@ function saveSelection(sel: MockSelection) {
   try { localStorage.setItem(selectionKey, JSON.stringify(sel)) } catch { /* private mode */ }
 }
 
-export function MocksView({ scope, deviceId, appId, supportsQueryMocks, mocks, conns, pendingRule, pendingSocketRule, pushPrefill, onPendingConsumed, onClose }: {
+export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supportsSocketPayloadMocks, mocks, conns, pendingRule, pendingSocketRule, pushPrefill, onPendingConsumed, onClose }: {
   /** which panel opened it: the API panel manages HTTP rules, the Socket panel the socket ones */
   scope: 'http' | 'socket'
   deviceId: string | null
   appId: string | null
   supportsQueryMocks: boolean
+  supportsSocketPayloadMocks: boolean
   mocks: Mocks
   conns: SocketConn[]
   pendingRule: HttpMockRule | null
@@ -381,7 +380,7 @@ export function MocksView({ scope, deviceId, appId, supportsQueryMocks, mocks, c
     id: r.id,
     badge: r.transport === 'ktor-ws' ? 'WS' : 'SIO',
     label: r.name || r.event || '(new rule)',
-    sub: r.name ? r.event : undefined,
+    sub: [r.name ? r.event : '', typeof r.payloadMatch === 'string' ? r.payloadMatch.trim() : ''].filter(Boolean).join(' · ') || undefined,
     enabled: r.enabled,
     starred: r.starred,
     dup: socketDups.has(r.id),
@@ -492,7 +491,7 @@ export function MocksView({ scope, deviceId, appId, supportsQueryMocks, mocks, c
             />
             <div className="mocks-detail">
               {socketAt < 0 ? <div className="empty">No socket rules yet — add one to start mocking</div> : (
-                <SocketRuleEditor key={draft.socket[socketAt].id} rule={draft.socket[socketAt]} dup={socketDups.has(draft.socket[socketAt].id)}
+                <SocketRuleEditor supportsSocketPayloadMocks={supportsSocketPayloadMocks} key={draft.socket[socketAt].id} rule={draft.socket[socketAt]} dup={socketDups.has(draft.socket[socketAt].id)}
                   onDuplicate={() => {
                     const copy = { ...draft.socket[socketAt], id: newRuleId(), createdAt: Date.now() }
                     update({ ...draft, socket: [...draft.socket.slice(0, socketAt + 1), copy, ...draft.socket.slice(socketAt + 1)] })
@@ -660,10 +659,11 @@ function exportCategories(source: ExportRulesSource): ExportCategory[] {
   return [
     { key: 'http', title: 'HTTP rules', rows: source.http.map(r => ({
       id: r.id, label: r.name || r.urlPattern || '(new rule)',
-      sub: `${r.method ?? 'ANY'} ${r.urlPattern}`, badge: String(r.status),
+      sub: [`${r.method ?? 'ANY'} ${r.urlPattern}`, new URLSearchParams(r.queryParams).toString()].filter(Boolean).join('?'), badge: String(r.status),
     })) },
     { key: 'socket', title: 'Socket rules', rows: source.socket.map(r => ({
-      id: r.id, label: r.name || r.event || '(new rule)', sub: r.event, badge: r.transport,
+      id: r.id, label: r.name || r.event || '(new rule)',
+      sub: [r.event, typeof r.payloadMatch === 'string' ? r.payloadMatch.trim() : ''].filter(Boolean).join(' · '), badge: r.transport,
     })) },
     { key: 'push', title: 'Push events', rows: source.push.map(r => ({
       id: r.id, label: r.name || r.event || '(new event)', sub: r.event, badge: 'push',
@@ -1049,8 +1049,12 @@ function HttpRuleEditor({ rule, dup, supportsQueryMocks, onChange, onDelete, onD
         <div className="hint dup-warning"><WarningIcon />Another enabled rule has the same matcher — the newest one takes effect.</div>
       )}
       <section className="query-params" aria-label="Query parameters">
-        <div className="headers-label">Query parameters</div>
-        <p className="hint">All specified values must match. Other parameters are ignored. Rules without parameters are fallbacks.</p>
+        <div className="condition-heading">
+          <span className="headers-label">Query parameters</span>
+          <span className="hint" title="All specified values must match. Other parameters are ignored. Rules without parameters are fallbacks.">
+            Match specified parameters. Leave blank for fallback.
+          </span>
+        </div>
         <HeadersEditor kind="query" value={rule.queryParams ?? {}}
           onChange={queryParams => onChange({ ...rule, queryParams })} />
         {!supportsQueryMocks && Object.keys(rule.queryParams ?? {}).length > 0 && (
@@ -1268,7 +1272,8 @@ function JsonStringToggle({ view }: { view: JsonStringView }) {
   )
 }
 
-function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
+function SocketRuleEditor({ rule, dup, supportsSocketPayloadMocks, onChange, onDelete, onDuplicate }: {
+  supportsSocketPayloadMocks: boolean
   rule: SocketMockRule
   dup: boolean
   onChange: (r: SocketMockRule) => void
@@ -1279,6 +1284,9 @@ function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
   const pushRef = useRef<HTMLTextAreaElement>(null)
   const ackView = useJsonStringView(rule.ackPayload, ackPayload => onChange({ ...rule, ackPayload }), 'args')
   const pushView = useJsonStringView(rule.pushPayload ?? '[]', pushPayload => onChange({ ...rule, pushPayload }), 'args')
+  const conditionError = payloadMatchError(rule.payloadMatch)
+  const hasPayloadConditions = !conditionError && typeof rule.payloadMatch === 'string' &&
+    Object.keys(JSON.parse(rule.payloadMatch.trim() || '{}')).length > 0
   const mode = rule.transport === 'ktor-ws' ? 'ws' : rule.pushEvent != null ? 'sio-event' : 'sio-ack'
   return (
     <div className="rule-card" data-disabled={!rule.enabled || undefined}>
@@ -1311,6 +1319,25 @@ function SocketRuleEditor({ rule, dup, onChange, onDelete, onDuplicate }: {
       </div>
       {dup && (
         <div className="hint dup-warning"><WarningIcon />Another enabled rule has the same matcher — the newest one takes effect.</div>
+      )}
+      <label className="payload-condition">
+        <span className="condition-heading">
+          <span>Payload conditions</span>
+          <span className="hint" title="All specified fields must match. Other object fields are ignored. Arrays match exactly. Blank or {} is a fallback.">
+            Match fields in {rule.transport === 'socketio' ? 'the first argument' : 'the JSON frame'}. Leave blank for fallback.
+          </span>
+        </span>
+        <textarea className="mono" rows={3} aria-label="Payload conditions"
+          placeholder='{"page": 1}' value={typeof rule.payloadMatch === 'string' ? rule.payloadMatch : rule.payloadMatch == null ? '' : JSON.stringify(rule.payloadMatch)} aria-invalid={!!conditionError}
+          onChange={e => onChange({ ...rule, payloadMatch: e.target.value || undefined })} />
+      </label>
+      <div className="rule-body-tools">
+        <JsonTool label="Pretty JSON" body={rule.payloadMatch ?? ''} transform={v => JSON.stringify(v, null, 2)}
+          onResult={payloadMatch => onChange({ ...rule, payloadMatch })} />
+      </div>
+      {conditionError && <div className="hint dup-warning" role="alert">{conditionError}</div>}
+      {!supportsSocketPayloadMocks && hasPayloadConditions && (
+        <div className="hint dup-warning">Update this device’s SDK to use payload conditions.</div>
       )}
       {mode === 'sio-event' ? (
         <>

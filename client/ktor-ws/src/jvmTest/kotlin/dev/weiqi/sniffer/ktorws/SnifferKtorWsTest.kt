@@ -37,6 +37,25 @@ class SnifferKtorWsTest {
     }
 
     @Test
+    fun payload_pages_reply_and_unmatched_frames_pass_through() = runBlocking {
+        MockRegistry.update(MockRules(socket = listOf(
+            SocketMockRule(id = "one", transport = "ktor-ws", event = "items", payloadMatch = """{"page":1}""", ackPayload = "one"),
+            SocketMockRule(id = "two", transport = "ktor-ws", event = "items", payloadMatch = """{"page":2}""", ackPayload = "two"),
+        )))
+        val delegate = FakeDefaultWebSocketSession()
+        val wrapped = SnifferFrameInterceptor(delegate, "ws://example.test/socket")
+        try {
+            for ((page, expected) in listOf(1 to "one", 2 to "two", 1 to "one")) {
+                wrapped.send(Frame.Text("""{"type":"items","page":$page}"""))
+                assertEquals(expected, (withTimeout(2000) { wrapped.incoming.receive() } as Frame.Text).readText())
+            }
+            val unmatched = """{"type":"items","page":3}"""
+            wrapped.send(Frame.Text(unmatched))
+            assertEquals(unmatched, (withTimeout(2000) { delegate.outgoingChannel.receive() } as Frame.Text).readText())
+        } finally { delegate.terminate() }
+    }
+
+    @Test
     fun reports_status_and_forwards_inbound_text_frames() = runBlocking {
         val reports = captureReports()
         val delegate = FakeDefaultWebSocketSession()

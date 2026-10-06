@@ -713,6 +713,7 @@ export default function App() {
           deviceId={deviceId}
           appId={selectedDevice.appId ?? null}
           supportsQueryMocks={selectedDevice.capabilities.includes('http-query-mocks')}
+          supportsSocketPayloadMocks={selectedDevice.capabilities.includes('socket-payload-mocks')}
           mocks={selectedMocks}
           conns={state.socketConns}
           pendingRule={pendingRule}

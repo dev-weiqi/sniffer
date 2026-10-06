@@ -1,6 +1,8 @@
 import {
   EMPTY_ORDER,
   httpMatcherSignature,
+  socketMatcherSignature,
+  payloadMatchError,
   applyOrder,
   byOrder,
   loadIds,
@@ -24,6 +26,15 @@ assert(httpMatcherSignature({ ...matcher, queryParams: { page: '1' } }) !==
 assert(httpMatcherSignature({ ...matcher, queryParams: { page: '1', size: '20' } }) ===
   httpMatcherSignature({ ...matcher, method: 'get', queryParams: { size: '20', page: '1' } }), 'parameter order and method case do not affect duplicates')
 assert(httpMatcherSignature(matcher) !== httpMatcherSignature({ ...matcher, queryParams: { page: '' } }), 'missing and empty query values differ')
+
+const socket = { transport: 'socketio' as const, event: 'items' }
+assert(socketMatcherSignature(socket) === socketMatcherSignature({ ...socket, payloadMatch: ' {} ' }), 'empty payload is fallback')
+assert(socketMatcherSignature({ ...socket, payloadMatch: '{"page":1}' }) !== socketMatcherSignature({ ...socket, payloadMatch: '{"page":2}' }), 'socket pages are distinct')
+assert(socketMatcherSignature({ ...socket, payloadMatch: '{"page":2,"filter":{"b":1,"a":true}}' }) ===
+  socketMatcherSignature({ ...socket, payloadMatch: '{ "filter": {"a":true,"b":1}, "page": 2.0 }' }), 'JSON formatting, numeric spelling and key order do not affect duplicates')
+assert(socketMatcherSignature({ ...socket, payloadMatch: '{"page":2}' }) !== socketMatcherSignature({ ...socket, payloadMatch: '{"page":"2"}' }), 'JSON types remain distinct')
+for (const text of ['[]', 'null', 'true', '{', '2', {}, 2, false]) assert(payloadMatchError(text), 'invalid condition is explained')
+for (const text of ['', ' ', '{}', '{"page":2}']) assert(payloadMatchError(text) === null, 'valid condition accepted')
 
 // ---- byOrder ----
 // The case this exists for: the daemon merges starred rules ahead of the device's own, so a

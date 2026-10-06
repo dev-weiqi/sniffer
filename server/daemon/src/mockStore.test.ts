@@ -62,6 +62,19 @@ assertEqual((queryWire.http[2] as { queryParams: { page: string } }).queryParams
 assert(!('starred' in (queryWire.http[2] as object)), 'shared query rules lose only the UI marker')
 assertEqual(queryWire.socket.length, 1, 'capability filtering leaves socket rules intact')
 
+const payloadMocks = { http: [], socket: [
+  { id: 'fallback' }, { id: 'blank', payloadMatch: ' ' }, { id: 'empty', payloadMatch: '{}' },
+  { id: 'page', payloadMatch: '{"page":2}', starred: true },
+  ...[false, 1, [], {}, '[]', 'null', '{', '2'].map(payloadMatch => ({ id: 'invalid', payloadMatch })),
+] }
+assertEqual(stripUiOnlyFields(payloadMocks).socket.length, 3, 'old SDKs never receive payload conditions')
+const payloadWire = stripUiOnlyFields(payloadMocks, ['socket-payload-mocks'])
+assertEqual(payloadWire.socket.length, 4, 'new SDKs receive only valid payload rules')
+assertEqual((payloadWire.socket[3] as { payloadMatch: string }).payloadMatch, '{"page":2}', 'payload survives sync')
+const payloadStore = parseMockStoreJson(JSON.stringify({ devices: { d1: payloadMocks } }))
+assertEqual((payloadStore.devices.d1.socket[3] as { payloadMatch: string }).payloadMatch, '{"page":2}', 'payload survives persistence')
+assertEqual(payloadStore.devices.d1.socket.length, payloadMocks.socket.length, 'invalid drafts remain editable')
+
 const migration = migrateStarredToSharedStore({
   devices: {
     d1: {

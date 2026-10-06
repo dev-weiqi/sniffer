@@ -2,6 +2,12 @@ package dev.weiqi.sniffer.core
 
 import kotlin.concurrent.Volatile
 import io.ktor.http.decodeURLQueryComponent
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.doubleOrNull
 
 /** Currently active mock rules. The daemon replaces the full set on every update. */
 object MockRegistry {
@@ -43,10 +49,40 @@ object MockRegistry {
         return path.substringBefore('?').substringBefore('#')
     }
 
-    fun matchSocketAck(event: String): SocketMockRule? =
-        rules.socket.firstOrNull { it.enabled && it.transport == "socketio" && it.event == event }
+    fun matchSocketAck(event: String): SocketMockRule? = matchSocketAck(event, "[]")
 
-    /** ktor-ws "reply mock": matches outgoing text frames by substring. */
+    fun matchSocketAck(event: String, args: String): SocketMockRule? =
+        matchSocket("socketio", event) { (parseJson(args) as? JsonArray)?.firstOrNull() }
+
+    /** ktor-ws "reply mock": matches outgoing text frames by substring and optional JSON fields. */
     fun matchWsSend(text: String): SocketMockRule? =
-        rules.socket.firstOrNull { it.enabled && it.transport == "ktor-ws" && text.contains(it.event) }
+        matchSocket("ktor-ws", text) { parseJson(text) }
+
+    private fun matchSocket(transport: String, event: String, payload: () -> JsonElement?): SocketMockRule? {
+        val actual by lazy(payload)
+        var fallback: SocketMockRule? = null
+        for (rule in rules.socket) {
+            if (!rule.enabled || rule.transport != transport ||
+                !(if (transport == "ktor-ws") event.contains(rule.event) else event == rule.event)) continue
+            val condition = rule.payloadMatch?.takeUnless { it.isBlank() }
+            val expected = condition?.let { parseJson(it) as? JsonObject }
+            if (condition != null && expected == null) continue // Invalid constraints must never become fallbacks.
+            if (expected == null || expected.isEmpty()) {
+                if (fallback == null) fallback = rule
+            } else if (matchesJson(expected, actual)) return rule
+        }
+        return fallback
+    }
+
+    private fun parseJson(text: String): JsonElement? = runCatching { Json.parseToJsonElement(text) }.getOrNull()
+
+    private fun matchesJson(expected: JsonElement, actual: JsonElement?, partial: Boolean = true): Boolean = when {
+        expected is JsonObject -> actual is JsonObject && (partial || expected.size == actual.size) &&
+            expected.all { (key, value) -> matchesJson(value, actual[key], partial) }
+        expected is JsonArray -> actual is JsonArray && expected.size == actual.size &&
+            expected.indices.all { matchesJson(expected[it], actual[it], false) }
+        expected is JsonPrimitive && actual is JsonPrimitive && !expected.isString && !actual.isString &&
+            expected.doubleOrNull != null -> expected.doubleOrNull == actual.doubleOrNull
+        else -> expected == actual
+    }
 }

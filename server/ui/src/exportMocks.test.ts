@@ -19,6 +19,7 @@ const mocks: Mocks = {
       enabled: true,
       method: 'GET',
       urlPattern: '/users',
+      queryParams: { page: '2', size: '20' },
       status: 200,
       headers: { 'content-type': 'application/json' },
       body: '{}',
@@ -43,6 +44,7 @@ const mocks: Mocks = {
       enabled: true,
       transport: 'socketio',
       event: 'join',
+      payloadMatch: '{"page":2}',
       ackPayload: '[{"ok":true}]',
       delayMs: 0,
     },
@@ -112,6 +114,10 @@ for (const key of Object.keys(full) as (keyof typeof full)[]) {
   assert(roundTrip![key].length === full[key].length,
     `import drops the "${key}" category the export writes`)
 }
+assert(JSON.stringify(roundTrip!.http[0].queryParams) === JSON.stringify({ page: '2', size: '20' }), 'query parameters survive export/import')
+assert(importedCopies(roundTrip!.http, () => 'new')[0].queryParams?.page === '2', 'query parameters survive copying')
+assert(roundTrip!.socket[0].payloadMatch === '{"page":2}', 'payload condition survives export/import')
+assert(importedCopies(roundTrip!.socket, () => 'new')[0].payloadMatch === '{"page":2}', 'payload condition survives copying')
 assertIds(roundTrip!.push, ['push-1', 'push-2'], 'push events survive a round trip')
 assert(countImportedRules(roundTrip!) === 6, 'counts every imported rule')
 

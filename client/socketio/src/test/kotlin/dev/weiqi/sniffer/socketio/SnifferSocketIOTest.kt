@@ -34,6 +34,28 @@ class SnifferSocketIOTest {
     }
 
     @Test
+    fun payload_pages_route_ack_and_event_replies_and_preserve_unmatched_emits() = runBlocking {
+        val socket = FakeSocket()
+        val wrapped = SnifferSocketIO.wrap(socket)
+        val rules = listOf(
+            SocketMockRule(id = "one", event = "items", payloadMatch = """{"page":1}""", ackPayload = "[1]"),
+            SocketMockRule(id = "two", event = "items", payloadMatch = """{"page":2}""", pushEvent = "items:result", pushPayload = "[2]"),
+        )
+        MockRegistry.update(MockRules(socket = rules))
+        val ack = CompletableDeferred<List<Any?>>()
+        wrapped.emit("items", JSONObject("""{"page":1}"""), Ack { ack.complete(it.toList()) })
+        assertEquals(listOf(1), withTimeout(2000) { ack.await() })
+        val reply = CompletableDeferred<List<Any?>>()
+        wrapped.on("items:result") { reply.complete(it.toList()) }
+        wrapped.emit("items", JSONObject("""{"page":2}"""))
+        assertEquals(listOf(2), withTimeout(2000) { reply.await() })
+        assertTrue(socket.emitted.isEmpty())
+        val unmatched = JSONObject("""{"page":3}""")
+        wrapped.emit("items", unmatched)
+        assertEquals(unmatched, socket.emitted.single().args.single())
+    }
+
+    @Test
     fun inbound_events_are_bridged_and_status_is_reported() {
         val reports = captureReports()
         val socket = FakeSocket()

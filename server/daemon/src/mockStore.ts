@@ -41,7 +41,18 @@ export function stripUiOnlyFields(mocks: Mocks, capabilities: string[] = []): Mo
     // Older SDKs ignore unknown fields; never turn a conditional mock into a path-only mock.
     return entries.length === 0 || capabilities.includes('http-query-mocks')
   })
-  return { http: strip(http), socket: strip(mocks.socket) }
+  const socket = mocks.socket.filter(r => {
+    const condition = (r as { payloadMatch?: unknown } | null)?.payloadMatch
+    if (condition == null) return true
+    if (typeof condition !== 'string') return false
+    if (!condition.trim()) return true
+    try {
+      const expected = JSON.parse(condition)
+      if (!expected || typeof expected !== 'object' || Array.isArray(expected)) return false
+      return Object.keys(expected).length === 0 || capabilities.includes('socket-payload-mocks')
+    } catch { return false }
+  })
+  return { http: strip(http), socket: strip(socket) }
 }
 
 export function migrateStarredToSharedStore(

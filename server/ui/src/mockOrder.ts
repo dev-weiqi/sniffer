@@ -5,13 +5,36 @@
     Which rules exist stays the daemon's business; where they sit is a display concern, so it
     lives here (localStorage, per device) alongside the filters and push records. */
 
-import type { HttpMockRule } from './state.js'
+import type { HttpMockRule, SocketMockRule } from './state.js'
 
 export function httpMatcherSignature(rule: Pick<HttpMockRule, 'method' | 'urlPattern' | 'queryParams'>): string {
   return JSON.stringify([
     rule.method?.toUpperCase() ?? 'ANY', rule.urlPattern,
     Object.entries(rule.queryParams ?? {}).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0),
   ])
+}
+
+/** Invalid drafts are retained for editing but never synced to an SDK. */
+export function payloadMatchError(text: unknown): string | null {
+  if (text == null || (typeof text === 'string' && !text.trim())) return null
+  try {
+    const value = typeof text === 'string' ? JSON.parse(text) : null
+    if (value && typeof value === 'object' && !Array.isArray(value)) return null
+  } catch { /* show the same actionable error for malformed JSON and wrong root types */ }
+  return 'Enter a JSON object, for example {"page": 2}. This rule is inactive until corrected.'
+}
+
+export function socketMatcherSignature(rule: Pick<SocketMockRule, 'transport' | 'event' | 'payloadMatch'>): string {
+  const canonical = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(canonical)
+    if (value && typeof value === 'object') return Object.fromEntries(
+      Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([key, item]) => [key, canonical(item)]),
+    )
+    return value
+  }
+  let condition: unknown = rule.payloadMatch ?? ''
+  try { condition = canonical(JSON.parse(rule.payloadMatch?.trim() || '{}')) } catch { /* keep invalid drafts distinct */ }
+  return JSON.stringify([rule.transport, rule.event, condition])
 }
 
 export interface MockOrder {

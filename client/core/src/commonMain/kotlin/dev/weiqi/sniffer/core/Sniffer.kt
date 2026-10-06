@@ -46,7 +46,7 @@ object Sniffer {
     internal var reportSinkForTests: ((DeviceMessage) -> Unit)? = null
 
     @Volatile
-    private var capabilities: Set<String> = setOf("http-query-mocks")
+    private var capabilities: Set<String> = setOf("http-query-mocks", "socket-payload-mocks")
 
     @Volatile
     private var pushHandlers: Map<String, (event: String, payload: String) -> Unit> = emptyMap()

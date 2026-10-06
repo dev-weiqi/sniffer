@@ -127,6 +127,17 @@ Timestamps are epoch millis. Bodies are strings; binary bodies are `null`. Bodie
 //   instead of an ack. transport "ktor-ws": [event] is a substring matched against outgoing
 //   text frames; matched frames are not sent and [ackPayload] is injected as a fake incoming
 //   frame ([pushEvent]/[pushPayload] are ignored; the reply frame already is the injection)
+// socket rule optional payloadMatch: a string containing a JSON object, e.g. "{\"page\":2}".
+//   Socket.IO compares the first emitted argument (ack callbacks and other arguments are ignored).
+//   WebSocket compares the outgoing JSON text frame, in addition to the existing event substring.
+//   All specified fields must match; nested objects also use subset matching. Extra object fields
+//   are ignored. Arrays match exactly, including object fields inside arrays. Values retain their
+//   JSON types (2 differs from "2" and true); numbers compare numerically (2 equals 2.0).
+//   Missing fields differ from null. Absent/null/blank payloadMatch or {} is a fallback.
+//   Conditional matches precede fallbacks; the first matching rule wins within each group.
+//   Invalid conditions/non-object roots never match. Invalid/non-object payloads can only use fallbacks.
+//   SDKs advertise "socket-payload-mocks". The daemon omits conditional rules for older SDKs and
+//   invalid conditions for all SDKs. Drafts remain in storage/export so users can correct them.
 // UI-only rule fields the daemon strips before sending to the device: "starred" (rule is shared
 //   with every device of the same appId, stored per appId on the daemon and merged in ahead of
 //   the device's own rules), plus "name" / "createdAt" pass through untouched (SDK ignores them)

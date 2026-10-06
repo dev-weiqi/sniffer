@@ -226,4 +226,6 @@ data class SocketMockRule(
     // placeholders expanded) and [ackPayload] is ignored. Ignored for "ktor-ws".
     val pushEvent: String? = null,
     val pushPayload: String = "[]",
+    // JSON object of required payload fields. Socket.IO uses its first argument; WS uses the frame.
+    val payloadMatch: String? = null,
 )

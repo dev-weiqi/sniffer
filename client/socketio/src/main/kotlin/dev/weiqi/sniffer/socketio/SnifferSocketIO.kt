@@ -152,9 +152,10 @@ class SnifferSocket internal constructor(
             val ack = args.lastOrNull() as? Ack
             val data = if (ack != null) args.copyOfRange(0, args.size - 1) else arrayOf(*args)
             val id = newId()
-            val rule = MockRegistry.matchSocketAck(event)
+            val payload = toJsonArrayString(data)
+            val rule = MockRegistry.matchSocketAck(event, payload)
             Sniffer.report(
-                SocketEventMsg(id, connectionId, "socketio", "out", event, toJsonArrayString(data), mocked = rule != null, timestamp = now())
+                SocketEventMsg(id, connectionId, "socketio", "out", event, payload, mocked = rule != null, timestamp = now())
             )
             val push = rule?.pushEvent?.takeIf { it.isNotBlank() }
             if (push != null) {

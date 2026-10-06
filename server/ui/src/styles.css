@@ -756,6 +756,10 @@ button.add { margin-top: 2px; }
   min-height: 32px;
   font-size: 13px; color: var(--text-dim); white-space: nowrap;
 }
+.payload-condition { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-dim); }
+.condition-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.condition-heading > :first-child { font-size: 13px; font-weight: 600; color: var(--text); }
+.condition-heading .hint { font-size: 12px; font-weight: 400; color: var(--text-dim); }
 .rule-body-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 /* two kinds of control live here: actions that rewrite the whole payload, and tokens you drop
    at the cursor. The tokens are literal text, so they are styled as code rather than as buttons. */

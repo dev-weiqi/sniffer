@@ -46,6 +46,8 @@ export interface SocketMockRule {
   /** socketio only: also inject this event (with pushPayload args) back into the app after delayMs */
   pushEvent?: string
   pushPayload?: string
+  /** JSON object of required outgoing payload fields; blank means fallback. */
+  payloadMatch?: string
 }
 
 export interface Mocks {
