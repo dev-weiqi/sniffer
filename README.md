@@ -54,7 +54,7 @@ Update, or pin a version:
 
 ```bash
 npm install -g @dev-weiqi/sniffer@latest
-npm install -g @dev-weiqi/sniffer@0.7.1
+npm install -g @dev-weiqi/sniffer@0.7.2
 ```
 
 ## Desktop app
@@ -84,7 +84,7 @@ builds: same API, empty implementation.
 | Ktor WebSocket | `io.github.dev-weiqi.sniffer:ktor-ws` |
 
 ```kotlin
-val snifferVersion = "0.7.1"
+val snifferVersion = "0.7.2"
 
 dependencies {
     debugImplementation("io.github.dev-weiqi.sniffer:core:$snifferVersion")
@@ -315,6 +315,10 @@ condition must match; other object fields are ignored. **Mock this request** pre
 and complete JSON object body separately from the response. The device SDK must support the
 selected conditions; update older SDKs before using body matching.
 
+HTTP and Socket editors keep **Request conditions** collapsed by default. Each device's
+rules remember their expanded state and the selected Query/Body tab in this browser,
+including after closing the panel or reloading. Delay settings remain beside the response.
+
 ## Modules
 
 | Artifact | Use it for |
@@ -324,6 +328,7 @@ selected conditions; update older SDKs before using body matching.
 | `io.github.dev-weiqi.sniffer:ktor` | Ktor client inspection for Android, iOS and JVM |
 | `io.github.dev-weiqi.sniffer:socketio` | Socket.IO inspection, ack mocks, push events |
 | `io.github.dev-weiqi.sniffer:ktor-ws` | Ktor WebSocket inspection and reply mocks |
+| `io.github.dev-weiqi.sniffer:firebase` | Firebase Analytics event and user ID tracking |
 
 Each artifact has a `-noop` twin with the same API.
 
