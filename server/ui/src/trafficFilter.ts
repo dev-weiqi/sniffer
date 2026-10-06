@@ -11,12 +11,12 @@ export function filterActive(filter: TrafficFilter): boolean {
   return filter.items.some(i => i.enabled)
 }
 
-/** case-insensitive exact match against the row's displayed name */
-export function passesFilter(filter: TrafficFilter, text: string): boolean {
+/** Case-insensitive match against the row's displayed name; exact unless requested otherwise. */
+export function passesFilter(filter: TrafficFilter, text: string, match: 'exact' | 'contains' = 'exact'): boolean {
   const enabled = filter.items.filter(i => i.enabled)
   if (enabled.length === 0) return true
   const haystack = text.toLowerCase()
-  const matched = enabled.some(i => haystack === i.value.toLowerCase())
+  const matched = enabled.some(i => match === 'contains' ? haystack.includes(i.value.toLowerCase()) : haystack === i.value.toLowerCase())
   return filter.mode === 'exclude' ? !matched : matched
 }
 

@@ -376,7 +376,7 @@ export function RowMenu({ x, y, items, onClose }: {
   )
 }
 
-function HttpDetail({ row, query, onMock, onArm, onClose }: {
+export function HttpDetail({ row, query, onMock, onArm, onClose }: {
   row: HttpRow
   query: string
   onMock: (rule: HttpMockRule, deviceId: string) => void
@@ -400,7 +400,7 @@ function HttpDetail({ row, query, onMock, onArm, onClose }: {
   )
 
   return (
-    <aside className="detail-pane">
+    <aside className="detail-pane" aria-label="API request details">
       <div className="detail-toolbar">
         <button onClick={mockThis}>Mock this request</button>
         <button title="Pause future responses to this path so you can edit them before the app sees them"
@@ -413,6 +413,7 @@ function HttpDetail({ row, query, onMock, onArm, onClose }: {
         <KV k="URL" v={row.url} query={query} />
         <KV k="Method" v={row.method} query={query} />
         <KV k="Library" v={row.library} />
+        <KV k="User ID" v={row.userId === undefined ? 'Not captured by this SDK' : row.userId || 'No user ID'} query={query} />
         {row.durationMs !== undefined && <KV k="Duration" v={fmtDuration(row.durationMs)} />}
         {(row.delayedMs ?? 0) > 0 && <KV k="Delayed" v={`+${row.delayedMs} ms injected by a delay-only rule`} />}
         {row.mocked && <KV k="Mocked" v="yes (short-circuited on device, no network)" />}

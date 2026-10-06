@@ -900,9 +900,9 @@ button.add { margin-top: 2px; }
 .settings-adb-help {
   margin-top: 6px;
 }
-.settings-toggle { margin: 0; padding: 12px; gap: 12px; }
+.settings-toggle { margin: 0; padding: 12px; gap: 12px; align-items: flex-start; }
 .settings-toggle-copy { flex: 1; min-width: 0; }
-.settings-toggle-copy strong { display: block; font-size: 13px; line-height: 1.3; }
+.settings-toggle-copy strong { display: flex; align-items: center; gap: 6px; min-height: 18px; font-size: 13px; line-height: 1.3; }
 .settings-toggle-copy > span { display: block; margin-top: 4px; color: var(--text-dim); font-size: 12px; line-height: 1.35; }
 @media (prefers-reduced-motion: reduce) {
   .settings-toggle .track, .settings-toggle .track i { transition: none; }
@@ -1159,3 +1159,72 @@ button.modal-primary:hover {
 }
 .find-bar input { width: 220px; }
 .find-count { min-width: 44px; text-align: right; font-size: 12px; }
+
+
+/* Firebase uses the existing traffic split and semantic colors. */
+.firebase-users { flex: 0 0 170px; overflow: auto; background: var(--bg); border-right: 1px solid var(--border); padding: 10px 8px; }
+.firebase-users-title { padding: 4px 8px 12px; font-size: 12px; font-weight: 600; color: var(--text-dim); }
+.firebase-user { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 8px; margin-bottom: 3px; text-align: left; border: 1px solid transparent; background: transparent; }
+.firebase-user > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.firebase-user .count { font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.firebase-user[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); border-color: var(--border); }
+.firebase-user[aria-pressed="true"] .count { color: var(--accent); }
+.firebase-panel .panel-toolbar { flex-wrap: wrap; }
+.firebase-panel button:active { transform: none; }
+.firebase-api-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; cursor: pointer; }
+.firebase-api-toggle input { accent-color: var(--accent); }
+.firebase-timeline-caption { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 14px 16px 4px; font-size: 13px; }
+.firebase-timeline-caption strong { overflow-wrap: anywhere; min-width: 0; }
+.firebase-timeline-caption > span { flex-shrink: 0; color: var(--text-dim); font-size: 12px; }
+.firebase-timeline { padding: 12px 14px; margin: 0; list-style: none; }
+.firebase-timeline li { position: relative; }
+.firebase-timeline li:not(:last-child)::before { content: ''; position: absolute; left: 110px; top: 24px; bottom: -24px; width: 1px; background: var(--border); }
+.firebase-event { display: grid; grid-template-columns: 94px 9px minmax(0, 1fr); align-items: start; gap: 12px; position: relative; width: 100%; border: 0; border-radius: 0; padding: 8px 0; background: transparent; text-align: left; }
+.firebase-event:hover { background: transparent; }
+.firebase-event time { padding-top: 11px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.firebase-event-dot { margin-top: 16px; width: 9px; height: 9px; border-radius: 50%; background: var(--text-dim); }
+.firebase-event[data-level="fatal"] .firebase-event-dot { background: var(--err); }
+.firebase-event[data-level="non-fatal"] .firebase-event-dot { background: var(--warn); }
+.firebase-event[data-level="http"] .firebase-event-dot { background: var(--info); }
+.firebase-event-body { min-width: 0; padding: 8px 10px; border: 1px solid transparent; border-radius: 6px; }
+.firebase-event:hover .firebase-event-body { background: var(--hover); }
+.firebase-event[data-selected] .firebase-event-body { background: var(--accent-soft); border-color: var(--accent); }
+.firebase-event-message { display: block; font-size: 13px; font-weight: 500; overflow-wrap: anywhere; white-space: pre-wrap; }
+.firebase-event-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-top: 5px; font-size: 11px; color: var(--text-dim); overflow-wrap: anywhere; }
+.firebase-event-meta .firebase-level { min-width: 60px; font-size: 11px; }
+.firebase-event-host { min-width: 0; overflow-wrap: anywhere; }
+.firebase-level[data-level="http"] { color: var(--info); }
+.firebase-timeline-note { padding: 8px 12px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 11px; }
+.beta-badge { display: inline-block; padding: 1px 5px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border)); border-radius: 4px; color: var(--accent); background: var(--accent-soft); font-size: 10px; font-weight: 600; line-height: 1.4; vertical-align: middle; }
+.firebase-level { color: var(--text); font-size: 12px; font-weight: 600; }
+.firebase-level[data-level="fatal"], .firebase-error { color: var(--err); }
+:root:not([data-theme="dark"]) .firebase-event[data-selected] .firebase-level[data-level="fatal"] { color: color-mix(in srgb, var(--err) 92%, black); }
+.firebase-level[data-level="non-fatal"] { color: var(--warn); }
+.firebase-stack { padding: 10px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.firebase-log { display: flex; gap: 10px; align-items: baseline; }
+.firebase-log span { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.firebase-panel tr:focus-visible, .firebase-panel button:focus-visible, .tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+@media (max-width: 1100px) {
+  .topbar { flex-wrap: wrap; }
+  .topbar .search { min-width: 150px; }
+}
+@media (max-width: 640px) {
+  .firebase-panel { flex-direction: column; }
+  .firebase-users { display: flex; flex: none; gap: 4px; padding: 6px; border-right: 0; border-bottom: 1px solid var(--border); max-height: 52px; }
+  .firebase-users-title { display: none; }
+  .firebase-user { width: auto; flex-shrink: 0; max-width: 180px; margin: 0; padding: 6px 8px; }
+  .firebase-timeline { padding: 8px; }
+  .firebase-event { grid-template-columns: 82px 7px minmax(0, 1fr); gap: 8px; }
+  .firebase-event time { font-size: 11px; }
+  .firebase-event-dot { width: 7px; height: 7px; }
+  .firebase-timeline li:not(:last-child)::before { left: 93px; }
+  .firebase-panel .pane-resizer { display: none; }
+  .firebase-panel .detail-pane { flex: 1; width: 100%; min-width: 0; max-width: none; max-height: none; border-left: 0; }
+  .firebase-panel[data-detail-open] .list-pane, .firebase-panel[data-detail-open] .firebase-users { display: none; }
+  .firebase-panel .panel-toolbar { flex-wrap: wrap; }
+  .firebase-panel .list-pane { min-height: 120px; }
+  .topbar .device-picker { min-width: 0; }
+  .topbar .tabs { order: 1; width: 100%; min-width: 0; margin-left: 0; }
+  .topbar .tabs button { flex: 1; padding: 4px 6px; gap: 4px; font-size: 14px; }
+  .topbar .tabs .count { margin-left: 0; padding: 1px 4px; }
+}

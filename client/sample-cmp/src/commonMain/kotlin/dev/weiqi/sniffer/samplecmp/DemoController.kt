@@ -1,5 +1,6 @@
 package dev.weiqi.sniffer.samplecmp
 
+import dev.weiqi.sniffer.core.SnifferFirebaseCrashlytics
 import androidx.compose.runtime.mutableStateListOf
 import dev.weiqi.sniffer.core.DEFAULT_PORT
 import dev.weiqi.sniffer.ktor.SnifferKtor
@@ -63,6 +64,23 @@ class DemoController {
     private var pendingWsAck: CompletableDeferred<String>? = null
 
     val sections = listOf(
+        DemoSection("Firebase · Beta", listOf(
+            DemoAction("Log") {
+                SnifferFirebaseCrashlytics.setUserId("sample-user")
+                SnifferFirebaseCrashlytics.setCustomKey("screen", "sample")
+                SnifferFirebaseCrashlytics.log("Sample: opened Firebase demo")
+                log("Firebase log recorded", LogKind.INFO)
+            },
+            DemoAction("Non-fatal") {
+                SnifferFirebaseCrashlytics.recordException(IllegalStateException("Sample non-fatal exception"))
+                log("Firebase non-fatal recorded", LogKind.OK)
+            },
+            DemoAction("Fatal record") {
+                // Synthetic fatal exercises the panel without terminating the sample app.
+                SnifferFirebaseCrashlytics.recordFatal(IllegalStateException("Sample synthetic fatal exception"))
+                log("Firebase synthetic fatal recorded (app stays open)", LogKind.OK)
+            },
+        )),
         DemoSection("HTTP · Ktor", listOf(
             DemoAction("GET") {
                 val resp = ktor.get("$BASE/test/users/7")

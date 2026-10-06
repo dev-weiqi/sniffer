@@ -37,6 +37,8 @@ data class HttpRequestMsg(
     val bodyTruncated: Boolean,
     val library: String,
     val timestamp: Long,
+    /** Crashlytics user at request capture time; null means an older/unannotated capture. */
+    val userId: String? = null,
 ) : DeviceMessage
 
 @Serializable
@@ -112,6 +114,29 @@ data class BreakpointHitMsg(
 
 @Serializable
 sealed interface DaemonMessage
+
+@Serializable
+@SerialName("firebase-event")
+data class FirebaseEventMsg(
+    val id: String,
+    val severity: String, // "fatal" | "non-fatal" | "log"
+    val message: String,
+    val timestamp: Long,
+    val exception: String = "",
+    val stackTrace: String = "",
+    val userId: String = "",
+    val keys: Map<String, String> = emptyMap(),
+    val logs: List<FirebaseLog> = emptyList(),
+    val thread: String = "",
+    val truncated: Boolean = false,
+) : DeviceMessage
+
+@Serializable
+data class FirebaseLog(val timestamp: Long, val message: String)
+
+@Serializable
+@SerialName("firebase-ack")
+data class FirebaseAck(val id: String) : DaemonMessage
 
 @Serializable
 @SerialName("mock-rules")

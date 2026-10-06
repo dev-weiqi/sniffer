@@ -76,6 +76,7 @@ function makeDeps() {
       clearAll: () => entryCalls.push('all'),
       clearHttp: () => entryCalls.push('http'),
       clearSocket: () => entryCalls.push('socket'),
+      clearFirebase: () => entryCalls.push('firebase'),
       snapshot: () => [{ id: 'entry' }],
     },
     broadcastToUi: (msg: unknown) => broadcasts.push(msg),
@@ -190,6 +191,7 @@ for (const [path, call, event, releases] of [
   ['/api/entries', 'all', 'entries-cleared', 1],
   ['/api/entries/http', 'http', 'http-entries-cleared', 1],
   ['/api/entries/socket', 'socket', 'socket-entries-cleared', 0],
+  ['/api/entries/firebase', 'firebase', 'firebase-entries-cleared', 0],
 ] as const) {
   ctx = makeDeps()
   res = fakeRes()

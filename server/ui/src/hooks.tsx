@@ -14,7 +14,7 @@ export function useFollowLatestRow(
     select(latest.id)
     requestAnimationFrame(() => {
       if (listRef.current?.getClientRects().length) {
-        listRef.current.querySelector('tr[data-selected]')?.scrollIntoView({ block: 'center' })
+        listRef.current.querySelector('[data-selected]')?.scrollIntoView({ block: 'center' })
       }
     })
   }, [allRows, visibleRows, enabled, scope, select, listRef])
@@ -56,7 +56,7 @@ export function useListKeys(ids: string[], selectedId: string | null, select: (i
         : i === -1 ? 0 : Math.max(0, i - 1)
       select(ids[next])
       requestAnimationFrame(() => {
-        document.querySelector('.split:not([hidden]) .list-scroll tr[data-selected]')?.scrollIntoView({ block: 'nearest' })
+        document.querySelector('.split:not([hidden]) .list-scroll [data-selected]')?.scrollIntoView({ block: 'nearest' })
       })
     }
     window.addEventListener('keydown', onKey)

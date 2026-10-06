@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import dev.weiqi.sniffer.core.Sniffer
+import dev.weiqi.sniffer.core.SnifferFirebaseCrashlytics
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -13,6 +14,7 @@ import java.util.Locale
 class SampleCmpApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        SnifferFirebaseCrashlytics.start(filesDir.absolutePath)
         Sniffer.start(appId = packageName)
     }
 }

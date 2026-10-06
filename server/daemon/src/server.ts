@@ -217,6 +217,7 @@ deviceWss.on('connection', ws => {
   ws.on('message', data => {
     let msg: Record<string, unknown>
     try { msg = JSON.parse(data.toString()) } catch { return }
+    if (!msg || typeof msg !== 'object' || Array.isArray(msg)) return
     if (msg.type === 'hello') {
       deviceId = String(msg.deviceId)
       const old = devices.get(deviceId)
@@ -242,7 +243,12 @@ deviceWss.on('connection', ws => {
       broadcastToUi({ type: 'breakpoint-hit', deviceId, hit: msg })
       return
     }
-    if (deviceId) entryStore.pushEntry(deviceId, msg)
+    if (deviceId && devices.get(deviceId)?.ws === ws) {
+      const accepted = entryStore.pushEntry(deviceId, msg)
+      if (accepted && msg.type === 'firebase-event' && msg.severity === 'fatal') {
+        ws.send(JSON.stringify({ type: 'firebase-ack', id: msg.id }))
+      }
+    }
   })
   ws.on('close', () => {
     if (!deviceId) return
