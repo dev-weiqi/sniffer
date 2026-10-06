@@ -76,3 +76,36 @@ store.pushEntry('d4', { type: 'http-request', id: 'd4-fresh', timestamp: 2_000_0
 assert(accepted('d4-fresh'), 'unseen devices still record current traffic')
 
 console.log('entryStore.test: all assertions passed')
+
+const firebaseStore = createEntryStore(() => {}, { now: () => 9_000_000 })
+const userStore = createEntryStore(() => {})
+for (const userId of ['', 'alice', null, undefined]) {
+  assertEqual(userStore.pushEntry('d1', { type: 'http-request', id: 'user', timestamp: 1, userId }), true, 'optional HTTP user context is accepted')
+}
+for (const userId of [{}, 42, 'x'.repeat(1025)]) {
+  assertEqual(userStore.pushEntry('d1', { type: 'http-request', id: 'user', timestamp: 1, userId }), false, 'invalid HTTP user context is rejected')
+}
+assertEqual(userStore.snapshot()[1].message.userId, 'alice', 'user context survives storage')
+const fatal = { type: 'firebase-event', id: 'f1', severity: 'fatal', message: 'crash', timestamp: 100 }
+assertEqual(firebaseStore.pushEntry('d1', fatal), true, 'valid fatal is acknowledged')
+assertEqual(firebaseStore.pushEntry('d1', fatal), true, 'replay is acknowledged')
+assertEqual(firebaseStore.snapshot().length, 1, 'replay is deduplicated')
+assertEqual(firebaseStore.pushEntry('d2', fatal), true, 'same id on another device is independent')
+assertEqual(firebaseStore.snapshot().length, 2, 'dedup is per device')
+for (const invalid of [
+  { severity: 'unknown' }, { timestamp: Infinity }, { message: {} }, { stackTrace: 'x'.repeat(65537) },
+  { keys: { screen: {} } }, { logs: [{ timestamp: 'bad', message: 'log' }] }, { id: '' },
+]) assertEqual(firebaseStore.pushEntry('d1', { ...fatal, ...invalid }), false, 'invalid event is rejected')
+firebaseStore.pushEntry('d1', { type: 'http-request', id: 'http', timestamp: 101 })
+firebaseStore.clearFirebase()
+assertEqual(firebaseStore.snapshot().length, 1, 'Firebase clear preserves HTTP')
+assertEqual(firebaseStore.pushEntry('d1', fatal), true, 'cleared replay still acknowledged')
+assertEqual(firebaseStore.snapshot().length, 1, 'cleared fatal cannot reappear')
+firebaseStore.pushEntry('d1', { ...fatal, id: 'new', timestamp: 102 })
+assertEqual(firebaseStore.snapshot().length, 2, 'new records survive device clock skew')
+firebaseStore.clearAll()
+firebaseStore.pushEntry('d1', { ...fatal, id: 'old' })
+assertEqual(firebaseStore.snapshot().length, 0, 'clearAll includes Firebase watermark')
+firebaseStore.pushEntry('d1', { ...fatal, id: 'newer', timestamp: 103 })
+firebaseStore.removeDeviceEntries('d1')
+assertEqual(firebaseStore.snapshot().length, 0, 'device deletion includes Firebase')

@@ -33,13 +33,38 @@ Timestamps are epoch millis. Bodies are strings; binary bodies are `null`. Bodie
 // HTTP: request and response are sent separately, correlated by id
 { "type": "http-request", "id": "<uuid>", "method": "GET", "url": "https://host/path?q=1",
   "headers": { "Accept": "application/json" }, "body": null, "bodySize": 0,
-  "bodyTruncated": false, "library": "okhttp", "timestamp": 0 }
+  "bodyTruncated": false, "library": "okhttp", "timestamp": 0, "userId": "user-7" }
+// userId is the Analytics identity when the request was captured (max 1024 chars).
+// Until Analytics setUserId is called, legacy Crashlytics identity is used as a fallback.
+// Empty means no user ID was set; absent/null means an older SDK did not capture identity.
+// Responses preserve the request's identity, even if setUserId changes while it is in flight.
 
 { "type": "http-response", "id": "<uuid>", "status": 200, "headers": {},
   "body": "{...}", "bodySize": 18879, "bodyTruncated": false,
   "durationMs": 115, "mocked": false, "error": null, "timestamp": 0,
   "delayedMs": 0 }        // optional: latency injected by a delay-only rule (real request still ran)
 // on transport failure: status=0, error=<message>
+
+// Local Analytics mirror of an explicit logEvent call, with an immutable parameter snapshot.
+{ "type": "firebase-analytics-event", "id": "<uuid>", "name": "select_content",
+  "params": { "item_id": "42", "quantity": 2, "value": 9.99 },
+  "timestamp": 0, "userId": "user-7", "truncated": false, "firebaseSdkCalled": true }
+// firebaseSdkCalled means the original SDK call returned normally, never cloud acknowledgement.
+// Parameters preserve strings, numbers, booleans, null, maps, and lists/arrays.
+// Bounds: name 4096 chars; userId 1024; parameter capture budget 65536 chars/nodes,
+// depth 8, 64 keys per object, 200 items per array. Oversized captures set truncated.
+// Events use the normal in-memory offline queue. This is not confirmation of Firebase upload.
+
+// Local Crashlytics mirror. severity: "fatal" | "non-fatal" | "log".
+// Fatal ids and timestamps survive an app restart; duplicate ids are scoped to deviceId.
+{ "type": "firebase-event", "id": "<uuid>", "severity": "non-fatal", "timestamp": 0,
+  "message": "Payment failed", "exception": "IllegalStateException",
+  "stackTrace": "...", "userId": "user-7", "keys": { "screen": "checkout" },
+  "logs": [{ "timestamp": 0, "message": "Pay tapped" }], "thread": "main", "truncated": false }
+// Bounds: message 4096 chars, stackTrace 65536, userId/thread/exception 1024;
+// at most 64 custom keys (key/value each 1024 chars), 64 logs (each 4096 chars).
+// Non-fatal/log messages use the normal offline queue. The SDK persists up to 20 pending
+// fatal events in an app-private file and replays them after hello on every connection.
 
 // socket connection lifecycle
 { "type": "socket-status", "connectionId": "<uuid>", "transport": "socketio",
@@ -69,6 +94,11 @@ Timestamps are epoch millis. Bodies are strings; binary bodies are `null`. Bodie
 ## Daemon → Device
 
 ```jsonc
+// Sent only for a valid fatal event, including duplicates and events suppressed by a clear.
+// The SDK removes its durable copy only after this acknowledgement.
+{ "type": "firebase-ack", "id": "<fatal uuid>" }
+// Acknowledgement means accepted by this daemon, whose traffic store is in memory.
+
 // full replacement of this device's mock rules (sent on connect and on every change for this device)
 { "type": "mock-rules",
   "http": [ { "id": "r1", "enabled": true, "method": "GET",
@@ -127,6 +157,7 @@ WebSocket `/ui` sends a snapshot on connect, then a live stream:
 { "type": "device-status", "deviceId": "...", "connected": false }
 { "type": "mocks-changed", "deviceId": "...", "mocks": { "http": [], "socket": [] } }
 { "type": "entries-cleared" }
+{ "type": "firebase-entries-cleared" } // Firebase only, all devices
 { "type": "breakpoints-changed", "deviceId": "...", "rules": [ { "...": "breakpoint rule" } ] }
 { "type": "breakpoint-hit", "deviceId": "...", "hit": { "...": "breakpoint-hit message" } }
 { "type": "breakpoint-resolved", "deviceId": "...", "id": "<hit uuid>" }   // user resumed/aborted
@@ -144,5 +175,6 @@ PUT    /api/breakpoints         body: { "deviceId": "...", "rules": [...] }   fu
 POST   /api/breakpoints/resolve body: { "deviceId": "...", "id": "<hit uuid>", "action": "resume"|"abort",
                                          "status"?, "headers"?, "body"? }
 DELETE /api/entries            clear recorded traffic
+DELETE /api/entries/firebase   clear Firebase records for all devices; prevents pre-clear fatal replay
 GET    /api/state              debug snapshot: devices, entry count, mocks
 ```

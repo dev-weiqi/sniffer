@@ -429,3 +429,26 @@ try {
 }
 
 console.log('state.test: all assertions passed')
+
+const firebaseEvent = { type: 'firebase-event', id: 'f1', severity: 'fatal', timestamp: 100, message: 'crash' }
+let contextState = initialState
+for (const [deviceId, userId] of [['d1', 'alice'], ['d2', 'bob']]) contextState = dispatch(contextState, {
+  type: 'event', deviceId, message: { type: 'http-request', id: 'shared', timestamp: 1, method: 'GET', url: '/', userId },
+})
+contextState = dispatch(contextState, { type: 'event', deviceId: 'd1', message: { type: 'http-response', id: 'shared', status: 200, userId: 'changed' } })
+assertEqual(contextState.http[0].userId, 'alice', 'response keeps the identity captured on request')
+assertEqual(contextState.http[1].status, undefined, 'same request ID on another device is not updated')
+contextState = dispatch(contextState, { type: 'event', deviceId: 'd1', message: { type: 'http-request', id: 'legacy', timestamp: 2, method: 'GET', url: '/' } })
+assertEqual(contextState.http[2].userId, undefined, 'legacy API identity stays unknown rather than anonymous')
+let firebaseState = dispatch(initialState, { type: 'init', entries: [{ deviceId: 'd1', message: firebaseEvent }] })
+assertEqual(firebaseState.firebase[0].message, 'crash', 'snapshot restores Firebase')
+firebaseState = dispatch(firebaseState, { type: 'event', deviceId: 'd1', message: firebaseEvent })
+assertEqual(firebaseState.firebase.length, 1, 'Firebase replay is idempotent')
+for (let i = 0; i < 510; i++) firebaseState = dispatch(firebaseState, {
+  type: 'event', deviceId: 'd1', message: { ...firebaseEvent, id: `f${i}` },
+})
+assertEqual(firebaseState.firebase.length, 500, 'Firebase rows are bounded')
+assertEqual(dispatch(firebaseState, { type: 'http-entries-cleared' }).firebase.length, 500, 'HTTP clear preserves Firebase')
+assertEqual(dispatch(firebaseState, { type: 'firebase-entries-cleared' }).firebase.length, 0, 'Firebase clear')
+assertEqual(dispatch(firebaseState, { type: 'entries-cleared' }).firebase.length, 0, 'clearAll includes Firebase')
+assertEqual(dispatch(firebaseState, { type: 'device-deleted', deviceId: 'd1' }).firebase.length, 0, 'delete device includes Firebase')

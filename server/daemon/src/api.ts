@@ -23,6 +23,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, url: 
     clearAll(): void
     clearHttp(): void
     clearSocket(): void
+    clearFirebase(): void
     snapshot(): unknown[]
   }
   broadcastToUi(msg: unknown): void
@@ -116,6 +117,11 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, url: 
   if (req.method === 'DELETE' && url.pathname === '/api/entries/socket') {
     deps.entryStore.clearSocket()
     deps.broadcastToUi({ type: 'socket-entries-cleared' })
+    return json(res, 200, { ok: true })
+  }
+  if (req.method === 'DELETE' && url.pathname === '/api/entries/firebase') {
+    deps.entryStore.clearFirebase()
+    deps.broadcastToUi({ type: 'firebase-entries-cleared' })
     return json(res, 200, { ok: true })
   }
   if (req.method === 'DELETE' && url.pathname === '/api/devices/offline') {

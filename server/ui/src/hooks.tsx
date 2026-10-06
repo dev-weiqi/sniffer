@@ -4,20 +4,21 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 're
 export function useFollowLatestRow(
   allRows: readonly { id: string }[], visibleRows: readonly { id: string }[],
   enabled: boolean, scope: string, select: (id: string) => void, listRef: RefObject<HTMLDivElement>,
+  newestFirst = false,
 ) {
   const previous = useRef({ scope, ids: new Set(allRows.map(row => row.id)) })
   useEffect(() => {
     const before = previous.current
     previous.current = { scope, ids: new Set(allRows.map(row => row.id)) }
-    const latest = visibleRows[visibleRows.length - 1]
+    const latest = newestFirst ? visibleRows[0] : visibleRows[visibleRows.length - 1]
     if (!enabled || before.scope !== scope || !latest || before.ids.has(latest.id)) return
     select(latest.id)
     requestAnimationFrame(() => {
       if (listRef.current?.getClientRects().length) {
-        listRef.current.querySelector('tr[data-selected]')?.scrollIntoView({ block: 'center' })
+        listRef.current.querySelector('[data-selected]')?.scrollIntoView({ block: 'center' })
       }
     })
-  }, [allRows, visibleRows, enabled, scope, select, listRef])
+  }, [allRows, visibleRows, enabled, scope, select, listRef, newestFirst])
 }
 
 /** Only newly received, visible rows count; filtering and response/ack updates are not arrivals. */
@@ -56,7 +57,7 @@ export function useListKeys(ids: string[], selectedId: string | null, select: (i
         : i === -1 ? 0 : Math.max(0, i - 1)
       select(ids[next])
       requestAnimationFrame(() => {
-        document.querySelector('.split:not([hidden]) .list-scroll tr[data-selected]')?.scrollIntoView({ block: 'nearest' })
+        document.querySelector('.split:not([hidden]) .list-scroll [data-selected]')?.scrollIntoView({ block: 'nearest' })
       })
     }
     window.addEventListener('keydown', onKey)

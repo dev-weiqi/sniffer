@@ -115,20 +115,13 @@ commonMain.dependencies {
 }
 ```
 
-### Android: allow cleartext to the daemon
+### Connection to the daemon
 
-The SDK reaches the daemon over plain `ws://localhost:9091` with the ktor engine your
-app already ships. On Android that engine follows the network security policy, which
-blocks cleartext by default on API 28+. Allow it in the variants that start Sniffer:
-
-```xml
-<!-- src/debug/AndroidManifest.xml -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application android:usesCleartextTraffic="true" />
-</manifest>
-```
-
-A `network_security_config` limited to the daemon host also works. iOS needs nothing.
+The SDK owns its plain WebSocket connection to `localhost:9091`, using the same
+socket and WebSocket primitives as its USB transport. Apps do not need to add a
+Ktor client engine for Sniffer, and Sniffer does not register an engine that could
+change the app's own `HttpClient()` selection. Android apps need the usual
+`android.permission.INTERNET` permission.
 
 ## Start Sniffer
 
@@ -240,6 +233,130 @@ val session = ktor.webSocketSession("wss://api.example.com/realtime")
 session.send("ping")
 ```
 
+## Firebase panel (Beta)
+
+Enable **Firebase · Beta** in the monitor's Settings to show the tab. It is hidden by
+default and the preference is saved locally. Hiding the panel does not stop capture.
+The panel shows only Analytics: explicit `logEvent` calls with their
+event names and parameter snapshots in a timeline. **All users** is the default; choose **No user ID** or a specific ID
+in the sidebar. **Include API** interleaves captured requests by their start time;
+select a request to inspect headers, bodies, timing, and mock/breakpoint actions.
+Nearby requests are context, not evidence that an event caused a request.
+
+HTTP requests snapshot the current `SnifferAnalytics.setUserId` value when captured.
+Pass the same identity changes your app sends to Analytics, including `null` to clear it. Legacy requests with no captured identity appear
+only under **All users**, rather than being assigned to an anonymous user.
+Search and user filters also apply to API requests. The **Name** filter includes or excludes case-insensitive partial names;
+**From selection** adds the selected name, and right-click **Copy name** copies the displayed name.
+Name filters are saved locally. **Clear Firebase**
+clears Firebase records across all devices and keeps API requests.
+The shared search field matches event names, parameter names and values (including nested data),
+and user IDs using case-insensitive substrings. It combines with the Name and user filters.
+Click events to expand their parameters inline; multiple events can remain open. Each parameter
+row can be copied, and the collapse-all icon next to the record count closes all expanded events.
+Matching names and values are highlighted. Newest events appear first, with a purple dot on the
+latest visible record and a subtle entrance animation for new arrivals. Reduced-motion settings
+use a fade without movement.
+
+Wrap the Firebase instance in your existing event facade. Add `firebase` for debug and
+`firebase-noop` for release, at the same Sniffer version as `core`. Keep your existing
+Firebase Analytics dependency and BoM; Sniffer does not choose the host's Firebase version.
+
+```kotlin
+import com.google.firebase.Firebase
+import com.google.firebase.analytics.analytics
+import dev.weiqi.sniffer.firebase.SnifferFirebaseAnalytics
+
+private lateinit var firebaseAnalytics: SnifferFirebaseAnalytics
+
+fun init() {
+    firebaseAnalytics = SnifferFirebaseAnalytics.wrap(Firebase.analytics)
+}
+
+fun track(eventId: String, params: Map<String, String>?) {
+    firebaseAnalytics.logEvent(eventId) {
+        params?.forEach { (key, value) -> param(key, value) }
+    }
+}
+
+fun setUserId(id: String?) = firebaseAnalytics.setUserId(id)
+```
+
+Both `logEvent(name, Bundle?)` and `logEvent(name) { param(...) }` call the supplied Firebase
+instance. The debug wrapper captures after Firebase's `logEvent` returns normally. The protocol records whether the SDK call returned normally, which is not cloud delivery
+confirmation; use Firebase DebugView for received events. Original Firebase exceptions propagate normally; local capture errors
+never prevent the Firebase call. The release wrapper forwards directly, with no Sniffer core
+dependency and no capture code.
+
+No extra start call, file path, or Timber tree is needed. Parameters preserve strings,
+numbers, booleans, nulls, nested Bundles, and Bundle arrays/lists; oversized captures are marked
+truncated. Only explicit wrapped calls appear, not Firebase's automatic events.
+For KMP or local samples, `dev.weiqi.sniffer.core.SnifferAnalytics` accepts parameter maps;
+without a Firebase callback, those events are marked **Local capture**. Both samples provide
+Event, With params, and No user ID actions.
+
+### Crashlytics compatibility
+
+The existing Crashlytics SDK bridge and protocol remain available for older integrations,
+but the Firebase panel only displays Analytics events. Analytics identity takes precedence for API correlation after it is set.
+
+The bridge is included in `core` and `core-noop`; no Firebase dependency or cloud
+credentials are added to Sniffer. It mirrors local app calls, not reports from the
+Firebase console. Existing direct `FirebaseCrashlytics` calls must use the wrapper
+below (or your app's logging facade) to appear in Sniffer.
+
+Initialize Firebase first, then the bridge, then Sniffer:
+
+```kotlin
+// Android Application.onCreate(), after Firebase initialization:
+SnifferFirebaseCrashlytics.start()
+Sniffer.start(appId = packageName)
+```
+
+Forward your existing Crashlytics calls through the bridge:
+
+```kotlin
+import dev.weiqi.sniffer.core.SnifferFirebaseCrashlytics
+import com.google.firebase.crashlytics.FirebaseCrashlytics
+
+val crashlytics = FirebaseCrashlytics.getInstance()
+
+fun recordException(error: Throwable) =
+    SnifferFirebaseCrashlytics.recordException(error, crashlytics::recordException)
+
+fun log(message: String) = SnifferFirebaseCrashlytics.log(message, crashlytics::log)
+fun setUserId(id: String) = SnifferFirebaseCrashlytics.setUserId(id, crashlytics::setUserId)
+fun setCustomKey(key: String, value: String) =
+    SnifferFirebaseCrashlytics.setCustomKey(key, value) { k, v -> crashlytics.setCustomKey(k, v) }
+```
+
+The callbacks receive the original values and still run in `core-noop`, so switching
+release builds to the no-op artifact does not disable Firebase reporting. Omitting a
+callback records only in Sniffer; the sample apps use this mode and require no Firebase project.
+
+On Android/JVM, the bridge chains the default uncaught exception handler and invokes
+the existing handler (including Crashlytics). By default it uses memory only and writes
+no files; fatal events that were not delivered before termination are lost.
+To opt into replay after restart, pass an app-private directory such as
+`SnifferFirebaseCrashlytics.start(filesDir.absolutePath)`. Pending fatal events are then
+saved before invoking the existing handler and removed from disk when acknowledged.
+Install after any other crash handler; call `SnifferFirebaseCrashlytics.stop()`
+to detach. If the app already owns fatal handling, pass `captureUncaughtExceptions = false`
+and call `SnifferFirebaseCrashlytics.recordFatal(error)` from that handler before delegating normally.
+`recordFatal` does not terminate the app or call Firebase's non-fatal API.
+
+For KMP on iOS, initialize with `SnifferFirebaseCrashlytics.start()`, and pass
+your platform's Firebase calls through the same callbacks. Automatic iOS capture covers
+unhandled **Kotlin** exceptions and preserves an existing Kotlin exception hook. Native
+signals, Swift fatal errors, Objective-C exceptions and ANRs are not intercepted by this
+bridge. Firebase's native crash reporting continues independently.
+
+The SDK keeps the latest 20 unacknowledged fatal events (on disk only when opted in), 64 preceding logs and
+64 custom keys. Non-fatal/log events use the existing 1000-message in-memory offline
+queue and do not survive app termination. Daemon history remains in memory, like API
+and Socket traffic; it is not a long-term crash archive. A process killed before its
+exception handler can run cannot be captured.
+
 ## Use the UI
 
 Open `http://localhost:9091`, launch your debug app and select the device.
@@ -248,6 +365,7 @@ Open `http://localhost:9091`, launch your debug app and select the device.
   mocked entries.
 - **Socket**: Socket.IO and WebSocket connections, events, payloads, acks and pushed
   server-to-client messages.
+- **Firebase · Beta** (opt-in in Settings): Analytics events and inline parameters.
 - **Mocks**: per-device HTTP response rules, delay-only rules, Socket.IO ack rules,
   WebSocket reply rules and push events.
 

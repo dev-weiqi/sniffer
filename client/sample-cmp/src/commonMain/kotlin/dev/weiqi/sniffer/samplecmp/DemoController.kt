@@ -1,5 +1,6 @@
 package dev.weiqi.sniffer.samplecmp
 
+import dev.weiqi.sniffer.core.SnifferAnalytics
 import androidx.compose.runtime.mutableStateListOf
 import dev.weiqi.sniffer.core.DEFAULT_PORT
 import dev.weiqi.sniffer.ktor.SnifferKtor
@@ -63,6 +64,26 @@ class DemoController {
     private var pendingWsAck: CompletableDeferred<String>? = null
 
     val sections = listOf(
+        DemoSection("Firebase · Beta", listOf(
+            DemoAction("Event") {
+                SnifferAnalytics.logEvent("screen_view")
+                log("Analytics event recorded", LogKind.INFO)
+            },
+            DemoAction("With params") {
+                SnifferAnalytics.setUserId("sample-user")
+                SnifferAnalytics.logEvent("select_item", mapOf(
+                    "item_id" to "sample-42", "item_name" to "Sample item",
+                    "quantity" to 2L, "value" to 9.99,
+                    "items" to listOf(mapOf("item_id" to "sample-42", "quantity" to 2L)),
+                ))
+                log("Analytics event with parameters recorded", LogKind.OK)
+            },
+            DemoAction("No user ID") {
+                SnifferAnalytics.setUserId(null)
+                SnifferAnalytics.logEvent("screen_view", mapOf("screen_name" to "guest_home"))
+                log("Anonymous Analytics event recorded", LogKind.OK)
+            },
+        )),
         DemoSection("HTTP · Ktor", listOf(
             DemoAction("GET") {
                 val resp = ktor.get("$BASE/test/users/7")

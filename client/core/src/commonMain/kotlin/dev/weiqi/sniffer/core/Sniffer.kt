@@ -1,8 +1,5 @@
 package dev.weiqi.sniffer.core
 
-import io.ktor.client.HttpClient
-import io.ktor.client.plugins.websocket.WebSockets
-import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketSession
 import io.ktor.websocket.readText
@@ -106,8 +103,12 @@ object Sniffer {
                 if (msg.status == "connected") liveConnections + (msg.connectionId to msg)
                 else liveConnections - msg.connectionId
         }
-        reportSinkForTests?.invoke(msg)
-        queue.trySend(msg)
+        // Snapshot at request capture, before buffering: account changes must not relabel an in-flight call.
+        val captured = if (msg is HttpRequestMsg && msg.userId == null) {
+            msg.copy(userId = SnifferAnalytics.userIdSnapshot() ?: SnifferFirebaseCrashlytics.userIdSnapshot())
+        } else msg
+        reportSinkForTests?.invoke(captured)
+        queue.trySend(captured)
     }
 
     /**
@@ -117,7 +118,7 @@ object Sniffer {
      * stays blind to those sockets until the app restarts, and saved push events lose their target.
      */
     internal fun handshakeMessages(hello: Hello): List<DeviceMessage> =
-        listOf(hello.copy(capabilities = capabilities.toList())) + liveConnections.values
+        listOf(hello.copy(capabilities = capabilities.toList())) + liveConnections.values + SnifferFirebaseCrashlytics.pendingEvents()
 
     /**
      * Pauses the calling response until the daemon resolves breakpoint [hit], returning how to
@@ -141,11 +142,6 @@ object Sniffer {
         pushHandlers = pushHandlers - connectionId
     }
 
-    // No engine of our own: the SDK borrows whichever engine the host app already ships. Bundling
-    // one (CIO) would register a second engine in ktor's auto-discovery and could silently change
-    // the host's default HttpClient() engine (on iOS that meant CIO, which has no TLS).
-    private val client by lazy { HttpClient { install(WebSockets) } }
-
     // outbound (wifi / adb reverse / simulator) and USB may both reach a daemon; one session drains the queue
     private val sessionLock = Mutex()
 
@@ -154,7 +150,7 @@ object Sniffer {
         while (currentCoroutineContext().isActive) {
             try {
                 sessionLock.withLock {
-                    client.webSocket(host = host, port = port, path = "/device") { runSession(hello) }
+                    connectDaemon(host, port) { runSession(hello) }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -209,6 +205,7 @@ internal fun handleDaemonMessage(
 ) {
     val msg = runCatching { SnifferJson.decodeFromString<DaemonMessage>(text) }.getOrNull() ?: return
     when (msg) {
+        is FirebaseAck -> SnifferFirebaseCrashlytics.acknowledge(msg.id)
         is MockRules -> MockRegistry.update(msg)
         is BreakpointRules -> BreakpointRegistry.update(msg.rules)
         is BreakpointResolveMsg -> Breakpoints.resolve(

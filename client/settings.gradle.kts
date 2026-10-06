@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 
 include(":core", ":okhttp", ":ktor", ":ktor-ws", ":socketio", ":sample", ":sample-cmp")
 include(":core-noop", ":okhttp-noop", ":ktor-noop", ":ktor-ws-noop", ":socketio-noop")
+include(":firebase", ":firebase-noop")

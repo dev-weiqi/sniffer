@@ -18,11 +18,12 @@ import { useConfirm } from './Confirm'
 import { newRuleId } from './util'
 import { HttpView } from './HttpView'
 import { SocketView } from './SocketView'
+import { FirebaseIcon, FirebaseView } from './FirebaseView'
 import { HttpIcon, MocksView, SocketIcon } from './MocksView'
 import { FindBar } from './FindBar'
 import { DevicePicker } from './DevicePicker'
 
-type Tab = 'http' | 'socket'
+type Tab = 'http' | 'socket' | 'firebase'
 type PushPrefill = { connectionId: string; event: string; payload: string }
 
 declare const __APP_VERSION__: string
@@ -86,12 +87,16 @@ export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState)
   const confirm = useConfirm()
   const [tab, setTab] = useState<Tab>(() =>
-    localStorage.getItem('sniffer-tab') === 'socket' ? 'socket' : 'http')
+    localStorage.getItem('sniffer-tab') === 'firebase' && localStorage.getItem('sniffer-firebase-enabled') === 'true'
+      ? 'firebase' : localStorage.getItem('sniffer-tab') === 'socket' ? 'socket' : 'http')
+  const [firebaseEnabled, setFirebaseEnabled] = useState(() => localStorage.getItem('sniffer-firebase-enabled') === 'true')
+  useEffect(() => { localStorage.setItem('sniffer-firebase-enabled', String(firebaseEnabled)) }, [firebaseEnabled])
   // the mock rules moved out of the tab bar into a modal each panel opens for its own rules
   const [mocksOpen, setMocksOpen] = useState<null | 'http' | 'socket'>(null)
   const [deviceId, setDeviceId] = useState<string>(() => localStorage.getItem('sniffer-device') ?? '')
   const [httpUnread, setHttpUnread] = useState(0)
   const [socketUnread, setSocketUnread] = useState(0)
+  const [firebaseUnread, setFirebaseUnread] = useState(0)
   const [streamVersion, setStreamVersion] = useState(0)
   const unreadScope = `${deviceId}:${streamVersion}`
   const [search, setSearch] = useState('')
@@ -267,7 +272,7 @@ export default function App() {
 
   // ←/→ cycle the tabs (↑/↓ walk list rows inside a view); form fields keep their arrows
   useEffect(() => {
-    const TABS: Tab[] = ['http', 'socket']
+    const TABS: Tab[] = firebaseEnabled ? ['http', 'socket', 'firebase'] : ['http', 'socket']
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
@@ -280,7 +285,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [firebaseEnabled])
   useEffect(() => {
     if (deviceId) localStorage.setItem('sniffer-device', deviceId)
     else localStorage.removeItem('sniffer-device')
@@ -306,7 +311,7 @@ export default function App() {
         searchRef.current?.focus()
         searchRef.current?.select()
       }
-      else if (selectedDevice) {
+      else if (selectedDevice && tab !== 'firebase') {
         setShowSettings(false)
         setMocksOpen(tab)
       }
@@ -357,6 +362,13 @@ export default function App() {
         (state.connUrls[r.connectionId]?.toLowerCase().includes(q) ?? false) ||
         r.payload.toLowerCase().includes(q)))
   }, [state.socketEvents, state.connUrls, deviceId, deferredSearch, socketFilter])
+
+  const analyticsRows = useMemo(() => state.firebase.filter(row => row.severity === 'analytics'), [state.firebase])
+  const filteredFirebase = useMemo(() => {
+    const q = deferredSearch.trim().toLowerCase()
+    return analyticsRows.filter(row => row.deviceId === deviceId && (!q ||
+      [row.message, row.userId, JSON.stringify(row.params ?? {})].some(value => value.toLowerCase().includes(q))))
+  }, [analyticsRows, deviceId, deferredSearch])
 
   const mockFromRequest = (rule: HttpMockRule, targetDeviceId: string) => {
     setDeviceId(targetDeviceId)
@@ -487,7 +499,7 @@ export default function App() {
           className="search"
           title="Search (⌘F)"
           aria-keyshortcuts="Meta+F"
-          placeholder="Search URL, method, status, event…"
+          placeholder={tab === 'firebase' ? 'Search events, params, user ID…' : 'Search URL, method, status, event…'}
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
@@ -505,6 +517,11 @@ export default function App() {
             <SocketIcon /> Socket <span className="count">{filteredSocketEvents.length}</span>
             {showUnreadBadges && tab !== 'socket' && socketUnread > 0 && <span className="tab-unread" aria-hidden="true">{socketUnread > 99 ? '99+' : socketUnread}</span>}
           </button>
+          {firebaseEnabled && <button data-active={tab === 'firebase' || undefined} onClick={() => setTab('firebase')}
+            aria-label={`Firebase Beta, ${filteredFirebase.length} entries${showUnreadBadges && tab !== 'firebase' && firebaseUnread ? `, ${firebaseUnread} new` : ''}`}>
+            <FirebaseIcon /> Firebase <span className="beta-badge">Beta</span><span className="count">{filteredFirebase.length}</span>
+            {showUnreadBadges && tab !== 'firebase' && firebaseUnread > 0 && <span className="tab-unread" aria-hidden="true">{firebaseUnread > 99 ? '99+' : firebaseUnread}</span>}
+          </button>}
         </nav>
 
         <span className="spacer" />
@@ -584,6 +601,18 @@ export default function App() {
                     </div>
                   )}
                 </div>
+                <label className="filter-switch settings-toggle">
+                  <span className="settings-toggle-copy">
+                    <strong><FirebaseIcon />Firebase <span className="beta-badge">Beta</span></strong>
+                    <span id="firebase-help">Show Analytics events and parameters.</span>
+                  </span>
+                  <input type="checkbox" role="switch" aria-label="Firebase Beta" aria-describedby="firebase-help"
+                    checked={firebaseEnabled} onChange={e => {
+                      setFirebaseEnabled(e.target.checked)
+                      if (!e.target.checked && tab === 'firebase') setTab('http')
+                    }} />
+                  <span className="track" aria-hidden="true"><i /></span>
+                </label>
                 <label className="filter-switch settings-toggle">
                   <span className="settings-toggle-copy">
                     <strong>Unread badges</strong>
@@ -672,6 +701,11 @@ export default function App() {
             eventFilter={socketFilter} onEventFilterChange={setSocketFilter}
             onMockAck={mockFromSocketEvent} onPushPrefill={pushFromEvent}
             onClear={() => void api.clearSocketEntries()} />
+          {firebaseEnabled && <FirebaseView active={tab === 'firebase'} rows={filteredFirebase} allRows={analyticsRows}
+            httpRows={state.http} onMock={mockFromRequest} onArm={armBreakpoint}
+            query={deferredSearch} followLatest={followLatest} unreadScope={unreadScope} onUnreadChange={setFirebaseUnread}
+            emptyState={{ ...trafficContext, hasTraffic: analyticsRows.some(row => row.deviceId === deviceId),
+              onResetFilters: () => setSearch('') }} />}
       </main>
 
       {mocksOpen && selectedDevice && (

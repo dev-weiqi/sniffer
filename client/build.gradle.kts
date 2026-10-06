@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.serialization) apply false
     alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.android.library) apply false
     alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.compose.multiplatform) apply false
     alias(libs.plugins.maven.publish) apply false
@@ -81,6 +82,10 @@ subprojects {
             sourceCompatibility = JavaVersion.VERSION_17
             targetCompatibility = JavaVersion.VERSION_17
         }
+    }
+
+    plugins.withId("com.android.library") {
+        apply(plugin = "com.vanniktech.maven.publish")
     }
 
     // KMP modules (core, ktor, ktor-ws + their -noop twins). The vanniktech plugin registers
