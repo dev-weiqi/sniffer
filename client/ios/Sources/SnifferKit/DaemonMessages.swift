@@ -55,6 +55,7 @@ struct SocketMockRule: Decodable, Equatable {
     let delayMs: Int
     let pushEvent: String?
     let pushPayload: String
+    let payloadMatch: String?
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -66,10 +67,11 @@ struct SocketMockRule: Decodable, Equatable {
         delayMs = max(0, try container.decodeIfPresent(Int.self, forKey: .delayMs) ?? 0)
         pushEvent = try container.decodeIfPresent(String.self, forKey: .pushEvent)
         pushPayload = try container.decodeIfPresent(String.self, forKey: .pushPayload) ?? "[]"
+        payloadMatch = try container.decodeIfPresent(String.self, forKey: .payloadMatch)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, enabled, transport, event, ackPayload, delayMs, pushEvent, pushPayload
+        case id, enabled, transport, event, ackPayload, delayMs, pushEvent, pushPayload, payloadMatch
     }
 }
 
