@@ -38,7 +38,10 @@ let package = Package(
         ),
         .testTarget(
             name: "SnifferKitTests",
-            dependencies: ["SnifferKit"],
+            dependencies: [
+                "SnifferKit", "SnifferSocketIO",
+                .product(name: "SocketIO", package: "socket.io-client-swift"),
+            ],
             path: "client/ios/Tests/SnifferKitTests"
         ),
     ]
