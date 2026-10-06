@@ -294,68 +294,6 @@ For KMP or local samples, `dev.weiqi.sniffer.core.SnifferAnalytics` accepts para
 without a Firebase callback, those events are marked **Local capture**. Both samples provide
 Event, With params, and No user ID actions.
 
-### Crashlytics compatibility
-
-The existing Crashlytics SDK bridge and protocol remain available for older integrations,
-but the Firebase panel only displays Analytics events. Analytics identity takes precedence for API correlation after it is set.
-
-The bridge is included in `core` and `core-noop`; no Firebase dependency or cloud
-credentials are added to Sniffer. It mirrors local app calls, not reports from the
-Firebase console. Existing direct `FirebaseCrashlytics` calls must use the wrapper
-below (or your app's logging facade) to appear in Sniffer.
-
-Initialize Firebase first, then the bridge, then Sniffer:
-
-```kotlin
-// Android Application.onCreate(), after Firebase initialization:
-SnifferFirebaseCrashlytics.start()
-Sniffer.start(appId = packageName)
-```
-
-Forward your existing Crashlytics calls through the bridge:
-
-```kotlin
-import dev.weiqi.sniffer.core.SnifferFirebaseCrashlytics
-import com.google.firebase.crashlytics.FirebaseCrashlytics
-
-val crashlytics = FirebaseCrashlytics.getInstance()
-
-fun recordException(error: Throwable) =
-    SnifferFirebaseCrashlytics.recordException(error, crashlytics::recordException)
-
-fun log(message: String) = SnifferFirebaseCrashlytics.log(message, crashlytics::log)
-fun setUserId(id: String) = SnifferFirebaseCrashlytics.setUserId(id, crashlytics::setUserId)
-fun setCustomKey(key: String, value: String) =
-    SnifferFirebaseCrashlytics.setCustomKey(key, value) { k, v -> crashlytics.setCustomKey(k, v) }
-```
-
-The callbacks receive the original values and still run in `core-noop`, so switching
-release builds to the no-op artifact does not disable Firebase reporting. Omitting a
-callback records only in Sniffer; the sample apps use this mode and require no Firebase project.
-
-On Android/JVM, the bridge chains the default uncaught exception handler and invokes
-the existing handler (including Crashlytics). By default it uses memory only and writes
-no files; fatal events that were not delivered before termination are lost.
-To opt into replay after restart, pass an app-private directory such as
-`SnifferFirebaseCrashlytics.start(filesDir.absolutePath)`. Pending fatal events are then
-saved before invoking the existing handler and removed from disk when acknowledged.
-Install after any other crash handler; call `SnifferFirebaseCrashlytics.stop()`
-to detach. If the app already owns fatal handling, pass `captureUncaughtExceptions = false`
-and call `SnifferFirebaseCrashlytics.recordFatal(error)` from that handler before delegating normally.
-`recordFatal` does not terminate the app or call Firebase's non-fatal API.
-
-For KMP on iOS, initialize with `SnifferFirebaseCrashlytics.start()`, and pass
-your platform's Firebase calls through the same callbacks. Automatic iOS capture covers
-unhandled **Kotlin** exceptions and preserves an existing Kotlin exception hook. Native
-signals, Swift fatal errors, Objective-C exceptions and ANRs are not intercepted by this
-bridge. Firebase's native crash reporting continues independently.
-
-The SDK keeps the latest 20 unacknowledged fatal events (on disk only when opted in), 64 preceding logs and
-64 custom keys. Non-fatal/log events use the existing 1000-message in-memory offline
-queue and do not survive app termination. Daemon history remains in memory, like API
-and Socket traffic; it is not a long-term crash archive. A process killed before its
-exception handler can run cannot be captured.
-
 ## Use the UI
 
 Open `http://localhost:9091`, launch your debug app and select the device.
