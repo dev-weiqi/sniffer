@@ -68,7 +68,7 @@ public final class SnifferSocket {
     public func emit(_ event: String, with items: [SocketData], completion: (() -> Void)? = nil) {
         let id = UUID().uuidString
         let values = representations(items)
-        let rule = SnifferPlugin.socketRule(transport: "socketio", event: event)
+        let rule = SnifferPlugin.socketRule(transport: "socketio", event: event, payload: self.jsonArray(values))
         SnifferPlugin.reportSocketEvent(
             id: id,
             connectionID: connectionID,
@@ -107,7 +107,7 @@ public final class SnifferSocket {
         return SnifferOnAckCallback { [weak self] timeout, callback in
             guard let self else { return }
             let values = self.representations(items)
-            let rule = SnifferPlugin.socketRule(transport: "socketio", event: event)
+            let rule = SnifferPlugin.socketRule(transport: "socketio", event: event, payload: self.jsonArray(values))
             SnifferPlugin.reportSocketEvent(
                 id: id,
                 connectionID: self.connectionID,
