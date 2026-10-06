@@ -42,13 +42,26 @@ final class RuleStore {
 
     func http(method: String, url: URL?) -> HTTPMockRule? {
         let path = url?.path ?? ""
+        var components = url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
+        if let query = components?.percentEncodedQuery {
+            components?.percentEncodedQuery = query.replacingOccurrences(of: "+", with: "%20")
+        }
+        let query = components?.queryItems ?? []
         return lock.withLock {
-            httpRules.first {
-                $0.enabled
-                    && ($0.method == nil || $0.method?.caseInsensitiveCompare(method) == .orderedSame)
-                    && !$0.urlPattern.isEmpty
-                    && $0.urlPattern == path
+            var fallback: HTTPMockRule?
+            for rule in httpRules {
+                guard rule.enabled, !rule.urlPattern.isEmpty, rule.urlPattern == path,
+                      rule.method == nil || rule.method?.caseInsensitiveCompare(method) == .orderedSame else { continue }
+                if rule.queryParams.isEmpty {
+                    if fallback == nil { fallback = rule }
+                } else if rule.queryParams.allSatisfy({ key, value in
+                    !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        && query.contains { $0.name == key && ($0.value ?? "") == value }
+                }) {
+                    return rule
+                }
             }
+            return fallback
         }
     }
 

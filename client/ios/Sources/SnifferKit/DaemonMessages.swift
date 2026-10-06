@@ -25,6 +25,7 @@ struct HTTPMockRule: Decodable, Equatable {
     let body: String
     let delayMs: Int
     let delayOnly: Bool
+    let queryParams: [String: String]
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -37,10 +38,11 @@ struct HTTPMockRule: Decodable, Equatable {
         body = try container.decodeIfPresent(String.self, forKey: .body) ?? ""
         delayMs = max(0, try container.decodeIfPresent(Int.self, forKey: .delayMs) ?? 0)
         delayOnly = try container.decodeIfPresent(Bool.self, forKey: .delayOnly) ?? false
+        queryParams = try container.decodeIfPresent([String: String].self, forKey: .queryParams) ?? [:]
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, enabled, method, urlPattern, status, headers, body, delayMs, delayOnly
+        case id, enabled, method, urlPattern, status, headers, body, delayMs, delayOnly, queryParams
     }
 }
 
