@@ -1,7 +1,6 @@
 package dev.weiqi.sniffer.ktorws
 
 import dev.weiqi.sniffer.core.MockRegistry
-import dev.weiqi.sniffer.core.CoverageExcluded
 import dev.weiqi.sniffer.core.Sniffer
 import dev.weiqi.sniffer.core.SocketEventMsg
 import dev.weiqi.sniffer.core.SocketStatusMsg
@@ -31,7 +30,6 @@ import kotlin.coroutines.cancellation.CancellationException
  * webSocketSession is then monitored automatically — frames reported to the daemon,
  * reply mocks applied, and server→client messages injectable from the UI.
  */
-@CoverageExcluded
 val SnifferKtorWs: ClientPlugin<Unit> = createClientPlugin("SnifferKtorWs") {
     client.responsePipeline.intercept(HttpResponsePipeline.State) { (info, session) ->
         // positive recognition only: wrap the exact type the WebSockets plugin produces,

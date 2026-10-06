@@ -145,7 +145,6 @@ object Sniffer {
     // outbound (wifi / adb reverse / simulator) and USB may both reach a daemon; one session drains the queue
     private val sessionLock = Mutex()
 
-    @CoverageExcluded
     private suspend fun connectLoop(host: String, port: Int, hello: Hello) {
         while (currentCoroutineContext().isActive) {
             try {
@@ -161,7 +160,6 @@ object Sniffer {
         }
     }
 
-    @CoverageExcluded
     private suspend fun usbLoop(hello: Hello) {
         val port = configOverride("usb_port")?.toIntOrNull() ?: USB_PORT
         while (currentCoroutineContext().isActive) {

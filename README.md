@@ -4,7 +4,6 @@
   <a href="https://github.com/dev-weiqi/sniffer/tags"><img src="https://img.shields.io/github/v/tag/dev-weiqi/sniffer?label=version" alt="Latest version"></a>
   <a href="https://www.npmjs.com/package/@dev-weiqi/sniffer"><img src="https://img.shields.io/npm/v/%40dev-weiqi%2Fsniffer?label=npm" alt="npm"></a>
   <a href="https://central.sonatype.com/namespace/io.github.dev-weiqi.sniffer"><img src="https://img.shields.io/maven-central/v/io.github.dev-weiqi.sniffer/core?label=maven" alt="Maven Central"></a>
-  <a href="https://github.com/dev-weiqi/sniffer/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/coverage-100%25-brightgreen" alt="Code coverage"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
 </p>
 
@@ -396,12 +395,18 @@ cd client
 ./gradlew :sample-cmp:installDebug
 ```
 
-Checks:
+Run client and server unit tests from the repository root:
 
 ```bash
-cd server/daemon && npm run typecheck
-cd server/ui && npm run build
-cd client && ./gradlew :core:jvmTest :okhttp:test :sample:compileDebugKotlin
+npm test
+```
+
+Build checks from the repository root:
+
+```bash
+npm --prefix server/daemon run typecheck
+npm --prefix server/ui run build
+(cd client && ./gradlew :sample:compileDebugKotlin :sample-cmp:compileDebugKotlinAndroid)
 ```
 
 More: [docs/GUIDE.md](docs/GUIDE.md) and [PROTOCOL.md](PROTOCOL.md).
