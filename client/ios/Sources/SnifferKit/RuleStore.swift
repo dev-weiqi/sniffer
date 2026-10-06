@@ -41,7 +41,7 @@ final class RuleStore {
         lock.withLock { breakpointRules.removeAll() }
     }
 
-    func http(method: String, url: URL?) -> HTTPMockRule? {
+    func http(method: String, url: URL?, body: String? = nil) -> HTTPMockRule? {
         let path = url?.path ?? ""
         var components = url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
         if let query = components?.percentEncodedQuery {
@@ -50,15 +50,27 @@ final class RuleStore {
         let query = components?.queryItems ?? []
         return lock.withLock {
             var fallback: HTTPMockRule?
+            lazy var actual: Any? = {
+                guard let body, body.utf8.count <= CapturedBody.limit else { return nil }
+                return parseJSON(body)
+            }()
             for rule in httpRules {
                 guard rule.enabled, !rule.urlPattern.isEmpty, rule.urlPattern == path,
                       rule.method == nil || rule.method?.caseInsensitiveCompare(method) == .orderedSame else { continue }
-                if rule.queryParams.isEmpty {
+                let condition = rule.bodyMatch?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let expected: [String: Any]
+                if condition.isEmpty {
+                    expected = [:]
+                } else {
+                    guard let object = parseJSON(condition) as? [String: Any] else { continue }
+                    expected = object
+                }
+                if rule.queryParams.isEmpty && expected.isEmpty {
                     if fallback == nil { fallback = rule }
                 } else if rule.queryParams.allSatisfy({ key, value in
                     !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         && query.contains { $0.name == key && ($0.value ?? "") == value }
-                }) {
+                }) && (expected.isEmpty || matchesJSON(expected, actual)) {
                     return rule
                 }
             }

@@ -87,7 +87,10 @@ class SnifferURLProtocol: URLProtocol, URLSessionDataDelegate, @unchecked Sendab
             timestamp: nowMillis()
         ))
 
-        let rule = RuleStore.shared.http(method: method, url: request.url)
+        let rule = RuleStore.shared.http(
+            method: method, url: request.url,
+            body: requestBody.truncated || requestBody.base64 ? nil : requestBody.text
+        )
         if let rule, !rule.delayOnly {
             schedule(after: rule.delayMs) { [weak self] in self?.serveMock(rule) }
             return
