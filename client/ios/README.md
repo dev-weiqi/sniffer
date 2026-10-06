@@ -9,6 +9,8 @@ The Swift package exposes two products:
 
 In Xcode, select **File > Add Package Dependencies**, enter `https://github.com/dev-weiqi/sniffer.git`, and select the `ios` branch. Link `SnifferKit` for HTTP. Also link `SnifferSocketIO` when the app uses Socket.IO. For a local checkout, select **File > Add Local Package** and choose the repository root containing `Package.swift`.
 
+The 0.7.0 snapshot is marked by the Git tag `ios/0.7.0`. Existing SPM integrations continue to track the `ios` branch. Update package versions in Xcode to receive HTTP query and Socket payload matching.
+
 ## Start the SDK
 
 Start once before creating HTTP or socket clients:
