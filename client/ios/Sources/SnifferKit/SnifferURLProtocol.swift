@@ -25,6 +25,7 @@ class SnifferURLProtocol: URLProtocol, URLSessionDataDelegate, @unchecked Sendab
     private var captured = Data()
     private var bodySize = 0
     private var heldForBreakpoint = false
+    private lazy var forwardingRequest = request
 
     override class func canInit(with request: URLRequest) -> Bool {
         guard URLProtocol.property(forKey: handledKey, in: request) == nil else { return false }
@@ -64,8 +65,14 @@ class SnifferURLProtocol: URLProtocol, URLSessionDataDelegate, @unchecked Sendab
         id = UUID().uuidString
         method = request.httpMethod ?? "GET"
         startedAt = Date()
+        do {
+            try restoreRequestBody()
+        } catch {
+            failSafely(error)
+            return
+        }
         let requestBody = CapturedBody(
-            data: request.httpBody,
+            data: forwardingRequest.httpBody,
             mimeType: request.value(forHTTPHeaderField: "Content-Type")
         )
 
@@ -94,6 +101,22 @@ class SnifferURLProtocol: URLProtocol, URLSessionDataDelegate, @unchecked Sendab
         delayedWork?.cancel()
         dataTask?.cancel()
         session?.invalidateAndCancel()
+    }
+
+    private func restoreRequestBody() throws {
+        guard forwardingRequest.httpBody == nil, let stream = forwardingRequest.httpBodyStream else { return }
+        stream.open()
+        defer { stream.close() }
+        // ponytail: buffers the full upload for replay; spool to disk if large uploads cause memory pressure.
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 16_384)
+        while true {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            guard count >= 0 else { throw stream.streamError ?? URLError(.requestBodyStreamExhausted) }
+            if count == 0 { break }
+            data.append(contentsOf: buffer.prefix(count))
+        }
+        forwardingRequest.httpBody = data
     }
 
     private func schedule(after milliseconds: Int, action: @escaping () -> Void) {
@@ -142,7 +165,7 @@ class SnifferURLProtocol: URLProtocol, URLSessionDataDelegate, @unchecked Sendab
         delegateQueue.maxConcurrentOperationCount = 1
         let session = URLSession(configuration: configuration, delegate: self, delegateQueue: delegateQueue)
         self.session = session
-        dataTask = session.dataTask(with: request)
+        dataTask = session.dataTask(with: forwardingRequest)
         dataTask?.resume()
     }
 
