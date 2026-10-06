@@ -17,6 +17,51 @@ final class SnifferKitTests: XCTestCase {
         XCTAssertEqual(matches?.count, 1)
     }
 
+    func testQueryMockPagesAndFallback() async throws {
+        let json = #"""
+        {"http":[
+          {"id":"fallback","urlPattern":"/items","method":"GET","body":"end"},
+          {"id":"one","urlPattern":"/items","method":"GET","queryParams":{"page":"1"},"body":"page one"},
+          {"id":"two","urlPattern":"/items","method":"GET","queryParams":{"page":"2","size":"20"},"body":"page two"},
+          {"id":"duplicate","urlPattern":"/items","method":"GET","queryParams":{"size":"20","page":"2"}},
+          {"id":"off","urlPattern":"/items","enabled":false,"queryParams":{"page":"3"}},
+          {"id":"encoded","urlPattern":"/items","queryParams":{"q":"茶 +&","flag":""}}
+        ],"socket":[]}
+        """#
+        let rules = try JSONDecoder().decode(MockRulesMessage.self, from: Data(json.utf8))
+        RuleStore.shared.update(mocks: rules)
+        let cases = [
+            ("?page=1", "one"), ("?extra=x&page=1#page=2", "one"),
+            ("?size=20&%70age=%32", "two"), ("?page=2", "fallback"),
+            ("?page=3", "fallback"), ("?page=20", "fallback"), ("?PAGE=1", "fallback"),
+            ("", "fallback"), ("#fragment?page=1", "fallback"),
+            ("?page=9&page=1", "one"),
+            ("?q=%E8%8C%B6+%2B%26&flag=", "encoded"),
+            ("?q=%E8%8C%B6%20%2B%26&flag", "encoded"),
+            ("?q=%E8%8C%B6+%2B%26", "fallback"),
+        ]
+        for (query, expected) in cases {
+            XCTAssertEqual(RuleStore.shared.http(method: "get", url: URL(string: "https://host/items\(query)"))?.id, expected, query)
+        }
+        XCTAssertNil(RuleStore.shared.http(method: "POST", url: URL(string: "https://host/items?page=1")))
+        XCTAssertNil(RuleStore.shared.http(method: "GET", url: URL(string: "https://host/items/child?page=1")))
+
+        OwnerURLProtocol.handler = { _ in
+            XCTFail("Query mocks must not reach the owner transport")
+            return (500, Data())
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [OwnerURLProtocol.self]
+        let session = URLSession(configuration: Sniffer.configure(configuration))
+        defer { session.invalidateAndCancel() }
+        for (query, expected) in [("?page=1", "page one"), ("?size=20&page=2", "page two"), ("?page=3", "end"), ("?page=1", "page one")] {
+            let (data, _) = try await session.data(from: URL(string: "https://owner.invalid/items\(query)")!)
+            XCTAssertEqual(String(decoding: data, as: UTF8.self), expected)
+        }
+        SnifferRuntime.shared.handle(#"{"type":"mock-rules","http":[{"id":"one","urlPattern":"/items","queryParams":{"page":"1"}}],"socket":[]}"#)
+        XCTAssertNil(RuleStore.shared.http(method: "GET", url: URL(string: "https://host/items?page=99")))
+    }
+
     func testCapturedBodyKeepsSizeAndCapsText() {
         let data = Data(repeating: 65, count: CapturedBody.limit + 1)
         let body = CapturedBody(data: data, mimeType: "text/plain")
