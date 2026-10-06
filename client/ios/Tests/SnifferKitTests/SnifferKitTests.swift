@@ -62,6 +62,73 @@ final class SnifferKitTests: XCTestCase {
         XCTAssertNil(RuleStore.shared.http(method: "GET", url: URL(string: "https://host/items?page=99")))
     }
 
+    func testHTTPBodyConditionsRequireQueryAndTypedJSONFields() throws {
+        let rules = try JSONDecoder().decode(MockRulesMessage.self, from: Data(#"""
+        {"http":[
+          {"id":"fallback","method":"POST","urlPattern":"/messages"},
+          {"id":"invalid","method":"POST","urlPattern":"/messages","bodyMatch":"{"},
+          {"id":"one","method":"POST","urlPattern":"/messages","queryParams":{"locale":"zh-TW"},"bodyMatch":"{\"session_id\":\"session\",\"limit\":20}"},
+          {"id":"nested","method":"POST","urlPattern":"/messages","bodyMatch":"{\"filter\":{\"active\":true},\"ids\":[1,{\"id\":2}]}"},
+          {"id":"null","method":"POST","urlPattern":"/messages","bodyMatch":"{\"cursor\":null}"}
+        ]}
+        """#.utf8))
+        RuleStore.shared.update(mocks: rules)
+        let url = URL(string: "https://host/messages?locale=zh-TW")!
+        let cases: [(String?, String)] = [
+            (#"{"session_id":"session","limit":20,"extra":true}"#, "one"),
+            (#"{"session_id":"session","limit":20.0}"#, "one"),
+            (#"{"session_id":"session","limit":"20"}"#, "fallback"),
+            (#"{"session_id":"session","limit":true}"#, "fallback"),
+            (#"{"filter":{"active":true,"extra":1},"ids":[1,{"id":2}]}"#, "nested"),
+            (#"{"filter":{"active":true},"ids":[1,{"id":2,"extra":1}]}"#, "fallback"),
+            (#"{"cursor":null}"#, "null"),
+            ("{}", "fallback"), ("[]", "fallback"), ("{", "fallback"), (nil, "fallback"),
+        ]
+        for (body, expected) in cases {
+            XCTAssertEqual(RuleStore.shared.http(method: "post", url: url, body: body)?.id, expected)
+        }
+        XCTAssertEqual(RuleStore.shared.http(method: "POST", url: URL(string: "https://host/messages?locale=en-US"), body: cases[0].0)?.id, "fallback")
+        XCTAssertNil(RuleStore.shared.http(method: "GET", url: url, body: cases[0].0))
+        XCTAssertNil(RuleStore.shared.http(method: "POST", url: URL(string: "https://host/messages/child"), body: cases[0].0))
+    }
+
+    func testHTTPBodyMocksSupportDataStreamsAndPreserveUnmatchedBodies() async throws {
+        let rules = try JSONDecoder().decode(MockRulesMessage.self, from: Data(#"""
+        {"http":[{"id":"body","method":"POST","urlPattern":"/messages","queryParams":{"locale":"zh-TW"},"bodyMatch":"{\"session_id\":\"session\",\"limit\":20}","body":"mocked"}]}
+        """#.utf8))
+        RuleStore.shared.update(mocks: rules)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [OwnerURLProtocol.self]
+        let session = URLSession(configuration: Sniffer.configure(configuration))
+        defer { session.invalidateAndCancel() }
+        OwnerURLProtocol.handler = { request in
+            let stream = request.httpBodyStream ?? InputStream(data: request.httpBody ?? Data())
+            stream.open()
+            defer { stream.close() }
+            var data = Data()
+            var buffer = [UInt8](repeating: 0, count: 4096)
+            while true {
+                let count = stream.read(&buffer, maxLength: buffer.count)
+                guard count > 0 else { break }
+                data.append(contentsOf: buffer.prefix(count))
+            }
+            return (200, data)
+        }
+        let json = #"{"session_id":"session","limit":20}"#
+        let different = #"{"session_id":"session","limit":40}"#
+        for stream in [false, true] {
+            for (body, locale, expected) in [(json, "zh-TW", "mocked"), (json, "en-US", json), (different, "zh-TW", different)] {
+                var request = URLRequest(url: URL(string: "https://owner.invalid/messages?locale=\(locale)")!)
+                request.httpMethod = "POST"
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                if stream { request.httpBodyStream = InputStream(data: Data(body.utf8)) }
+                else { request.httpBody = Data(body.utf8) }
+                let (data, _) = try await session.data(for: request)
+                XCTAssertEqual(String(decoding: data, as: UTF8.self), expected)
+            }
+        }
+    }
+
     func testCapturedBodyKeepsSizeAndCapsText() {
         let data = Data(repeating: 65, count: CapturedBody.limit + 1)
         let body = CapturedBody(data: data, mimeType: "text/plain")
