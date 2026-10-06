@@ -923,6 +923,7 @@ button.add { margin-top: 2px; }
 .headers-editor { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
 .header-row { display: flex; gap: 6px; align-items: center; }
 .header-row > input:first-child { width: 200px; }
+.query-params .header-row > input { flex: 1 1 0; min-width: 0; width: 0; }
 
 .section-icon { color: var(--accent); flex-shrink: 0; }
 .rule-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-bottom: 8px; }
