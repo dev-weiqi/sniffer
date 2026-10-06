@@ -10,8 +10,8 @@ public struct SnifferPluginSocketRule: Sendable {
 
 @_spi(Plugin)
 public enum SnifferPlugin {
-    public static func socketRule(transport: String, event: String) -> SnifferPluginSocketRule? {
-        RuleStore.shared.socket(transport: transport, event: event).map {
+    public static func socketRule(transport: String, event: String, payload: String? = nil) -> SnifferPluginSocketRule? {
+        RuleStore.shared.socket(transport: transport, event: event, payload: payload).map {
             SnifferPluginSocketRule(
                 ackPayload: $0.ackPayload,
                 delayMs: $0.delayMs,
