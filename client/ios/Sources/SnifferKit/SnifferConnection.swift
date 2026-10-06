@@ -153,7 +153,7 @@ private struct HelloMessage: Encodable {
     let deviceName: String
     let platform = "ios"
     let appId: String
-    let sdkVersion = "0.7.1"
+    let sdkVersion = "0.7.2"
     let capabilities = ["http", "http-query-mocks", "http-body-mocks", "socket-payload-mocks", "breakpoint", "ktor-ws", "socketio"]
 
     var json: String {
