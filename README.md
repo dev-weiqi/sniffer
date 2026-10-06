@@ -51,11 +51,13 @@ opened up, together with `host` in the app (see [Start Sniffer](#start-sniffer))
 SNIFFER_BIND=0.0.0.0 sniffer start
 ```
 
+Install this beta with `npm install -g @dev-weiqi/sniffer@beta`. The `latest` tag stays on the stable release.
+
 Update, or pin a version:
 
 ```bash
 npm install -g @dev-weiqi/sniffer@latest
-npm install -g @dev-weiqi/sniffer@0.6.18
+npm install -g @dev-weiqi/sniffer@0.6.19-beta.1
 ```
 
 ## Desktop app
@@ -85,7 +87,7 @@ builds: same API, empty implementation.
 | Ktor WebSocket | `io.github.dev-weiqi.sniffer:ktor-ws` |
 
 ```kotlin
-val snifferVersion = "0.6.5"
+val snifferVersion = "0.6.6-beta.1"
 
 dependencies {
     debugImplementation("io.github.dev-weiqi.sniffer:core:$snifferVersion")

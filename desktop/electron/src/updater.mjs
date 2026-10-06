@@ -8,13 +8,27 @@ const execFileAsync = promisify(execFile)
 export const PACKAGE_NAME = '@dev-weiqi/sniffer'
 export const REGISTRY = 'https://registry.npmjs.org'
 
-/** Release-only x.y.z comparison — that's all we ever publish, and `latest` is never a prerelease. */
+/** Compare release and prerelease versions; the stable npm channel remains separate. */
 export function compareVersions(a, b) {
   const parts = v => String(v ?? '').split('.').map(n => Number.parseInt(n, 10) || 0)
   const [x, y] = [parts(a), parts(b)]
   for (let i = 0; i < 3; i++) {
     const [l, r] = [x[i] ?? 0, y[i] ?? 0]
     if (l !== r) return l > r ? 1 : -1
+  }
+  const prerelease = v => String(v ?? '').split('+')[0].split('-').slice(1).join('-')
+  const [left, right] = [prerelease(a), prerelease(b)]
+  if (left === right) return 0
+  if (!left || !right) return left ? -1 : 1
+  const [ls, rs] = [left.split('.'), right.split('.')]
+  for (let i = 0; i < Math.max(ls.length, rs.length); i++) {
+    const [l, r] = [ls[i], rs[i]]
+    if (l === r) continue
+    if (l === undefined || r === undefined) return l === undefined ? -1 : 1
+    const [ln, rn] = [/^\d+$/.test(l), /^\d+$/.test(r)]
+    if (ln && rn) return Number(l) > Number(r) ? 1 : -1
+    if (ln !== rn) return ln ? -1 : 1
+    return l > r ? 1 : -1
   }
   return 0
 }
