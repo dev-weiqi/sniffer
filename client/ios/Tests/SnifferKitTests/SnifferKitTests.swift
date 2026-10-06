@@ -1,4 +1,5 @@
 import Foundation
+import Network
 import XCTest
 @testable import SnifferKit
 
@@ -22,6 +23,99 @@ final class SnifferKitTests: XCTestCase {
         XCTAssertEqual(body.size, CapturedBody.limit + 1)
         XCTAssertEqual(body.text?.utf8.count, CapturedBody.limit)
         XCTAssertTrue(body.truncated)
+    }
+
+    func testRequestBodyIsReportedAndForwarded() async throws {
+        let body = Data(#"{"message":"hello"}"#.utf8)
+        let cases: [(path: String, body: Data?, contentType: String)] = [
+            ("data", body, "application/json"),
+            ("stream", body, "application/json"),
+            ("upload", body, "application/json"),
+            ("form", Data("message=hello&count=2".utf8), "application/x-www-form-urlencoded"),
+            ("large", Data(repeating: 65, count: CapturedBody.limit + 1), "text/plain"),
+            ("empty", nil, "application/json"),
+        ]
+        let ready = expectation(description: "daemon listening")
+        let reported = expectation(description: "request body reported")
+        reported.expectedFulfillmentCount = cases.count
+        let parameters = NWParameters.tcp
+        parameters.defaultProtocolStack.applicationProtocols.insert(NWProtocolWebSocket.Options(), at: 0)
+        let listener = try NWListener(using: parameters, on: .any)
+        listener.stateUpdateHandler = { if case .ready = $0 { ready.fulfill() } }
+        listener.newConnectionHandler = { connection in
+            var remaining = cases.count
+            func receive() {
+                connection.receiveMessage { data, _, _, error in
+                    if let data,
+                       let message = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       message["type"] as? String == "http-request" {
+                        let path = (message["url"] as? String).flatMap(URL.init(string:))?.lastPathComponent
+                        let expected = cases.first { $0.path == path }
+                        XCTAssertNotNil(expected)
+                        let data = expected?.body
+                        XCTAssertEqual(message["body"] as? String, data.map { String(decoding: $0.prefix(CapturedBody.limit), as: UTF8.self) })
+                        XCTAssertEqual(message["bodySize"] as? Int, data?.count ?? 0)
+                        XCTAssertEqual(message["bodyTruncated"] as? Bool, (data?.count ?? 0) > CapturedBody.limit)
+                        reported.fulfill()
+                        remaining -= 1
+                        if remaining == 0 {
+                            connection.cancel()
+                            return
+                        }
+                    }
+                    if error == nil { receive() }
+                }
+            }
+            connection.start(queue: .global())
+            receive()
+        }
+        listener.start(queue: .global())
+        defer {
+            Sniffer.stop()
+            listener.cancel()
+        }
+        await fulfillment(of: [ready], timeout: 3)
+        let port = try XCTUnwrap(listener.port)
+        SnifferRuntime.shared.start(appID: "body-test", host: "127.0.0.1", port: Int(port.rawValue), deviceName: "test")
+
+        OwnerURLProtocol.handler = { request in
+            let stream = request.httpBodyStream ?? InputStream(data: request.httpBody ?? Data())
+            stream.open()
+            defer { stream.close() }
+            var forwarded = Data()
+            var buffer = [UInt8](repeating: 0, count: 1024)
+            while true {
+                let count = stream.read(&buffer, maxLength: buffer.count)
+                guard count > 0 else { break }
+                forwarded.append(contentsOf: buffer.prefix(count))
+            }
+            let expected = cases.first { $0.path == request.url?.lastPathComponent }
+            XCTAssertNotNil(expected)
+            XCTAssertEqual(forwarded, expected?.body ?? Data())
+            return (200, forwarded)
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [OwnerURLProtocol.self]
+        let session = URLSession(configuration: Sniffer.configure(configuration))
+        defer { session.invalidateAndCancel() }
+        for item in cases {
+            var request = URLRequest(url: URL(string: "https://owner.invalid/\(item.path)")!)
+            request.httpMethod = item.body == nil ? "GET" : "POST"
+            request.setValue(item.contentType, forHTTPHeaderField: "Content-Type")
+            let data: Data
+            if item.path == "upload" {
+                (data, _) = try await session.upload(for: request, from: body)
+            } else {
+                if item.path == "stream" {
+                    request.httpBodyStream = InputStream(data: body)
+                } else {
+                    request.httpBody = item.body
+                }
+                (data, _) = try await session.data(for: request)
+            }
+            XCTAssertEqual(data, item.body ?? Data(), item.path)
+        }
+        await fulfillment(of: [reported], timeout: 3)
     }
 
     func testPlaceholderExpansionKeepsUnknownTokensAndExpandsSupportedTokens() {
