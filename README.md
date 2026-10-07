@@ -54,7 +54,7 @@ Update, or pin a version:
 
 ```bash
 npm install -g @dev-weiqi/sniffer@latest
-npm install -g @dev-weiqi/sniffer@0.7.2
+npm install -g @dev-weiqi/sniffer@0.7.3
 ```
 
 ## Desktop app
