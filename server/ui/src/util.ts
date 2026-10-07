@@ -1,4 +1,4 @@
-import type { HttpMockRule, HttpRow, SocketMockRule } from './state.js'
+import type { HttpMockRule, HttpRow, SocketMockRule, SocketRow } from './state.js'
 
 export function fmtTime(ts: number): string {
   const d = new Date(ts)
@@ -152,21 +152,35 @@ export function splitHighlight(text: string, query: string): Array<{ text: strin
   return out
 }
 
-/** Seed request constraints separately from the mocked response. */
-export function httpMockFromRequest(row: HttpRow): HttpMockRule {
-  let bodyMatch: string | undefined
-  if (row.reqBody && !row.reqTruncated) {
-    try {
-      const value = JSON.parse(row.reqBody)
-      if (value && typeof value === 'object' && !Array.isArray(value)) bodyMatch = JSON.stringify(value, null, 2)
-    } catch { /* Only complete JSON objects can be used as body conditions. */ }
-  }
+/** Only nonempty JSON objects can add conditions; Socket.IO matches the first argument. */
+export function jsonObjectCondition(text: string | null | undefined, firstArgument = false): string | undefined {
+  try {
+    const parsed: unknown = JSON.parse(text ?? '')
+    const value = firstArgument ? (Array.isArray(parsed) ? parsed[0] : undefined) : parsed
+    if (value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length) {
+      return JSON.stringify(value, null, 2)
+    }
+  } catch { /* Incomplete and non-JSON captures cannot seed conditions. */ }
+  return undefined
+}
+
+/** Seed only explicitly selected constraints, separately from the mocked response. */
+export function httpMockFromRequest(row: HttpRow, conditions: 'none' | 'query' | 'body' | 'both' = 'none'): HttpMockRule {
   const { path, query } = urlParts(row.url)
   return {
     id: newRuleId(), enabled: true, method: row.method, urlPattern: path,
-    queryParams: Object.fromEntries(query), bodyMatch,
+    queryParams: conditions === 'query' || conditions === 'both' ? Object.fromEntries(query) : undefined,
+    bodyMatch: !row.reqTruncated && (conditions === 'body' || conditions === 'both') ? jsonObjectCondition(row.reqBody) : undefined,
     status: row.status && row.status > 0 ? row.status : 200,
     headers: { 'content-type': row.respHeaders?.['content-type'] ?? 'application/json' },
     body: prettyJson(row.respBody), delayMs: 0, delayOnly: false,
+  }
+}
+
+export function socketAckMockFromEvent(row: SocketRow, withPayload = false): SocketMockRule {
+  return {
+    id: newRuleId(), enabled: true, transport: 'socketio', event: row.event,
+    ackPayload: row.ackPayload ?? '[{"ok":true}]', delayMs: 0,
+    payloadMatch: withPayload ? jsonObjectCondition(row.payload, true) : undefined,
   }
 }

@@ -15,10 +15,22 @@ let mocks={http:preview?[{id:'http-preview',name:'Messages · first page',enable
  {id:'socket-preview',name:'Items · page 1',enabled:true,transport:'socketio',event:'items',payloadMatch:'{"page":1}',ackPayload:'[{"items":[{"id":1}],"page":1}]',delayMs:0},
  {id:'socket-fallback',name:'Items · fallback',enabled:true,transport:'socketio',event:'items',ackPayload:'[{"items":[]}]',delayMs:0},
 ]};
+if(preview){
+ mocks.http.push(...['GET','DELETE',null].map((method,i)=>({id:`preview-method-${i}`,enabled:true,method,urlPattern:i===0?'/profile':i===1?'/messages/1':'/health',status:200,headers:{},body:'{}',delayMs:0,delayOnly:false})));
+ mocks.socket.push({id:'preview-ws',enabled:true,transport:'ktor-ws',event:'ping',ackPayload:'pong',delayMs:0});
+}
+let breakpoints=[];
 const entries=[
  {deviceId:device.deviceId,message:{type:'http-request',id:'post-1',method:'POST',url:'https://preview.example/messages?locale=zh-TW',headers:{'content-type':'application/json'},body:JSON.stringify(body),bodySize:55,bodyTruncated:false,library:'urlsession',timestamp:Date.now()}},
  {deviceId:device.deviceId,message:{type:'http-response',id:'post-1',status:200,headers:{'content-type':'application/json'},body:JSON.stringify(response),bodySize:60,bodyTruncated:false,durationMs:12,mocked:false,timestamp:Date.now()+12}},
 ];
+entries.push(
+ {deviceId:device.deviceId,message:{type:'http-request',id:'plain-get',method:'GET',url:'https://preview.example/profile',headers:{},body:null,bodySize:0,bodyTruncated:false,library:'urlsession',timestamp:Date.now()}},
+ {deviceId:device.deviceId,message:{type:'http-request',id:'invalid-body',method:'POST',url:'https://preview.example/form?page=1',headers:{},body:'page=1',bodySize:6,bodyTruncated:false,library:'urlsession',timestamp:Date.now()}},
+ {deviceId:device.deviceId,message:{type:'socket-event',id:'ack-1',connectionId:'conn-1',transport:'socketio',direction:'out',event:'items',payload:'[{"page":1,"limit":20},{"ignore":true}]',mocked:false,timestamp:Date.now()}},
+ {deviceId:device.deviceId,message:{type:'socket-ack',id:'ack-1',payload:'[{"items":[{"id":1}]}]',mocked:false,timestamp:Date.now()+1}},
+ {deviceId:device.deviceId,message:{type:'socket-event',id:'ack-empty',connectionId:'conn-1',transport:'socketio',direction:'out',event:'ping',payload:'[]',mocked:false,timestamp:Date.now()+2}},
+);
 const wss=new WebSocketServer({noServer:true});
 const server=createServer(async(req,res)=>{
  if(req.url==='/api/mocks'&&req.method==='PUT'){
@@ -27,10 +39,16 @@ const server=createServer(async(req,res)=>{
   for(const ws of wss.clients)ws.send(JSON.stringify({type:'mocks-changed',deviceId:device.deviceId,mocks}));
   res.writeHead(200,{'content-type':'application/json'});res.end('{}');return;
  }
+ if(req.url==='/api/breakpoints'&&req.method==='PUT'){
+  let text='';for await(const chunk of req)text+=chunk;
+  breakpoints=JSON.parse(text).rules;
+  for(const ws of wss.clients)ws.send(JSON.stringify({type:'breakpoints-changed',deviceId:device.deviceId,rules:breakpoints}));
+  res.writeHead(200,{'content-type':'application/json'});res.end('{}');return;
+ }
  await serveStatic(res,new URL(req.url,'http://localhost').pathname,{uiDist:fileURLToPath(new URL('../server/ui/dist',import.meta.url))});
 });
 server.on('upgrade',(req,socket,head)=>wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws)));
-wss.on('connection',ws=>ws.send(JSON.stringify({type:'init',devices:[device],entries,mocksByDevice:{[device.deviceId]:mocks},breakpointsByDevice:{},pausedHits:[]})));
+wss.on('connection',ws=>ws.send(JSON.stringify({type:'init',devices:[device],entries,mocksByDevice:{[device.deviceId]:mocks},breakpointsByDevice:{[device.deviceId]:breakpoints},pausedHits:[]})));
 await new Promise(resolve=>server.listen(preview?Number(process.env.SNIFFER_PREVIEW_PORT??5200):0,'127.0.0.1',resolve));
 const url=`http://127.0.0.1:${server.address().port}`;
 if(preview){console.log(`HTTP body mock preview: ${url} (in-memory sample data)`)}else{
@@ -43,7 +61,30 @@ if(preview){console.log(`HTTP body mock preview: ${url} (in-memory sample data)`
   await page.goto(url);
   await page.locator('tbody tr').filter({hasText:'/messages'}).click();
   await page.getByRole('button',{name:'Mock this request',exact:true}).click();
-  assert.equal(await page.locator('.rule-conditions').getAttribute('open'),null,'conditions start collapsed');
+  assert.equal(await page.locator('.rule-conditions').evaluate(el=>el.open),false,'Path only starts collapsed');
+  await page.waitForResponse(r=>r.url().endsWith('/api/mocks')&&r.status()===200);
+  assert.equal(mocks.http[0].queryParams,undefined,'primary action excludes query');
+  assert.equal(mocks.http[0].bodyMatch,undefined,'primary action excludes body');
+  await page.getByTitle('Delete rule',{exact:true}).click();
+  await page.waitForResponse(r=>r.url().endsWith('/api/mocks')&&r.status()===200);
+  await page.getByTitle('Close',{exact:true}).click();
+  for(const choice of ['With query','With body']){
+   await page.getByRole('button',{name:'Choose conditions for mock this request',exact:true}).click();
+   await page.getByRole('menuitem',{name:choice,exact:false}).filter({hasText:choice==='With query'?'Include captured query':'Include captured JSON'}).click();
+   assert.equal(await page.locator('.rule-conditions').evaluate(el=>el.open),true,'explicit conditions open automatically');
+   assert.equal(await page.getByRole('tab',{name:choice==='With query'?/Query parameters/:/Body conditions/}).getAttribute('aria-selected'),'true');
+   await page.waitForResponse(r=>r.url().endsWith('/api/mocks')&&r.status()===200);
+   assert.equal(!!mocks.http[0].queryParams,choice==='With query');
+   assert.equal(!!mocks.http[0].bodyMatch,choice==='With body');
+   await page.getByTitle('Delete rule',{exact:true}).click();
+   await page.waitForResponse(r=>r.url().endsWith('/api/mocks')&&r.status()===200);
+   await page.getByTitle('Close',{exact:true}).click();
+  }
+  await page.getByRole('button',{name:'Choose conditions for mock this request',exact:true}).click();
+  await page.getByRole('menuitem',{name:/With query \+ body/}).click();
+  assert.equal(await page.locator('.rule-conditions').evaluate(el=>el.open),true,'query and body open automatically');
+  assert.equal(await page.getByRole('tab',{name:/Body conditions/}).getAttribute('aria-selected'),'true','body takes priority');
+  await page.locator('.rule-conditions summary').click();
   assert.equal(await page.locator('.rule-tabs').getByRole('textbox',{name:'Delay ms',exact:true}).isVisible(),true,'HTTP delay stays in the response toolbar');
   const modalBox=await page.getByRole('dialog').boundingBox();
   assert.ok(modalBox.width>=1280&&modalBox.height>=840,'mock panel uses larger defaults');
@@ -186,8 +227,61 @@ if(preview){console.log(`HTTP body mock preview: ${url} (in-memory sample data)`
   await page.setViewportSize({width:1100,height:740});
   const compactModal=await page.getByRole('dialog').boundingBox();
   assert.ok(compactModal.x>=0&&compactModal.y>=0&&compactModal.x+compactModal.width<=1100&&compactModal.y+compactModal.height<=740,'modal fits smaller desktop windows');
+  await page.getByTitle('Close',{exact:true}).click();
+  await page.locator('tbody tr').filter({hasText:'items'}).first().click();
+  await page.getByRole('button',{name:'Mock this ack',exact:true}).click();
+  assert.equal(await page.locator('.rule-conditions').evaluate(el=>el.open),false,'ack primary action is event only');
+  await page.waitForResponse(r=>r.url().endsWith('/api/mocks')&&r.status()===200);
+  assert.equal(mocks.socket[0].payloadMatch,undefined);
+  assert.deepEqual(JSON.parse(mocks.socket[0].ackPayload),[{items:[{id:1}]}]);
+  await page.getByTitle('Close',{exact:true}).click();
+  await page.getByRole('button',{name:'Choose conditions for mock this ack',exact:true}).focus();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await page.getByRole('textbox',{name:'Payload conditions',exact:true}).waitFor();
+  assert.equal(await page.locator('.rule-conditions').evaluate(el=>el.open),true,'ack payload opens automatically');
+  assert.deepEqual(JSON.parse(await page.getByRole('textbox',{name:'Payload conditions',exact:true}).inputValue()),{page:1,limit:20});
+  assert.deepEqual(JSON.parse(await page.getByRole('textbox',{name:'Response body',exact:true}).inputValue()),[{items:[{id:1}]}]);
+  await page.waitForResponse(r=>r.url().endsWith('/api/mocks')&&r.status()===200);
+  await page.getByTitle('Close',{exact:true}).click();
+  await page.getByRole('button',{name:/Socket Mocks/}).click();
+  assert.equal(await page.locator('.rule-conditions').evaluate(el=>el.open),true,'prefill expansion persists after reopening');
+  await page.locator('.rule-conditions summary').click();
+  await page.getByTitle('Close',{exact:true}).click();
+  await page.getByRole('button',{name:/Socket Mocks/}).click();
+  assert.equal(await page.locator('.rule-conditions').evaluate(el=>el.open),false,'manual collapse overrides automatic prefill');
+  await page.getByTitle('Close',{exact:true}).click();
+  await page.getByRole('button',{name:'Mock this ack',exact:true}).click();
+  assert.equal(await page.locator('.rule-conditions').evaluate(el=>el.open),false,'menu selection never changes the primary action');
+  await page.getByTitle('Close',{exact:true}).click();
+  await page.locator('tbody tr').filter({hasText:'ping'}).first().click();
+  await page.getByRole('button',{name:'Choose conditions for mock this ack',exact:true}).click();
+  assert.equal(await page.getByRole('menuitem',{name:/With payload/}).isDisabled(),true);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.getByRole('menu').count(),0);
+  assert.equal(await page.getByRole('button',{name:'Choose conditions for mock this ack',exact:true}).evaluate(el=>el===document.activeElement),true);
+  await page.locator('nav.tabs').getByRole('button',{name:/^API,/}).click();
+  await page.locator('tbody tr').filter({hasText:'/messages'}).click();
+  await page.getByRole('button',{name:'Choose conditions for mock this request',exact:true}).click();
+  const menuBox=await page.getByRole('menu',{name:'Mock conditions'}).boundingBox();
+  assert.ok(menuBox.x>=0&&menuBox.x+menuBox.width<=1100,'split menu fits the viewport');
+  await page.screenshot({path:'/tmp/sniffer-split-actions.png',fullPage:true});
+  await page.keyboard.press('Escape');
+  const armed=page.waitForResponse(r=>r.url().endsWith('/api/breakpoints')&&r.status()===200);
+  await page.getByRole('button',{name:'Break on path',exact:true}).click();await armed;
+  assert.equal(breakpoints[0].method,'POST');assert.equal(breakpoints[0].urlPattern,'/messages');
+  assert.equal(breakpoints[0].queryParams,undefined);assert.equal(breakpoints[0].bodyMatch,undefined);
+  for(const path of ['/profile','/form']){
+   await page.locator('tbody tr').filter({hasText:path}).click();
+   await page.getByRole('button',{name:'Choose conditions for mock this request',exact:true}).click();
+   assert.equal(await page.getByRole('menuitem',{name:/With body/}).isDisabled(),true);
+   assert.equal(await page.getByRole('menuitem',{name:/With query \+ body/}).isDisabled(),true);
+   assert.equal(await page.getByRole('menuitem',{name:/^With query(?! \+)/}).isDisabled(),path==='/profile');
+   await page.keyboard.press('Escape');
+  }
   assert.deepEqual(errors,[]);
-  console.log('PASS: HTTP/Socket progressive sections, persisted expansion and tabs, matching panel geometry, request prefill, keyboard controls, autosave, hidden errors, timing, reply modes, placeholders, export/import and old SDK notice.');
+  console.log('PASS: HTTP/Socket progressive sections, persisted expansion and tabs, matching panel geometry, split action defaults, selected prefill, keyboard controls, breakpoint scope, autosave, hidden errors, timing, reply modes, placeholders, export/import and old SDK notice.');
  }catch(error){
   await page.screenshot({path:'/tmp/sniffer-http-body-failure.png',fullPage:true});
   console.error(errors,await page.locator('body').innerText());

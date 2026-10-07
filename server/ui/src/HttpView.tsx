@@ -4,7 +4,8 @@ import { FilterMenu } from './FilterMenu'
 import { TrafficEmpty, type TrafficEmptyProps } from './TrafficEmpty'
 import type { TrafficFilter } from './trafficFilter'
 import { copyText, fmtDuration, fmtSize, fmtTime, prettyJson, splitHighlight, splitLinks, statusClass, statusLabel, toCurl, urlParts } from './util'
-import { httpMockFromRequest } from './util'
+import { httpMockFromRequest, jsonObjectCondition } from './util'
+import { MockAction } from './MockAction'
 import { useDetailWidth, useFollowLatestRow, useListKeys, useUnreadRows } from './hooks'
 import { JsonView } from './JsonView'
 import { HeadersEditor, WarningIcon } from './MocksView'
@@ -389,15 +390,27 @@ export function HttpDetail({ row, query, onMock, onArm, onClose }: {
   const responseIsJson = Boolean(row.respBody && !row.respBase64 && !isSse(row) && isValidJson(row.respBody))
 
   const mockThis = () => onMock(httpMockFromRequest(row), row.deviceId)
+  const hasQuery = queryParams.length > 0
+  const hasBody = !row.reqTruncated && !!jsonObjectCondition(row.reqBody)
 
   return (
     <aside className="detail-pane" aria-label="API request details">
       <div className="detail-toolbar">
-        <button onClick={mockThis}>Mock this request</button>
-        <button title="Pause future responses to this path so you can edit them before the app sees them"
-          onClick={() => onArm(row)}>Break on this</button>
+        <MockAction key={`${row.deviceId}:${row.id}`} label="Mock this request" scope="Path only" onDefault={mockThis} options={[
+          { label: 'Path only', description: 'Any query or body', onSelect: mockThis },
+          { label: 'With query', description: hasQuery ? 'Include captured query parameters' : 'No query parameters captured', disabled: !hasQuery,
+            onSelect: () => onMock(httpMockFromRequest(row, 'query'), row.deviceId) },
+          { label: 'With body', description: hasBody ? 'Include captured JSON body fields' : 'No complete, nonempty JSON object captured', disabled: !hasBody,
+            onSelect: () => onMock(httpMockFromRequest(row, 'body'), row.deviceId) },
+          { label: 'With query + body', description: 'Include both sets of conditions', disabled: !hasQuery || !hasBody,
+            onSelect: () => onMock(httpMockFromRequest(row, 'both'), row.deviceId) },
+        ]} />
+        <div className="detail-break-action">
+          <button title="Pause future responses matching this method and path. Query and body are ignored."
+            onClick={() => onArm(row)}>Break on path</button>
+        </div>
         <span className="spacer" />
-        <button className="ghost" onClick={onClose}>✕</button>
+        <button className="ghost" aria-label="Close request details" onClick={onClose}>✕</button>
       </div>
 
       <Section title="Request">

@@ -3,7 +3,8 @@ import type { SocketConn, SocketMockRule, SocketRow } from './state'
 import { FilterMenu } from './FilterMenu'
 import { TrafficEmpty, type TrafficEmptyProps } from './TrafficEmpty'
 import type { TrafficFilter } from './trafficFilter'
-import { fmtTime, newRuleId } from './util'
+import { fmtTime, jsonObjectCondition, newRuleId, socketAckMockFromEvent } from './util'
+import { MockAction } from './MockAction'
 import { useDetailWidth, useFollowLatestRow, useListKeys, useUnreadRows } from './hooks'
 import { JsonView } from './JsonView'
 import { CopyButton, Highlight, KV, RowMenu, ScrollToBottomButton, Section, SlidersIcon, SortIcon } from './HttpView'
@@ -178,13 +179,15 @@ export function SocketView({ active, followLatest, emptyState, mockCount, onOpen
       <aside className="detail-pane">
             <div className="detail-toolbar">
               {selected.direction === 'out' && selected.transport === 'socketio' && (
-                <button onClick={() => onMockAck(
-                  {
-                    id: newRuleId(), enabled: true, transport: 'socketio', event: selected.event,
-                    ackPayload: selected.ackPayload ?? '[{"ok":true}]', delayMs: 0,
-                  },
-                  selected.deviceId,
-                )}>Mock this ack</button>
+                <MockAction key={`${selected.deviceId}:${selected.id}`} label="Mock this ack" scope="Event only"
+                  onDefault={() => onMockAck(socketAckMockFromEvent(selected), selected.deviceId)} options={[
+                    { label: 'Event only', description: 'Any payload for this event',
+                      onSelect: () => onMockAck(socketAckMockFromEvent(selected), selected.deviceId) },
+                    { label: 'With payload', description: jsonObjectCondition(selected.payload, true)
+                        ? 'Include fields from the first argument' : 'No nonempty JSON object in the first argument',
+                      disabled: !jsonObjectCondition(selected.payload, true),
+                      onSelect: () => onMockAck(socketAckMockFromEvent(selected, true), selected.deviceId) },
+                  ]} />
               )}
               {selected.direction === 'out' && selected.transport === 'ktor-ws' && (
                 <button onClick={() => onMockAck(

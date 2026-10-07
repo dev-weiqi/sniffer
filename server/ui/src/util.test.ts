@@ -1,6 +1,8 @@
 import {
   copyText,
   httpMockFromRequest,
+  jsonObjectCondition,
+  socketAckMockFromEvent,
   fmtDuration,
   fmtSize,
   fmtTime,
@@ -208,7 +210,7 @@ console.log('util.test: all assertions passed')
 }
 
 const prefilled = httpMockFromRequest({ ...row, url: 'https://host/messages?locale=zh-TW&q=%E8%8C%B6+tea',
-  reqBody: '{"session_id":"session","limit":20}', respBody: '{"items":[]}', status: 201 })
+  reqBody: '{"session_id":"session","limit":20}', respBody: '{"items":[]}', status: 201 }, 'both')
 assertEqual(prefilled.urlPattern, '/messages', 'prefill keeps exact path')
 assertEqual(prefilled.queryParams?.q, '茶 tea', 'prefill decodes query parameters')
 assertEqual(prefilled.queryParams?.locale, 'zh-TW', 'prefill includes query')
@@ -216,6 +218,28 @@ assertEqual(JSON.parse(prefilled.bodyMatch!).limit, 20, 'prefill copies typed bo
 assertEqual(JSON.parse(prefilled.body).items.length, 0, 'response remains separate from request condition')
 assertEqual(prefilled.status, 201, 'prefill keeps response status')
 for (const reqBody of ['{', '[]', 'null', '"text"', 'a=1', null]) {
-  assertEqual(httpMockFromRequest({ ...row, reqBody }).bodyMatch, undefined, 'unsupported bodies are not JSON conditions')
+  assertEqual(httpMockFromRequest({ ...row, reqBody }, 'body').bodyMatch, undefined, 'unsupported bodies are not JSON conditions')
 }
-assertEqual(httpMockFromRequest({ ...row, reqTruncated: true }).bodyMatch, undefined, 'truncated JSON is not a condition')
+assertEqual(httpMockFromRequest({ ...row, reqTruncated: true }, 'body').bodyMatch, undefined, 'truncated JSON is not a condition')
+
+const captured = { ...row, url: 'https://host/messages?page=1', reqBody: '{"limit":20}' }
+for (const mode of ['none', 'query', 'body', 'both'] as const) {
+  const rule = httpMockFromRequest(captured, mode)
+  assertEqual(rule.queryParams?.page, mode === 'query' || mode === 'both' ? '1' : undefined, `${mode} query selection`)
+  assertEqual(rule.bodyMatch !== undefined, mode === 'body' || mode === 'both', `${mode} body selection`)
+}
+assertEqual(httpMockFromRequest(captured).queryParams, undefined, 'default mock is path only')
+assertEqual(httpMockFromRequest(captured).bodyMatch, undefined, 'default mock ignores captured body')
+for (const text of ['{}', '[]', 'null', '1', '"text"', '{', undefined]) {
+  assertEqual(jsonObjectCondition(text), undefined, 'empty or unsupported body does not offer conditions')
+}
+for (const text of ['[]', '[{}]', '[1,{"page":1}]', JSON.stringify([JSON.stringify({page:1})]), '{"page":1}', '[[1]]', '[null]', '{']) {
+  assertEqual(jsonObjectCondition(text, true), undefined, 'Socket.IO requires an actual object in the first argument')
+}
+const event = { id: 'ack-1', deviceId: 'device', connectionId: 'conn', ts: 1, transport: 'socketio',
+  direction: 'out' as const, event: 'items', payload: '[{"page":1,"tags":["a"]},{"ignored":2}]',
+  ackPayload: '[{"items":[]}]', mocked: false }
+assertEqual(socketAckMockFromEvent(event).payloadMatch, undefined, 'ack default matches event only')
+const ack = socketAckMockFromEvent(event, true)
+assertEqual(ack.payloadMatch, JSON.stringify({ page: 1, tags: ['a'] }, null, 2), 'ack condition uses only the first argument')
+assertEqual(ack.ackPayload, event.ackPayload, 'ack response remains separate from outgoing condition')

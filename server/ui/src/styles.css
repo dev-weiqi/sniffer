@@ -511,11 +511,21 @@ button.filter-btn { width: 20px; height: 20px; padding: 0; align-items: center; 
 /* ---------- detail ---------- */
 
 .detail-toolbar {
-  display: flex; align-items: center; gap: 8px; padding: 10px;
+  display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px; padding: 10px;
   border-bottom: 1px solid var(--border);
   position: sticky; top: 0; background: var(--bg-panel); z-index: 1;
 }
 .detail-toolbar > button { display: inline-flex; align-items: center; height: 32px; }
+.mock-action, .detail-break-action { display: flex; }
+.mock-action-buttons { display: flex; }
+.mock-action-buttons > button, .detail-break-action > button { height: 32px; }
+.mock-action-buttons > button { background: var(--accent); border-color: var(--accent); color: #fff; }
+.mock-action-buttons > button:hover { filter: brightness(.94); }
+.mock-action-main { border-radius: 5px 0 0 5px; }
+.mock-action-trigger { border-radius: 0 5px 5px 0; border-left: 0; padding-inline: 9px; }
+.mock-action-menu { width: 290px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: auto; }
+.mock-action-menu .ctx-item { flex-direction: column; align-items: flex-start; gap: 3px; white-space: normal; padding: 9px 10px; }
+.mock-action-menu small { font-size: 11px; opacity: .75; }
 
 /* breakpoints — a blocked (paused) response reads red: dot + light-red row */
 .badge.bp-paused { background: var(--err); color: #fff; }

@@ -311,13 +311,18 @@ socket ack rules answer locally. Mock bodies support `${randomId}`, `${now}` and
 `${randomString(min~max)}`.
 
 HTTP rules can combine **Query parameters** and JSON **Body conditions**. Every specified
-condition must match; other object fields are ignored. **Mock this request** prefills the query
-and complete JSON object body separately from the response. The device SDK must support the
-selected conditions; update older SDKs before using body matching.
+condition must match; other object fields are ignored. **Mock this request** defaults to
+**Path only**. Its menu can include the captured query, complete JSON object body, or both.
+**Mock this ack** defaults to **Event only**; its menu can include JSON object fields from
+the first outgoing argument. Response data stays separate from these conditions. The device
+SDK must support the selected conditions; update older SDKs before using them.
 
-HTTP and Socket editors keep **Request conditions** collapsed by default. Each device's
+HTTP and Socket editors keep **Request conditions** collapsed by default. Creating a mock
+with captured conditions expands them automatically and selects the matching tab (Body when
+both query and body are included). Each device's
 rules remember their expanded state and the selected Query/Body tab in this browser,
 including after closing the panel or reloading. Delay settings remain beside the response.
+**Break on path** matches the HTTP method and path only, ignoring query and body conditions.
 
 ## Modules
 

@@ -238,6 +238,7 @@ export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supports
     saveSelection({ http: selHttp ?? undefined, socket: selSocket ?? undefined, tab: socketTab })
   }, [selHttp, selSocket, socketTab])
   const [pushCount, setPushCount] = useState(0)
+  const prefilledRules = useRef(new Set<string>())
 
   // refs so the flush below sees the latest values without re-running the effect
   const draftRef = useRef(draft); draftRef.current = draft
@@ -280,6 +281,7 @@ export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supports
   // prefilled rules coming from the "Mock this request" / "Mock this event" actions
   useEffect(() => {
     if (pendingRule && deviceId) {
+      prefilledRules.current.add(pendingRule.id)
       // click-to-prefill lands on top so it's immediately visible
       setDraft(d => ({ ...d, http: [{ ...pendingRule, createdAt: Date.now() }, ...d.http] }))
       setSelHttp(pendingRule.id)
@@ -290,6 +292,7 @@ export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supports
 
   useEffect(() => {
     if (pendingSocketRule && deviceId) {
+      prefilledRules.current.add(pendingSocketRule.id)
       setDraft(d => ({ ...d, socket: [{ ...prettySocketRule(pendingSocketRule), createdAt: Date.now() }, ...d.socket] }))
       setSelSocket(pendingSocketRule.id)
       setSocketTab('rules')
@@ -462,6 +465,7 @@ export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supports
             <div className="mocks-detail">
               {httpAt < 0 ? <div className="empty">No HTTP rules yet — add one to start mocking</div> : (
                 <HttpRuleEditor deviceId={deviceId} key={`${deviceId}:${draft.http[httpAt].id}`} rule={draft.http[httpAt]} dup={httpDups.has(draft.http[httpAt].id)}
+                  prefilled={prefilledRules.current.has(draft.http[httpAt].id)}
                   supportsQueryMocks={supportsQueryMocks} supportsBodyMocks={supportsBodyMocks}
                   onDuplicate={() => {
                     const copy = { ...draft.http[httpAt], id: newRuleId(), createdAt: Date.now() }
@@ -495,6 +499,7 @@ export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supports
             <div className="mocks-detail">
               {socketAt < 0 ? <div className="empty">No socket rules yet — add one to start mocking</div> : (
                 <SocketRuleEditor deviceId={deviceId} supportsSocketPayloadMocks={supportsSocketPayloadMocks} key={`${deviceId}:${draft.socket[socketAt].id}`} rule={draft.socket[socketAt]} dup={socketDups.has(draft.socket[socketAt].id)}
+                  prefilled={prefilledRules.current.has(draft.socket[socketAt].id)}
                   onDuplicate={() => {
                     const copy = { ...draft.socket[socketAt], id: newRuleId(), createdAt: Date.now() }
                     update({ ...draft, socket: [...draft.socket.slice(0, socketAt + 1), copy, ...draft.socket.slice(socketAt + 1)] })
@@ -1011,18 +1016,20 @@ function PushRecordCard({ record, conns, deviceId, canStar, onChange, onDelete, 
 
 type ConditionView = { open: boolean; tab: 'query' | 'body' }
 
-function useConditionView(key: string, defaultTab: ConditionView['tab'] = 'query') {
+function useConditionView(key: string, defaultTab: ConditionView['tab'] = 'query', defaultOpen = false) {
   const [view, setView] = useState<ConditionView>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(key) ?? 'null')
-      return { open: saved?.open === true, tab: saved?.tab === 'query' || saved?.tab === 'body' ? saved.tab : defaultTab }
-    } catch { return { open: false, tab: defaultTab } }
+      return { open: typeof saved?.open === 'boolean' ? saved.open : defaultOpen, tab: saved?.tab === 'query' || saved?.tab === 'body' ? saved.tab : defaultTab }
+    } catch { return { open: defaultOpen, tab: defaultTab } }
   })
+  useEffect(() => {
+    try { localStorage.setItem(key, JSON.stringify(view)) } catch { /* private mode */ }
+  }, [key, view])
   const update = (patch: Partial<ConditionView>) => {
     const next = { ...view, ...patch }
     if (next.open === view.open && next.tab === view.tab) return
     setView(next)
-    try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* private mode */ }
   }
   return [view, update] as const
 }
@@ -1046,7 +1053,8 @@ function RequestConditions({ open, onToggle, count, summary, children }: {
   )
 }
 
-function HttpRuleEditor({ deviceId, rule, dup, supportsQueryMocks, supportsBodyMocks, onChange, onDelete, onDuplicate }: {
+function HttpRuleEditor({ deviceId, rule, dup, prefilled, supportsQueryMocks, supportsBodyMocks, onChange, onDelete, onDuplicate }: {
+  prefilled: boolean
   deviceId: string
   rule: HttpMockRule
   dup: boolean
@@ -1057,7 +1065,8 @@ function HttpRuleEditor({ deviceId, rule, dup, supportsQueryMocks, supportsBodyM
   onDuplicate: () => void
 }) {
   const [conditionView, setConditionView] = useConditionView(
-    `sniffer-mock-conditions:${JSON.stringify([deviceId, 'http', rule.id])}`, rule.bodyMatch ? 'body' : 'query')
+    `sniffer-mock-conditions:${JSON.stringify([deviceId, 'http', rule.id])}`, rule.bodyMatch ? 'body' : 'query',
+    prefilled && !!(rule.bodyMatch || Object.keys(rule.queryParams ?? {}).length))
   const conditionTab = conditionView.tab
   const setConditionTab = (tab: ConditionView['tab']) => setConditionView({ tab })
   const conditionError = payloadMatchError(rule.bodyMatch)
@@ -1372,7 +1381,8 @@ function JsonStringToggle({ view }: { view: JsonStringView }) {
   )
 }
 
-function SocketRuleEditor({ deviceId, rule, dup, supportsSocketPayloadMocks, onChange, onDelete, onDuplicate }: {
+function SocketRuleEditor({ deviceId, rule, dup, prefilled, supportsSocketPayloadMocks, onChange, onDelete, onDuplicate }: {
+  prefilled: boolean
   supportsSocketPayloadMocks: boolean
   deviceId: string
   rule: SocketMockRule
@@ -1382,7 +1392,7 @@ function SocketRuleEditor({ deviceId, rule, dup, supportsSocketPayloadMocks, onC
   onDuplicate: () => void
 }) {
   const [conditionView, setConditionView] = useConditionView(
-    `sniffer-mock-conditions:${JSON.stringify([deviceId, 'socket', rule.id])}`)
+    `sniffer-mock-conditions:${JSON.stringify([deviceId, 'socket', rule.id])}`, 'query', prefilled && !!rule.payloadMatch)
   const ackRef = useRef<HTMLTextAreaElement>(null)
   const pushRef = useRef<HTMLTextAreaElement>(null)
   const ackView = useJsonStringView(rule.ackPayload, ackPayload => onChange({ ...rule, ackPayload }), 'args')
