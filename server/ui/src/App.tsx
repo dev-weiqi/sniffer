@@ -341,7 +341,7 @@ export default function App() {
     const searchBodies = q.length >= 2
     return state.http.filter(r =>
       r.deviceId === deviceId &&
-      passesFilter(httpFilter, r.url) &&
+      passesFilter(httpFilter, r.url, 'url') &&
       (!q || r.url.toLowerCase().includes(q) || r.method.toLowerCase().includes(q) ||
         String(r.status ?? '').includes(q) ||
         (searchBodies && (

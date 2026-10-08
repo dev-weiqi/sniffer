@@ -207,7 +207,7 @@ export function HttpView({ active, followLatest, emptyState, mockCount, onOpenMo
               </th>
               <th style={{ width: 62 }}>Method</th>
               <th style={{ width: 72 }}>Status</th>
-              <th><span className="table-header-control"><span>URL</span><FilterMenu filter={urlFilter} onChange={onUrlFilterChange} placeholder="exact URL…" selectionValue={selected?.url ?? null} /></span></th>
+              <th><span className="table-header-control"><span>URL</span><FilterMenu filter={urlFilter} onChange={onUrlFilterChange} placeholder="URL…" selectionValue={selected?.url.replace(/^https?:\/\//i, '') ?? null} /></span></th>
               <th style={{ width: 66 }} className="num">Size</th>
               <th style={{ width: 70 }} className="num">Time</th>
             </tr>
@@ -260,7 +260,7 @@ const PausedRowItem = memo(function PausedRowItem({ hit, selected, onSelect }: {
       <td className="mono dim">{fmtTime(hit.timestamp)}</td>
       <td className="mono method">{hit.method}</td>
       <td className="mono"><span className="bp-dot" /></td>
-      <td className="url-cell">
+      <td className="url-cell" title={hit.url}>
         <span className="badge bp-paused">PAUSED</span>
         <span className="dim">{domain}</span>
         <span>{path}</span>
@@ -296,7 +296,7 @@ const HttpRowItem = memo(function HttpRowItem({ row: r, query, paused, selected,
       <td className={`mono ${statusClass(r.status, r.error)}`}>
         {paused ? <span className="bp-dot" /> : statusLabel(r.status, r.error)}
       </td>
-      <td className="url-cell">
+      <td className="url-cell" title={r.url}>
         {paused && <span className="badge bp-paused">PAUSED</span>}
         {r.mocked && <span className="badge mock">MOCK</span>}
         {!r.mocked && (r.delayedMs ?? 0) > 0 && <span className="badge delay">DELAY</span>}
@@ -494,7 +494,6 @@ function PausedDetail({ hit, onResolve, onClose }: {
   const [headers, setHeaders] = useState<Record<string, string>>(hit.headers)
   const [body, setBody] = useState(() => prettyJson(hit.body))
   const bodyIsJson = isValidJson(body)
-  const { domain, path } = urlParts(hit.url)
 
   return (
     <aside className="detail-pane">
@@ -508,7 +507,7 @@ function PausedDetail({ hit, onResolve, onClose }: {
         <div className="dim bp-hint">
           Response held — edits apply before the app sees it. The app is blocked until you act.
         </div>
-        <div className="mono dim bp-target">{hit.method} {domain}{path}</div>
+        <div className="mono dim bp-target">{hit.method} {hit.url}</div>
         <label className="bp-label">Status</label>
         <input className="bp-method mono" value={status} onChange={e => setStatus(e.target.value)} />
         <label className="bp-label">Response headers</label>

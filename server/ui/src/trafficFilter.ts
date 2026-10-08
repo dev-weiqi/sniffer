@@ -1,4 +1,4 @@
-/** Per-column noise filter: hide (or keep only) rows matching user-managed substrings. */
+/** Per-column noise filter: hide (or keep only) rows matching user-managed patterns. */
 export interface TrafficFilter {
   /** exclude: matching rows are hidden; include: only matching rows show */
   mode: 'exclude' | 'include'
@@ -11,12 +11,27 @@ export function filterActive(filter: TrafficFilter): boolean {
   return filter.items.some(i => i.enabled)
 }
 
-/** Case-insensitive match against the row's displayed name; exact unless requested otherwise. */
-export function passesFilter(filter: TrafficFilter, text: string, match: 'exact' | 'contains' = 'exact'): boolean {
+/** Case-insensitive match; * matches any characters. URL patterns may omit the HTTP(S) scheme. */
+export function passesFilter(filter: TrafficFilter, text: string, match: 'exact' | 'contains' | 'url' = 'exact'): boolean {
   const enabled = filter.items.filter(i => i.enabled)
   if (enabled.length === 0) return true
-  const haystack = text.toLowerCase()
-  const matched = enabled.some(i => match === 'contains' ? haystack.includes(i.value.toLowerCase()) : haystack === i.value.toLowerCase())
+  const normalized = text.toLowerCase()
+  const matched = enabled.some(i => {
+    const value = i.value.toLowerCase()
+    const haystack = match === 'url' && !value.includes('://') ? normalized.replace(/^https?:\/\//, '') : normalized
+    if (!value.includes('*')) return match === 'contains' ? haystack.includes(value) : haystack === value
+    const parts = (match === 'contains' ? `*${value}*` : value).split('*')
+    const first = parts.shift()!
+    const last = parts.pop()!
+    if (!haystack.startsWith(first) || !haystack.endsWith(last)) return false
+    let cursor = first.length
+    for (const part of parts) {
+      const index = haystack.indexOf(part, cursor)
+      if (index < 0) return false
+      cursor = index + part.length
+    }
+    return cursor <= haystack.length - last.length
+  })
   return filter.mode === 'exclude' ? !matched : matched
 }
 

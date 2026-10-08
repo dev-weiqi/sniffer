@@ -449,14 +449,16 @@ button.filter-btn { width: 20px; height: 20px; padding: 0; align-items: center; 
   font-weight: 400; text-transform: none; letter-spacing: normal; font-size: 13.5px;
 }
 /* Flipper layout: full-bleed separators between input / values / switch / footer */
-.filter-add { display: flex; gap: 8px; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border); margin: 0 -12px; padding-left: 12px; padding-right: 12px; }
-.filter-add input { flex: 1; min-width: 0; }
+.filter-add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border); margin: 0 -12px; padding-left: 12px; padding-right: 12px; }
+.filter-add input { min-width: 0; }
+.filter-hint { grid-column: 1 / -1; margin: 0; color: var(--text-dim); font-size: 12px; line-height: 1.5; }
 .filter-round {
   flex-shrink: 0; display: grid; place-items: center;
   width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%;
   background: transparent; color: var(--text-dim);
 }
 .filter-round:hover:not(:disabled) { color: var(--text); background: var(--hover); border: 0; }
+.filter-add .filter-round, .filter-add .filter-round:hover:not(:disabled) { color: var(--accent); }
 .filter-round:disabled { opacity: .4; }
 .filter-item {
   display: flex; align-items: center; gap: 8px; min-width: 0;
@@ -468,9 +470,15 @@ button.filter-btn { width: 20px; height: 20px; padding: 0; align-items: center; 
 .filter-item .toggle { display: flex; align-items: center; }
 .filter-item .toggle input, .filter-switch input { margin: 0; }
 /* wraps rather than ellipsizing: the whole value must stay readable */
-.filter-value { flex: 1; min-width: 0; word-break: break-all; line-height: 1.4; }
+.filter-value { flex: 1; min-width: 0; white-space: normal; word-break: break-all; line-height: 1.4; }
 .filter-remove { margin-left: auto; }
 .filter-remove:hover:not(:disabled) { color: var(--err); }
+.filter-mode {
+  display: flex; gap: 20px;
+  border-top: 1px solid var(--border); margin: 2px -12px 0; padding: 10px 12px 2px;
+}
+.filter-mode label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.filter-mode input { margin: 0; accent-color: var(--accent); }
 .filter-switch {
   display: flex; align-items: center; gap: 10px;
   cursor: pointer; user-select: none;

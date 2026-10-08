@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { addFilterValue, addOrEnableValue, filterActive, setAllEnabled, type TrafficFilter } from './trafficFilter'
 
 /** Funnel button for a column header; opens a popover managing that column's noise filter. */
@@ -11,9 +11,17 @@ export function FilterMenu({ filter, onChange, placeholder, selectionValue }: {
 }) {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState('')
+  const hintId = useId()
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
   const rootRef = useRef<HTMLSpanElement>(null)
   const popRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const updatePosition = () => {
+    if (!rootRef.current) return
+    const rect = rootRef.current.getBoundingClientRect()
+    setPos({ top: rect.bottom + 6, left: Math.max(8, Math.min(rect.left, window.innerWidth - 436)) })
+  }
 
   useEffect(() => {
     if (!open) return
@@ -21,9 +29,9 @@ export function FilterMenu({ filter, onChange, placeholder, selectionValue }: {
       const t = e.target as Node
       if (!rootRef.current?.contains(t) && !popRef.current?.contains(t)) setOpen(false)
     }
-    // the popover is fixed-positioned: close instead of drifting when the list scrolls under it
+    // Filtering can scroll the list as it shrinks; keep the popover anchored and open.
     const onScroll = (e: Event) => {
-      if (!popRef.current?.contains(e.target as Node)) setOpen(false)
+      if (!popRef.current?.contains(e.target as Node)) updatePosition()
     }
     document.addEventListener('mousedown', onDown)
     document.addEventListener('scroll', onScroll, true)
@@ -34,16 +42,14 @@ export function FilterMenu({ filter, onChange, placeholder, selectionValue }: {
   }, [open])
 
   const toggleOpen = () => {
-    if (!open && rootRef.current) {
-      const rect = rootRef.current.getBoundingClientRect()
-      setPos({ top: rect.bottom + 6, left: Math.max(8, Math.min(rect.left, window.innerWidth - 436)) })
-    }
+    if (!open) updatePosition()
     setOpen(v => !v)
   }
 
   const add = () => {
     onChange(addFilterValue(filter, draft))
     setDraft('')
+    inputRef.current?.focus({ preventScroll: true })
   }
 
   return (
@@ -58,7 +64,7 @@ export function FilterMenu({ filter, onChange, placeholder, selectionValue }: {
       {open && pos && (
         <div className="filter-pop" ref={popRef} style={{ top: pos.top, left: pos.left }}>
           <div className="filter-add">
-            <input className="mono" placeholder={placeholder} value={draft} autoFocus
+            <input ref={inputRef} className="mono" placeholder={placeholder} value={draft} autoFocus aria-describedby={hintId}
               onChange={e => setDraft(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') add() }} />
             <button className="filter-round" title="Add filter value" disabled={!draft.trim()} onClick={add}>
@@ -68,6 +74,9 @@ export function FilterMenu({ filter, onChange, placeholder, selectionValue }: {
                 <path d="M12 8v8M8 12h8" />
               </svg>
             </button>
+            <p className="filter-hint" id={hintId}>
+              <code>*</code> is a wildcard for zero or more characters.
+            </p>
           </div>
           {filter.items.length === 0 && <div className="hint">No filter values yet</div>}
           {filter.items.map((item, index) => (
@@ -90,12 +99,18 @@ export function FilterMenu({ filter, onChange, placeholder, selectionValue }: {
               </button>
             </div>
           ))}
-          <label className="filter-switch">
-            <input type="checkbox" checked={filter.mode === 'exclude'}
-              onChange={e => onChange({ ...filter, mode: e.target.checked ? 'exclude' : 'include' })} />
-            <span className="track" aria-hidden><i /></span>
-            Exclude items matching filter
-          </label>
+          <div className="filter-mode" role="group" aria-label="Filter mode">
+            <label>
+              <input type="radio" name={`${hintId}-mode`} checked={filter.mode === 'exclude'}
+                onChange={() => onChange({ ...filter, mode: 'exclude' })} />
+              Hide matches
+            </label>
+            <label>
+              <input type="radio" name={`${hintId}-mode`} checked={filter.mode === 'include'}
+                onChange={() => onChange({ ...filter, mode: 'include' })} />
+              Show only matches
+            </label>
+          </div>
           <div className="filter-footer">
             <button className="filter-link" disabled={!selectionValue}
               title={selectionValue ? `Add "${selectionValue}"` : 'Select a row first'}

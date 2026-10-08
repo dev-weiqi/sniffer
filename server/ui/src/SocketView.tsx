@@ -119,7 +119,7 @@ export function SocketView({ active, followLatest, emptyState, mockCount, onOpen
                 <span className="table-header-control"><span>Time</span><SortIcon descending={sortDesc} /></span>
               </th>
               <th style={{ width: 36 }}></th>
-              <th style={{ width: 160 }}><span className="table-header-control"><span>Event</span><FilterMenu filter={eventFilter} onChange={onEventFilterChange} placeholder="exact event name…"
+              <th style={{ width: 160 }}><span className="table-header-control"><span>Event</span><FilterMenu filter={eventFilter} onChange={onEventFilterChange} placeholder="Event name…"
                 selectionValue={selected ? displayEventName(selected.transport, selected.event, selected.payload, selected.label) : null} /></span></th>
               <th>Connection</th>
               <th style={{ width: 80 }}>Ack</th>

@@ -34,6 +34,52 @@ assert(
 assert(passesFilter({ ...exclude('ping'), mode: 'include' }, 'ping'), 'include keeps matches')
 assert(!passesFilter({ ...exclude('ping'), mode: 'include' }, 'pong'), 'include hides the rest')
 
+// ---- wildcard matching ----
+for (const [pattern, text, matched] of [
+  ['*/api/profiles/*', 'https://api.example.com/api/profiles/v1/me', true],
+  ['*favorites', 'api.example.com/favorites', true],
+  ['api.*', 'api.example.com', true],
+  ['api.*', 'prefix.api.example.com', false],
+  ['*favorites', 'favorites/extra', false],
+  ['a*b*c', 'a12b34c', true],
+  ['a*b*c', 'acb', false],
+  ['a*b', 'ab', true],
+  ['a**b', 'ab', true],
+  ['ab*bc', 'abc', false],
+  ['a*b*bc', 'abbc', true],
+  ['a*b*bc', 'abc', false],
+  ['*', '', true],
+  ['**', 'anything', true],
+  ['API/*', 'api/me', true],
+  ['*/a.b?x=[1]+(ok)$^|\\', '/a.b?x=[1]+(ok)$^|\\', true],
+  ['*/a.b?x=1', '/axb?x=1', false],
+] as const) {
+  assert(passesFilter(exclude(pattern), text) === !matched, `exclude wildcard ${pattern}: ${text}`)
+  assert(passesFilter({ ...exclude(pattern), mode: 'include' }, text) === matched, `include wildcard ${pattern}: ${text}`)
+}
+assert(passesFilter({ mode: 'exclude', items: [{ value: '*', enabled: false }] }, 'ping'), 'disabled wildcard is ignored')
+assert(!passesFilter(exclude('missing', 'api/*'), 'api/me'), 'any enabled pattern may match')
+assert(!passesFilter(exclude('ping'), 'shopping:updated', 'contains'), 'contains keeps substring behavior')
+assert(!passesFilter(exclude('p*g'), 'shopping:updated', 'contains'), 'contains supports wildcards within text')
+assert(passesFilter(exclude('g*p'), 'shopping', 'contains'), 'contains wildcard preserves order')
+
+// ---- URL patterns with optional scheme ----
+for (const [pattern, url, matched] of [
+  ['assets.goplayone.com/*', 'https://assets.goplayone.com/image.png', true],
+  ['assets.goplayone.com/*', 'http://assets.goplayone.com/image.png', true],
+  ['EXAMPLE.COM/a?x=1', 'HTTPS://example.com/a?x=1', true],
+  ['example.com/a', 'https://example.com/ab', false],
+  ['example.com/*', 'https://other.example.com/a', false],
+  ['https://example.com/*', 'https://example.com/a', true],
+  ['https://example.com/*', 'http://example.com/a', false],
+  ['http*://example.com/*', 'https://example.com/a', true],
+  ['*amazonaws.com*', 'https://bucket.s3.amazonaws.com/image.png', true],
+] as const) {
+  assert(passesFilter(exclude(pattern), url, 'url') === !matched, `exclude URL ${pattern}: ${url}`)
+  assert(passesFilter({ ...exclude(pattern), mode: 'include' }, url, 'url') === matched, `include URL ${pattern}: ${url}`)
+}
+assert(passesFilter(exclude('example.com/*'), 'https://example.com/a'), 'other filters retain exact boundaries')
+
 // ---- addFilterValue ----
 {
   const one = addFilterValue(EMPTY_FILTER, ' count_unread ')
