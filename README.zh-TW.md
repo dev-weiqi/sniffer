@@ -9,7 +9,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="授權條款"></a>
 </p>
 
-Sniffer 擷取偵錯版 App 的 HTTP 與 Socket 流量，讓你透過本機 UI 或 MCP 模擬回應。Kotlin Multiplatform SDK 支援 OkHttp、Ktor Client、Socket.IO 與 Ktor WebSocket。
+Sniffer 擷取偵錯版 App 的 HTTP 與 Socket 流量，讓你透過本機 UI 或 MCP 模擬回應。Kotlin Multiplatform 與原生 iOS SDK 支援 OkHttp、Ktor Client、URLSession、Socket.IO 與 WebSocket。
 
 ![Sniffer API 流量面板](docs/assets/sniffer-api-preview.png)
 
@@ -93,6 +93,10 @@ xattr -d com.apple.quarantine /Applications/Sniffer.app
 | Ktor Client | `io.github.dev-weiqi.sniffer:ktor` |
 | Socket.IO | `io.github.dev-weiqi.sniffer:socketio` |
 | Ktor WebSocket | `io.github.dev-weiqi.sniffer:ktor-ws` |
+| 原生 iOS HTTP 與 WebSocket | Swift Package 產品 `SnifferKit` |
+| 原生 iOS Socket.IO | Swift Package 產品 `SnifferSocketIO` |
+
+原生 iOS 的 HTTP、Socket.IO 與 `URLSessionWebSocketTask` 整合方式，請參閱[原生 iOS 整合指南](client/ios/README.zh-TW.md)。
 
 ```kotlin
 val snifferVersion = "0.10.0"

@@ -88,7 +88,7 @@ adb shell setprop debug.sniffer.host 192.168.1.20
 
 ### Mock 編輯器
 
-從 API 開啟 HTTP 規則，從 Socket 開啟 Socket 規則。背景服務按裝置儲存規則，並將變更傳給 SDK 在本機執行。背景服務離線後，已同步的規則仍可使用。
+從 API 開啟 HTTP 規則，從 Socket 開啟 Socket 規則。背景服務按裝置儲存規則，並將變更傳給 SDK。此分支會在背景服務斷線時清除啟用中的規則，讓 App 恢復原有的網路行為。
 
 * **HTTP rules**：比對方法（ANY 表示任意方法）與完整請求路徑，使用指定的狀態、標頭及內容回應，可選擇加入延遲。命中的請求不會送到網路。
 * 內容與 socket 負載會在每次命中時展開 `${randomId}`、`${now}`（ISO-8601 UTC）及 `${randomString(min~max)}`。
