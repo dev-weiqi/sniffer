@@ -10,7 +10,9 @@
 </p>
 
 
-Sniffer 是 Kotlin Multiplatform SDK 與本機監控工具，用來在開發期間檢視與模擬行動應用程式的網路流量。支援 **OkHttp**、**Ktor Client**、**Socket.IO** 與 **Ktor WebSocket**。
+Sniffer 提供 Kotlin Multiplatform 與原生 iOS SDK，搭配本機監控工具，在開發期間檢視與模擬行動應用程式的網路流量。
+
+支援 **OkHttp**、**Ktor Client**、**URLSession**、**Socket.IO** 與 **WebSocket**。
 
 ![Sniffer API 流量面板](docs/assets/sniffer-api-preview.png)
 
@@ -72,6 +74,10 @@ xattr -d com.apple.quarantine /Applications/Sniffer.app
 | Ktor Client | `io.github.dev-weiqi.sniffer:ktor` |
 | Socket.IO | `io.github.dev-weiqi.sniffer:socketio` |
 | Ktor WebSocket | `io.github.dev-weiqi.sniffer:ktor-ws` |
+| 原生 iOS HTTP 與 WebSocket | Swift Package 產品 `SnifferKit` |
+| 原生 iOS Socket.IO | Swift Package 產品 `SnifferSocketIO` |
+
+原生 iOS 的 HTTP、Socket.IO 與 `URLSessionWebSocketTask` 整合方式，請參閱[原生 iOS 整合指南](client/ios/README.zh-TW.md)。
 
 ```kotlin
 val snifferVersion = "0.7.2"
