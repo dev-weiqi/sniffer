@@ -1,3 +1,5 @@
+English | [繁體中文](PROTOCOL.zh-TW.md)
+
 # Sniffer Wire Protocol v1
 
 Every message is a WebSocket text frame carrying flat JSON with a `type` field.

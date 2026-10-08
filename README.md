@@ -1,3 +1,5 @@
+English | [繁體中文](README.zh-TW.md)
+
 <h1 align="center">Sniffer</h1>
 
 <p align="center">
@@ -59,7 +61,8 @@ npm install -g @dev-weiqi/sniffer@0.7.3
 
 ## Desktop app
 
-A macOS build bundles the daemon and UI in one window, no Node.js needed. Download the
+The macOS app bundles the daemon and UI in one window. Install [Node.js](https://nodejs.org)
+20+ before using it. Download the
 `.dmg` from [Releases](https://github.com/dev-weiqi/sniffer/releases)
 (`Sniffer-server-mac-aarch64.dmg` for Apple Silicon, `Sniffer-server-mac-x64.dmg` for
 Intel) and drag `Sniffer.app` into `/Applications`. The port is set in the app's settings.
@@ -234,65 +237,30 @@ session.send("ping")
 
 ## Firebase panel (Beta)
 
-Enable **Firebase · Beta** in the monitor's Settings to show the tab. It is hidden by
-default and the preference is saved locally. Hiding the panel does not stop capture.
-The panel shows only Analytics: explicit `logEvent` calls with their
-event names and parameter snapshots in a timeline. **All users** is the default; choose **No user ID** or a specific ID
-in the sidebar. **Include API** interleaves captured requests by their start time;
-select a request to inspect headers, bodies, timing, and mock/breakpoint actions.
-Nearby requests are context, not evidence that an event caused a request.
+Enable **Firebase · Beta** in Settings to inspect Analytics events and parameters.
+Search or filter by event name and user ID; **Include API** shows nearby requests.
+Only calls through the wrapper are captured, not Firebase's automatic events.
 
-HTTP requests snapshot the current `SnifferAnalytics.setUserId` value when captured.
-Pass the same identity changes your app sends to Analytics, including `null` to clear it. Legacy requests with no captured identity appear
-only under **All users**, rather than being assigned to an anonymous user.
-Search and user filters also apply to API requests. The **Name** filter includes or excludes case-insensitive partial names;
-**From selection** adds the selected name, and right-click **Copy name** copies the displayed name.
-Name filters are saved locally. **Clear Firebase**
-clears Firebase records across all devices and keeps API requests.
-The shared search field matches event names, parameter names and values (including nested data),
-and user IDs using case-insensitive substrings. It combines with the Name and user filters.
-Click events to expand their parameters inline; multiple events can remain open. Each parameter
-row can be copied, and the collapse-all icon next to the record count closes all expanded events.
-Matching names and values are highlighted. Newest events appear first, with a purple dot on the
-latest visible record and a subtle entrance animation for new arrivals. Reduced-motion settings
-use a fade without movement.
-
-Wrap the Firebase instance in your existing event facade. Add `firebase` for debug and
-`firebase-noop` for release, at the same Sniffer version as `core`. Keep your existing
-Firebase Analytics dependency and BoM; Sniffer does not choose the host's Firebase version.
+Add `firebase` for debug and `firebase-noop` for release, using the same Sniffer
+version as `core`. Keep your existing Firebase Analytics dependency and BoM.
+After Firebase initialization, wrap the instance in your app's event facade:
 
 ```kotlin
 import com.google.firebase.Firebase
 import com.google.firebase.analytics.analytics
 import dev.weiqi.sniffer.firebase.SnifferFirebaseAnalytics
 
-private lateinit var firebaseAnalytics: SnifferFirebaseAnalytics
-
-fun init() {
-    firebaseAnalytics = SnifferFirebaseAnalytics.wrap(Firebase.analytics)
+val analytics = SnifferFirebaseAnalytics.wrap(Firebase.analytics)
+analytics.setUserId("user-7") // Pass null to clear the user ID.
+analytics.logEvent("select_item") {
+    param("item_id", "42")
 }
-
-fun track(eventId: String, params: Map<String, String>?) {
-    firebaseAnalytics.logEvent(eventId) {
-        params?.forEach { (key, value) -> param(key, value) }
-    }
-}
-
-fun setUserId(id: String?) = firebaseAnalytics.setUserId(id)
 ```
 
-Both `logEvent(name, Bundle?)` and `logEvent(name) { param(...) }` call the supplied Firebase
-instance. The debug wrapper captures after Firebase's `logEvent` returns normally. The protocol records whether the SDK call returned normally, which is not cloud delivery
-confirmation; use Firebase DebugView for received events. Original Firebase exceptions propagate normally; local capture errors
-never prevent the Firebase call. The release wrapper forwards directly, with no Sniffer core
-dependency and no capture code.
-
-No extra start call, file path, or Timber tree is needed. Parameters preserve strings,
-numbers, booleans, nulls, nested Bundles, and Bundle arrays/lists; oversized captures are marked
-truncated. Only explicit wrapped calls appear, not Firebase's automatic events.
-For KMP or local samples, `dev.weiqi.sniffer.core.SnifferAnalytics` accepts parameter maps;
-without a Firebase callback, those events are marked **Local capture**. Both samples provide
-Event, With params, and No user ID actions.
+Firebase calls still run normally; the release wrapper disables only local capture.
+Captured events do not confirm cloud delivery; use Firebase DebugView for that.
+For KMP or local testing, use `SnifferAnalytics` with parameter maps; calls without
+a Firebase callback appear as **Local capture**.
 
 ## Use the UI
 

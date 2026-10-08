@@ -1,3 +1,5 @@
+English | [繁體中文](GUIDE.zh-TW.md)
+
 # Sniffer
 
 A self-hosted Flipper replacement for monitoring and mocking an app's HTTP and Socket traffic.
