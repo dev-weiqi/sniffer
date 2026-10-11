@@ -28,6 +28,9 @@ const val DEFAULT_PORT = 9091
 /** Bodies larger than this are truncated (approximated by UTF-16 length). */
 const val MAX_BODY_CHARS = 1024 * 1024
 
+/** Maximum raw image bytes captured for previews; text keeps its separate limit. */
+const val MAX_IMAGE_BYTES = 10 * 1024 * 1024
+
 data class CappedBody(val body: String?, val size: Long, val truncated: Boolean)
 
 fun capBody(raw: String?): CappedBody = when {

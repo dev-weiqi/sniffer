@@ -114,6 +114,7 @@ s = dispatch(s, {
     headers: { 'content-type': 'application/json' },
     body: '{"ok":true}',
     bodyBase64: false,
+    bodyTruncated: true,
     bodySize: 11,
     durationMs: 12,
     delayedMs: 4,
@@ -122,6 +123,7 @@ s = dispatch(s, {
   },
 })
 assertEqual(s.http[0].status, 200, 'http-response fills status')
+assertEqual(s.http[0].respTruncated, true, 'http-response preserves SDK capture limit flag')
 assertEqual(s.http[0].delayedMs, 4, 'http-response stores delay')
 assertEqual(s.http[0].mocked, true, 'http-response stores mock marker')
 
@@ -141,6 +143,7 @@ s = dispatch(s, {
   },
 })
 assertEqual(s.http[0].delayedMs, 4, 'http-response keeps earlier delay when update omits it')
+assertEqual(s.http[0].respTruncated, false, 'later full response clears the capture limit flag')
 
 s = dispatch(s, {
   type: 'event',

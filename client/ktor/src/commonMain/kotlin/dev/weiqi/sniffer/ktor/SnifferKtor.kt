@@ -7,6 +7,7 @@ import dev.weiqi.sniffer.core.HttpMockRule
 import dev.weiqi.sniffer.core.HttpRequestMsg
 import dev.weiqi.sniffer.core.HttpResponseMsg
 import dev.weiqi.sniffer.core.MAX_BODY_CHARS
+import dev.weiqi.sniffer.core.MAX_IMAGE_BYTES
 import dev.weiqi.sniffer.core.MockRegistry
 import dev.weiqi.sniffer.core.Sniffer
 import dev.weiqi.sniffer.core.capBody
@@ -411,7 +412,7 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
                 )
                 return@on call
             }
-            // images: capture raw bytes (<= 1MB) as base64 so the UI can render a preview
+            // Capture saved images within the separate preview limit; streaming stays untouched.
             if (!isUpgrade && ct?.contentType.equals("image", ignoreCase = true)) {
                 var b64: String? = null
                 var size = 0L
@@ -420,7 +421,7 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
                     resultCall = call.save()
                     val bytes = resultCall.body<ByteArray>()
                     size = bytes.size.toLong()
-                    if (bytes.size <= MAX_BODY_CHARS) b64 = encodeBase64(bytes) else truncated = true
+                    if (bytes.size <= MAX_IMAGE_BYTES) b64 = encodeBase64(bytes) else truncated = true
                 }
                 Sniffer.report(
                     HttpResponseMsg(

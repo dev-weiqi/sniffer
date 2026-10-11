@@ -6,6 +6,7 @@ import dev.weiqi.sniffer.core.BreakpointResolution
 import dev.weiqi.sniffer.core.HttpRequestMsg
 import dev.weiqi.sniffer.core.HttpResponseMsg
 import dev.weiqi.sniffer.core.MAX_BODY_CHARS
+import dev.weiqi.sniffer.core.MAX_IMAGE_BYTES
 import dev.weiqi.sniffer.core.MockRegistry
 import dev.weiqi.sniffer.core.Sniffer
 import dev.weiqi.sniffer.core.capBody
@@ -232,19 +233,20 @@ internal class SnifferInterceptor(
             )
             return response
         }
-        // images: capture the raw bytes (<= 1MB) as base64 so the UI can render a preview
+        // Images have a separate preview limit; do not buffer known oversized downloads.
         if (isImage(respCt)) {
             // peekBody blocks until byteCount bytes or EOF: only safe when the length is known
-            val bytes = if (response.body.contentLength() >= 0)
-                runCatching { response.peekBody((MAX_BODY_CHARS + 1).toLong()).bytes() }.getOrNull()
+            val length = response.body.contentLength()
+            val bytes = if (length in 0..MAX_IMAGE_BYTES.toLong())
+                runCatching { response.peekBody((MAX_IMAGE_BYTES + 1).toLong()).bytes() }.getOrNull()
             else null
-            val fits = bytes != null && bytes.size <= MAX_BODY_CHARS
+            val fits = bytes != null && bytes.size <= MAX_IMAGE_BYTES
             Sniffer.report(
                 HttpResponseMsg(
                     id = id, status = response.code, headers = response.headers.toMap(),
                     body = if (fits) encodeBase64(bytes!!) else null,
-                    bodySize = bytes?.size?.toLong() ?: 0,
-                    bodyTruncated = bytes != null && !fits,
+                    bodySize = bytes?.size?.toLong() ?: length.coerceAtLeast(0),
+                    bodyTruncated = length > MAX_IMAGE_BYTES || (bytes != null && !fits),
                     durationMs = durationMs, mocked = false, error = null,
                     timestamp = now(), bodyBase64 = fits, delayedMs = delayedMs,
                 )

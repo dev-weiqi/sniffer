@@ -8,6 +8,7 @@ import dev.weiqi.sniffer.core.DeviceMessage
 import dev.weiqi.sniffer.core.HttpMockRule
 import dev.weiqi.sniffer.core.HttpRequestMsg
 import dev.weiqi.sniffer.core.HttpResponseMsg
+import dev.weiqi.sniffer.core.MAX_IMAGE_BYTES
 import dev.weiqi.sniffer.core.MAX_BODY_CHARS
 import dev.weiqi.sniffer.core.MockRegistry
 import dev.weiqi.sniffer.core.MockRules
@@ -297,6 +298,27 @@ class SnifferKtorTest {
         assertTrue(report.bodyBase64)
         assertEquals(3, report.bodySize)
         client.close()
+    }
+
+    @Test
+    fun image_preview_limit_preserves_the_full_response() = runBlocking {
+        for (size in listOf(MAX_BODY_CHARS + 1, MAX_IMAGE_BYTES, MAX_IMAGE_BYTES + 1)) {
+            val reports = captureReports()
+            val bytes = ByteArray(size) { 42 }
+            val client = HttpClient(MockEngine {
+                respond(bytes, headers = headersOf(HttpHeaders.ContentType, "image/webp"))
+            }) { install(SnifferKtor) }
+            try {
+                assertTrue(bytes.contentEquals(client.get("http://example.test/image").bodyAsBytes()))
+                val report = reports.filterIsInstance<HttpResponseMsg>().last()
+                val fits = size <= MAX_IMAGE_BYTES
+                assertEquals(fits, report.bodyBase64)
+                assertEquals(!fits, report.bodyTruncated)
+                assertEquals(size.toLong(), report.bodySize)
+                if (fits) assertTrue(bytes.contentEquals(java.util.Base64.getDecoder().decode(report.body)))
+                else assertNull(report.body)
+            } finally { client.close() }
+        }
     }
 
     @Test

@@ -97,6 +97,7 @@ export interface HttpRow {
   respHeaders?: Record<string, string>
   respBody?: string | null
   respBase64?: boolean
+  respTruncated?: boolean
   respSize?: number
   durationMs?: number
   delayedMs?: number
@@ -223,6 +224,7 @@ function applyDeviceMessage(state: State, deviceId: string, m: Msg): State {
       const http = state.http.map(r => r.deviceId === deviceId && r.id === m.id ? {
         ...r, status: m.status, respHeaders: m.headers ?? {}, respBody: m.body,
         respBase64: m.bodyBase64 ?? false,
+        respTruncated: m.bodyTruncated === true,
         respSize: m.bodySize ?? 0, durationMs: m.durationMs, mocked: m.mocked,
         error: m.error,
         // absent on follow-up updates (e.g. SSE tee) must not erase an earlier value

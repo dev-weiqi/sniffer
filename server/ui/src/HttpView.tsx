@@ -470,6 +470,7 @@ export function HttpDetail({ row, query, onMock, onArm, onClose }: {
                     view={responseIsJson ? responseView : undefined} expandAll={responseExpandAll} />)
           : <div className="dim pad">
               {row.status === undefined ? 'Waiting for response…'
+                : row.respTruncated ? 'Response body exceeds the SDK capture limit. Image previews require an SDK with a large enough image limit.'
                 : isSse(row) ? 'SSE stream — events appear here as the app reads them'
                 : '(empty or binary)'}
             </div>}
