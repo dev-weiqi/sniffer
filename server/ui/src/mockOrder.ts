@@ -7,6 +7,25 @@
 
 import type { HttpMockRule, SocketMockRule } from './state.js'
 
+export interface RuleReference { id: string; number: number }
+
+/** Display numbers follow the current list; persisted rule IDs never change. */
+export function ruleConflicts<T extends { id: string; enabled: boolean }>(rules: T[], signature: (rule: T) => string): Map<string, RuleReference[]> {
+  const groups = new Map<string, RuleReference[]>()
+  rules.forEach((rule, index) => {
+    if (!rule.enabled) return
+    const key = signature(rule)
+    const group = groups.get(key) ?? []
+    group.push({ id: rule.id, number: index + 1 })
+    groups.set(key, group)
+  })
+  const conflicts = new Map<string, RuleReference[]>()
+  for (const group of groups.values()) {
+    if (group.length > 1) for (const rule of group) conflicts.set(rule.id, group.filter(peer => peer.id !== rule.id))
+  }
+  return conflicts
+}
+
 export function httpMatcherSignature(rule: Pick<HttpMockRule, 'method' | 'urlPattern' | 'queryParams' | 'bodyMatch'>): string {
   return JSON.stringify([
     rule.method?.toUpperCase() ?? 'ANY', rule.urlPattern,

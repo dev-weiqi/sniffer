@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { HttpMockRule, Mocks, SocketConn, SocketMockRule } from './state'
 import { api } from './state'
 import { newRuleId, prettyJson, prettySocketRule, unwrapJsonString, wrapJsonString } from './util'
-import { applyOrder, byOrder, httpMatcherSignature as httpSig, socketMatcherSignature as socketSig, payloadMatchError, loadIds, loadOrder, orderOf, saveIds, saveOrder } from './mockOrder'
+import { ruleConflicts, type RuleReference, applyOrder, byOrder, httpMatcherSignature as httpSig, socketMatcherSignature as socketSig, payloadMatchError, loadIds, loadOrder, orderOf, saveIds, saveOrder } from './mockOrder'
 import { pointAt, resolvePushTarget } from './pushTarget'
 import { buildExportRules, countImportedRules, createFullExportSelection, importedCopies, parseImportedRules, type ExportRuleSelection, type ExportRulesSource, type PushEventRule } from './exportMocks'
 import { useConfirm } from './Confirm'
@@ -17,11 +17,7 @@ const PlaceholderTokens = [
 
 /** ids of enabled rules whose matcher collides with another enabled rule */
 function duplicateIds<T extends { id: string; enabled: boolean }>(rules: T[], sig: (r: T) => string): Set<string> {
-  const groups = new Map<string, T[]>()
-  for (const r of rules) if (r.enabled) groups.set(sig(r), [...(groups.get(sig(r)) ?? []), r])
-  const out = new Set<string>()
-  for (const g of groups.values()) if (g.length > 1) for (const r of g) out.add(r.id)
-  return out
+  return new Set(ruleConflicts(rules, sig).keys())
 }
 
 /** SDK matching is first-wins: reorder duplicates newest-first in the sync payload only,
@@ -129,15 +125,12 @@ function CloseIcon() {
   )
 }
 
-/** The X badge distinguishes clearing the list from a single rule's plain trash can. */
+/** List lines distinguish clearing every rule from deleting a single rule. */
 function ClearListIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M3 6h14M7 6V3h6v3M5 6l1 14h8l.4-5" />
-      <path d="M9 10v6M13 10v3" />
-      <circle cx="18" cy="18" r="5" fill="var(--bg-panel)" />
-      <path d="m16 16 4 4m0-4-4 4" strokeWidth="1" />
+      <path d="M3 5h15M3 10h10M3 15h7M15 14l6 6M21 14l-6 6" />
     </svg>
   )
 }
@@ -223,6 +216,8 @@ export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supports
   onClose: () => void
 }) {
   const confirm = useConfirm()
+  const modalRef = useRef<HTMLDivElement>(null)
+  useEffect(() => { modalRef.current?.focus({ preventScroll: true }) }, [])
   const [draft, setDraft] = useState<Mocks>(mocks)
   const [dirty, setDirty] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -365,8 +360,8 @@ export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supports
     }).catch(() => alert('Not a valid mock rules JSON file'))
   }
 
-  const httpDups = duplicateIds(draft.http, httpSig)
-  const socketDups = duplicateIds(draft.socket, socketSig)
+  const httpConflicts = ruleConflicts(draft.http, httpSig)
+  const socketConflicts = ruleConflicts(draft.socket, socketSig)
 
   if (!deviceId) {
     return null
@@ -376,20 +371,20 @@ export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supports
     id: r.id,
     badge: r.method ?? 'ANY',
     label: r.name || r.urlPattern || '(new rule)',
-    sub: [[r.name ? r.urlPattern : '', new URLSearchParams(r.queryParams).toString()].filter(Boolean).join('?'),
-      typeof r.bodyMatch === 'string' ? r.bodyMatch.trim() : ''].filter(Boolean).join(' · ') || undefined,
+    sub: [r.name ? r.urlPattern : '', Object.keys(r.queryParams ?? {}).length ? `${Object.keys(r.queryParams!).length} query parameters` : '',
+      conditionSummary(r.bodyMatch, 'body')].filter(Boolean).join(' · ') || undefined,
     enabled: r.enabled,
     starred: r.starred,
-    dup: httpDups.has(r.id),
+    conflicts: httpConflicts.get(r.id),
   }))
   const socketRows: MockRow[] = draft.socket.map(r => ({
     id: r.id,
     badge: r.transport === 'ktor-ws' ? 'WS' : 'SIO',
     label: r.name || r.event || '(new rule)',
-    sub: [r.name ? r.event : '', typeof r.payloadMatch === 'string' ? r.payloadMatch.trim() : ''].filter(Boolean).join(' · ') || undefined,
+    sub: [r.name ? r.event : '', conditionSummary(r.payloadMatch, 'payload')].filter(Boolean).join(' · ') || undefined,
     enabled: r.enabled,
     starred: r.starred,
-    dup: socketDups.has(r.id),
+    conflicts: socketConflicts.get(r.id),
   }))
 
   const httpIndex = draft.http.findIndex(r => r.id === selHttp)
@@ -422,27 +417,46 @@ export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supports
 
   return (
     <div className="modal-backdrop mocks-backdrop" onMouseDown={onClose}>
-      <div className="modal mocks-modal" role="dialog" aria-modal="true" aria-label={title}
-        onMouseDown={e => e.stopPropagation()}>
+      <div className="modal mocks-modal" ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title}
+        onMouseDown={e => e.stopPropagation()}
+        onKeyDown={e => {
+          if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey ||
+              !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) ||
+              (scope === 'socket' && socketTab !== 'rules')) return
+          if ((e.target as HTMLElement).closest('input, textarea, select, [contenteditable="true"], [role="tablist"], .mocks-modal-tabs')) return
+          const rows = scope === 'http' ? httpRows : socketRows
+          if (!rows.length) return
+          e.preventDefault()
+          e.stopPropagation()
+          const at = scope === 'http' ? httpAt : socketAt
+          const step = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : -1
+          const next = rows[Math.max(0, Math.min(rows.length - 1, at + step))]
+          if (scope === 'http') setSelHttp(next.id)
+          else setSelSocket(next.id)
+          e.currentTarget.focus({ preventScroll: true })
+        }}>
         <div className="mocks-modal-head">
           <h2>{title}</h2>
+          {scope === 'socket' && (
+            <div className="mocks-modal-tabs" role="group" aria-label="Socket mock type">
+              <button aria-pressed={socketTab === 'rules'} data-active={socketTab === 'rules' || undefined} onClick={() => setSocketTab('rules')}>
+                Socket rules
+              </button>
+              <button aria-pressed={socketTab === 'push'} data-active={socketTab === 'push' || undefined} onClick={() => setSocketTab('push')}>
+                Server push events
+              </button>
+            </div>
+          )}
           <span className="dim">
-            {totalCount} {totalCount === 1 ? 'rule' : 'rules'} · {enabledCount} enabled
+            {scope === 'socket' && socketTab === 'push'
+              ? `${pushCount} ${pushCount === 1 ? 'event' : 'events'}`
+              : `${totalCount} ${totalCount === 1 ? 'rule' : 'rules'} · ${enabledCount} enabled`}
           </span>
           <span className="spacer" />
           <button className="ghost icon-btn" title="Close" onClick={onClose}><CloseIcon /></button>
         </div>
 
-        {scope === 'socket' && (
-          <div className="mocks-modal-tabs">
-            <button data-active={socketTab === 'rules' || undefined} onClick={() => setSocketTab('rules')}>
-              Socket rules{draft.socket.length > 0 && <span className="tab-count">{draft.socket.length}</span>}
-            </button>
-            <button data-active={socketTab === 'push' || undefined} onClick={() => setSocketTab('push')}>
-              Server push events{pushCount > 0 && <span className="tab-count">{pushCount}</span>}
-            </button>
-          </div>
-        )}
+
 
         {showPlaceholders && <PlaceholderGuide />}
 
@@ -464,7 +478,7 @@ export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supports
             />
             <div className="mocks-detail">
               {httpAt < 0 ? <div className="empty">No HTTP rules yet — add one to start mocking</div> : (
-                <HttpRuleEditor deviceId={deviceId} key={`${deviceId}:${draft.http[httpAt].id}`} rule={draft.http[httpAt]} dup={httpDups.has(draft.http[httpAt].id)}
+                <HttpRuleEditor deviceId={deviceId} key={`${deviceId}:${draft.http[httpAt].id}`} rule={draft.http[httpAt]} number={httpAt + 1} conflicts={httpConflicts.get(draft.http[httpAt].id) ?? []} onSelectConflict={setSelHttp}
                   prefilled={prefilledRules.current.has(draft.http[httpAt].id)}
                   supportsQueryMocks={supportsQueryMocks} supportsBodyMocks={supportsBodyMocks}
                   onDuplicate={() => {
@@ -498,7 +512,7 @@ export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supports
             />
             <div className="mocks-detail">
               {socketAt < 0 ? <div className="empty">No socket rules yet — add one to start mocking</div> : (
-                <SocketRuleEditor deviceId={deviceId} supportsSocketPayloadMocks={supportsSocketPayloadMocks} key={`${deviceId}:${draft.socket[socketAt].id}`} rule={draft.socket[socketAt]} dup={socketDups.has(draft.socket[socketAt].id)}
+                <SocketRuleEditor deviceId={deviceId} supportsSocketPayloadMocks={supportsSocketPayloadMocks} key={`${deviceId}:${draft.socket[socketAt].id}`} rule={draft.socket[socketAt]} number={socketAt + 1} conflicts={socketConflicts.get(draft.socket[socketAt].id) ?? []} onSelectConflict={setSelSocket}
                   prefilled={prefilledRules.current.has(draft.socket[socketAt].id)}
                   onDuplicate={() => {
                     const copy = { ...draft.socket[socketAt], id: newRuleId(), createdAt: Date.now() }
@@ -586,6 +600,22 @@ function ImportResultModal({ counts, onClose }: {
   )
 }
 
+function conditionSummary(value: string | undefined, label: string): string {
+  if (!value?.trim()) return ''
+  if (payloadMatchError(value)) return `Invalid ${label} condition`
+  const count = Object.keys(JSON.parse(value)).length
+  return count ? `${count} ${label} fields` : ''
+}
+
+function RuleConflicts({ conflicts, onSelect }: { conflicts: RuleReference[]; onSelect: (id: string) => void }) {
+  if (!conflicts.length) return null
+  return <div className="hint dup-warning mock-conflicts">
+    <WarningIcon /><div>Same matcher as {conflicts.map((peer, index) => <span key={peer.id}>
+      {index > 0 && ', '}<button className="mock-conflict-link" onClick={() => onSelect(peer.id)}>#{peer.number}</button>
+    </span>)}.<span className="mock-conflict-detail">The newest enabled rule takes effect.</span></div>
+  </div>
+}
+
 export interface MockRow {
   id: string
   badge: string
@@ -594,10 +624,10 @@ export interface MockRow {
   sub?: string
   enabled?: boolean
   starred?: boolean
-  dup?: boolean
+  conflicts?: RuleReference[]
 }
 
-/** Master list of the modal: never truncates a label -- long paths and names wrap instead. */
+/** Compact rule summaries; the selected editor retains every condition and the full path. */
 function MockList({ rows, selectedId, onSelect, onToggle, onToggleAll, onAdd, addLabel, onClearAll, placeholdersOn, onPlaceholders }: {
   rows: MockRow[]
   selectedId: string | null
@@ -610,6 +640,8 @@ function MockList({ rows, selectedId, onSelect, onToggle, onToggleAll, onAdd, ad
   placeholdersOn?: boolean
   onPlaceholders?: () => void
 }) {
+  const listRef = useRef<HTMLDivElement>(null)
+  useEffect(() => { listRef.current?.querySelector('[data-selected]')?.scrollIntoView({ block: 'nearest' }) }, [selectedId])
   const allEnabled = rows.every(row => row.enabled !== false)
   return (
     <div className="mocks-list">
@@ -629,25 +661,21 @@ function MockList({ rows, selectedId, onSelect, onToggle, onToggleAll, onAdd, ad
           <button className="pill-btn" data-on={placeholdersOn || undefined} onClick={onPlaceholders}>Placeholders</button>
         )}
       </div>
-      <div className="mocks-list-scroll">
-        {rows.map(row => (
+      <div className="mocks-list-scroll" ref={listRef}>
+        {rows.map((row, index) => (
           <div key={row.id} className="mocks-list-row" data-selected={row.id === selectedId || undefined}
-            data-off={row.enabled === false || undefined} onClick={() => onSelect(row.id)}>
+            data-off={row.enabled === false || undefined} data-rule-number={index + 1} onClick={() => onSelect(row.id)}>
             {onToggle && (
               <label className="toggle" onClick={e => e.stopPropagation()}>
-                <input type="checkbox" checked={row.enabled !== false} onChange={() => onToggle(row.id)} />
+                <input type="checkbox" aria-label={`Enable rule #${index + 1}`} checked={row.enabled !== false} onChange={() => onToggle(row.id)} />
               </label>
             )}
-            <span className="mocks-list-badge">{row.badge}</span>
-            <span className="mocks-list-name">
-              <span className="mocks-list-label">{row.label}</span>
-              {row.sub && <span className="mocks-list-sub mono">{row.sub}</span>}
-            </span>
-            {row.dup && (
-              <span className="mocks-list-dup" title="Another enabled rule has the same matcher — the newest one takes effect">
-                <WarningIcon />
-              </span>
-            )}
+            <button className="mocks-list-name" aria-pressed={row.id === selectedId}>
+              <span className="mocks-list-meta"><span className="rule-number">#{index + 1}</span><span className="mocks-list-badge">{row.badge}</span></span>
+              <span className="mocks-list-label" title={row.label}>{row.label}</span>
+              {row.sub && <span className="mocks-list-sub" title={row.sub}>{row.sub}</span>}
+              {!!row.conflicts?.length && <span className="mocks-list-conflicts">Conflicts with {row.conflicts.map(peer => `#${peer.number}`).join(', ')}</span>}
+            </button>
             {row.starred && <span className="mocks-list-star"><StarIcon filled /></span>}
           </div>
         ))}
@@ -667,12 +695,12 @@ function exportCategories(source: ExportRulesSource): ExportCategory[] {
   return [
     { key: 'http', title: 'HTTP rules', rows: source.http.map(r => ({
       id: r.id, label: r.name || r.urlPattern || '(new rule)',
-      sub: [[`${r.method ?? 'ANY'} ${r.urlPattern}`, new URLSearchParams(r.queryParams).toString()].filter(Boolean).join('?'),
-        typeof r.bodyMatch === 'string' ? r.bodyMatch.trim() : ''].filter(Boolean).join(' · '), badge: String(r.status),
+      sub: [[`${r.method ?? 'ANY'} ${r.urlPattern}`, Object.keys(r.queryParams ?? {}).length ? `${Object.keys(r.queryParams!).length} query parameters` : ''].filter(Boolean).join('?'),
+        conditionSummary(r.bodyMatch, 'body')].filter(Boolean).join(' · '), badge: String(r.status),
     })) },
     { key: 'socket', title: 'Socket rules', rows: source.socket.map(r => ({
       id: r.id, label: r.name || r.event || '(new rule)',
-      sub: [r.event, typeof r.payloadMatch === 'string' ? r.payloadMatch.trim() : ''].filter(Boolean).join(' · '), badge: r.transport,
+      sub: [r.event, conditionSummary(r.payloadMatch, 'payload')].filter(Boolean).join(' · '), badge: r.transport,
     })) },
     { key: 'push', title: 'Push events', rows: source.push.map(r => ({
       id: r.id, label: r.name || r.event || '(new event)', sub: r.event, badge: 'push',
@@ -916,7 +944,7 @@ function PushEventPanel({ active, conns, deviceId, appId, prefill, onConsumed, o
       />
       <div className="mocks-detail">
         {!current ? <div className="empty">No push events yet — add one to send a server event</div> : (
-          <PushRecordCard key={current.id} record={current} conns={conns} deviceId={deviceId} canStar={sharedKey !== null}
+          <PushRecordCard key={current.id} record={current} number={Math.max(0, at) + 1} conns={conns} deviceId={deviceId} canStar={sharedKey !== null}
             onChange={changeRecord}
             onDelete={() => deleteRecord(current.id)}
             onDuplicate={() => duplicateRecord(current)}
@@ -941,8 +969,9 @@ function loadRecords(key: string): PushRecord[] {
   }
 }
 
-function PushRecordCard({ record, conns, deviceId, canStar, onChange, onDelete, onDuplicate }: {
+function PushRecordCard({ record, number, conns, deviceId, canStar, onChange, onDelete, onDuplicate }: {
   record: PushRecord
+  number: number
   conns: SocketConn[]
   deviceId: string
   canStar: boolean
@@ -975,11 +1004,13 @@ function PushRecordCard({ record, conns, deviceId, canStar, onChange, onDelete, 
   }
 
   return (
-    <div className="rule-card">
+    <div className="rule-card mock-rule-editor">
+      <div className="mock-identity">
       <div className="rule-name-row">
         <TagIcon />
         <input className="rule-name" placeholder="name this push… (optional)" value={record.name ?? ''}
           onChange={e => onChange({ ...record, name: e.target.value || undefined })} />
+        <span className="rule-number">#{number}</span>
         {canStar && <StarButton starred={record.starred} onToggle={() => onChange({ ...record, starred: !record.starred || undefined })} />}
       </div>
       <div className="rule-row">
@@ -1003,12 +1034,18 @@ function PushRecordCard({ record, conns, deviceId, canStar, onChange, onDelete, 
       {!targetMissing && liveOptions.length === 0 && (
         <div className="dim hint">No active socket connections for this device. Connect one to send a push.</div>
       )}
-      <textarea ref={payloadRef} className="mono" rows={8} placeholder="payload (JSON or plain text)"
+      </div>
+      <div className="mock-response">
+      <div className="rule-tabs"><span className="rule-section-label">Payload</span></div>
+      <textarea ref={payloadRef} className="mono rule-response-editor" rows={8} aria-label="Push payload" placeholder="payload (JSON or plain text)"
         value={payloadView.text} onChange={e => payloadView.onText(e.target.value)} />
       <div className="rule-body-tools">
         <JsonTool label="Pretty JSON" body={payloadView.text} transform={v => JSON.stringify(v, null, 2)} onResult={payloadView.onText} />
         <JsonStringToggle view={payloadView} />
-        <PlaceholderTools value={payloadView.text} onValue={payloadView.onText} taRef={payloadRef} />
+        <details className="rule-placeholders"><summary>Insert placeholder</summary>
+          <div className="rule-body-tools"><PlaceholderTools value={payloadView.text} onValue={payloadView.onText} taRef={payloadRef} /></div>
+        </details>
+      </div>
       </div>
     </div>
   )
@@ -1053,11 +1090,13 @@ function RequestConditions({ open, onToggle, count, summary, children }: {
   )
 }
 
-function HttpRuleEditor({ deviceId, rule, dup, prefilled, supportsQueryMocks, supportsBodyMocks, onChange, onDelete, onDuplicate }: {
+function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, prefilled, supportsQueryMocks, supportsBodyMocks, onChange, onDelete, onDuplicate }: {
   prefilled: boolean
   deviceId: string
   rule: HttpMockRule
-  dup: boolean
+  number: number
+  conflicts: RuleReference[]
+  onSelectConflict: (id: string) => void
   supportsQueryMocks: boolean
   supportsBodyMocks: boolean
   onChange: (r: HttpMockRule) => void
@@ -1085,10 +1124,12 @@ function HttpRuleEditor({ deviceId, rule, dup, prefilled, supportsQueryMocks, su
   }, [rule.urlPattern])
   return (
     <div className="rule-card mock-rule-editor" data-disabled={!rule.enabled || undefined}>
+      <div className="mock-identity">
       <div className="rule-name-row">
         <TagIcon />
         <input className="rule-name" placeholder="name this rule… (optional)" value={rule.name ?? ''}
           onChange={e => onChange({ ...rule, name: e.target.value || undefined })} />
+        <span className="rule-number">#{number}</span>
         <StarButton starred={rule.starred} onToggle={() => onChange({ ...rule, starred: !rule.starred || undefined })} />
       </div>
       <div className="rule-row">
@@ -1104,9 +1145,8 @@ function HttpRuleEditor({ deviceId, rule, dup, prefilled, supportsQueryMocks, su
         <button className="ghost icon-btn" title="Duplicate rule" onClick={onDuplicate}><CopyIcon /></button>
         <button className="ghost icon-btn danger" title="Delete rule" onClick={onDelete}><TrashIcon /></button>
       </div>
-      {dup && (
-        <div className="hint dup-warning"><WarningIcon />Another enabled rule has the same matcher — the newest one takes effect.</div>
-      )}
+      </div>
+      <RuleConflicts conflicts={conflicts} onSelect={onSelectConflict} />
       <RequestConditions open={conditionView.open} onToggle={open => setConditionView({ open })} count={conditionError ? '!' : queryCount + bodyCount}
         summary={conditionError ? 'Invalid body condition' : queryCount + bodyCount === 0 ? 'Fallback · no conditions' :
           [queryCount > 0 && `${queryCount} query`, bodyCount > 0 && `${bodyCount} body`].filter(Boolean).join(' · ')}>
@@ -1168,6 +1208,7 @@ function HttpRuleEditor({ deviceId, rule, dup, prefilled, supportsQueryMocks, su
       {!supportsBodyMocks && bodyCount > 0 && (
         <p className="hint warn">Update the device SDK to use body conditions. This rule is not sent to this device.</p>
       )}
+      <div className="mock-response">
       <div className="rule-tabs">
         {!rule.delayOnly && (
           <>
@@ -1216,6 +1257,7 @@ function HttpRuleEditor({ deviceId, rule, dup, prefilled, supportsQueryMocks, su
           )}
         </>
       )}
+      </div>
     </div>
   )
 }
@@ -1381,12 +1423,14 @@ function JsonStringToggle({ view }: { view: JsonStringView }) {
   )
 }
 
-function SocketRuleEditor({ deviceId, rule, dup, prefilled, supportsSocketPayloadMocks, onChange, onDelete, onDuplicate }: {
+function SocketRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, prefilled, supportsSocketPayloadMocks, onChange, onDelete, onDuplicate }: {
   prefilled: boolean
   supportsSocketPayloadMocks: boolean
   deviceId: string
   rule: SocketMockRule
-  dup: boolean
+  number: number
+  conflicts: RuleReference[]
+  onSelectConflict: (id: string) => void
   onChange: (r: SocketMockRule) => void
   onDelete: () => void
   onDuplicate: () => void
@@ -1404,10 +1448,12 @@ function SocketRuleEditor({ deviceId, rule, dup, prefilled, supportsSocketPayloa
   const mode = rule.transport === 'ktor-ws' ? 'ws' : rule.pushEvent != null ? 'sio-event' : 'sio-ack'
   return (
     <div className="rule-card mock-rule-editor" data-disabled={!rule.enabled || undefined}>
+      <div className="mock-identity">
       <div className="rule-name-row">
         <TagIcon />
         <input className="rule-name" placeholder="name this rule… (optional)" value={rule.name ?? ''}
           onChange={e => onChange({ ...rule, name: e.target.value || undefined })} />
+        <span className="rule-number">#{number}</span>
         <StarButton starred={rule.starred} onToggle={() => onChange({ ...rule, starred: !rule.starred || undefined })} />
       </div>
       <div className="rule-row">
@@ -1431,9 +1477,8 @@ function SocketRuleEditor({ deviceId, rule, dup, prefilled, supportsSocketPayloa
         <button className="ghost icon-btn" title="Duplicate rule" onClick={onDuplicate}><CopyIcon /></button>
         <button className="ghost icon-btn danger" title="Delete rule" onClick={onDelete}><TrashIcon /></button>
       </div>
-      {dup && (
-        <div className="hint dup-warning"><WarningIcon />Another enabled rule has the same matcher — the newest one takes effect.</div>
-      )}
+      </div>
+      <RuleConflicts conflicts={conflicts} onSelect={onSelectConflict} />
       <RequestConditions open={conditionView.open} onToggle={open => setConditionView({ open })} count={conditionError ? '!' : payloadCount}
         summary={conditionError ? 'Invalid payload condition' : payloadCount > 0 ? `${payloadCount} payload` : 'Fallback · no conditions'}>
         <div className="condition-content">
@@ -1460,6 +1505,7 @@ function SocketRuleEditor({ deviceId, rule, dup, prefilled, supportsSocketPayloa
       {!supportsSocketPayloadMocks && hasPayloadConditions && (
         <div className="hint dup-warning">Update this device’s SDK to use payload conditions.</div>
       )}
+      <div className="mock-response">
       {mode === 'sio-event' ? (
         <>
           <div className="rule-tabs">
@@ -1509,6 +1555,7 @@ function SocketRuleEditor({ deviceId, rule, dup, prefilled, supportsSocketPayloa
           </div>
         </>
       )}
+      </div>
     </div>
   )
 }

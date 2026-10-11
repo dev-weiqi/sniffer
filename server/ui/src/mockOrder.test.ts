@@ -3,6 +3,7 @@ import {
   httpMatcherSignature,
   socketMatcherSignature,
   payloadMatchError,
+  ruleConflicts,
   applyOrder,
   byOrder,
   loadIds,
@@ -28,6 +29,22 @@ assert(httpMatcherSignature({ ...matcher, queryParams: { page: '1', size: '20' }
 assert(httpMatcherSignature(matcher) !== httpMatcherSignature({ ...matcher, queryParams: { page: '' } }), 'missing and empty query values differ')
 
 const socket = { transport: 'socketio' as const, event: 'items' }
+const numberedRules = [
+  { ...matcher, id: 'first', enabled: true },
+  { ...matcher, id: 'disabled', enabled: false },
+  { ...matcher, id: 'last', enabled: true },
+]
+const conflicts = ruleConflicts(numberedRules, httpMatcherSignature)
+assert(JSON.stringify(conflicts.get('first')) === JSON.stringify([{ id: 'last', number: 3 }]), 'conflict uses peer ID and current display number')
+assert(!conflicts.has('disabled'), 'disabled rules do not conflict')
+const renumbered = ruleConflicts(numberedRules.filter(r => r.id !== 'disabled'), httpMatcherSignature)
+assert(renumbered.get('first')?.[0].number === 2, 'deletion closes display numbering gaps')
+assert(renumbered.get('first')?.[0].id === 'last', 'renumbering never changes persistent IDs')
+assert(ruleConflicts(numberedRules.slice(0, 2), httpMatcherSignature).size === 0, 'removing the other enabled rule clears the conflict')
+assert(ruleConflicts([
+  { ...socket, id: 'a', enabled: true, payloadMatch: '{"a":1,"b":2}' },
+  { ...socket, id: 'b', enabled: true, payloadMatch: '{"b":2,"a":1}' },
+], socketMatcherSignature).get('a')?.[0].id === 'b', 'socket conflict uses canonical payload matching')
 assert(socketMatcherSignature(socket) === socketMatcherSignature({ ...socket, payloadMatch: ' {} ' }), 'empty payload is fallback')
 assert(socketMatcherSignature({ ...socket, payloadMatch: '{"page":1}' }) !== socketMatcherSignature({ ...socket, payloadMatch: '{"page":2}' }), 'socket pages are distinct')
 assert(socketMatcherSignature({ ...socket, payloadMatch: '{"page":2,"filter":{"b":1,"a":true}}' }) ===
