@@ -63,11 +63,10 @@ export function ScrollToBottomButton({ onClick }: { onClick: () => void }) {
   return (
     <div className="scroll-bottom-shelf">
       <button className="scroll-bottom-button" title="Scroll to bottom" aria-label="Scroll to bottom" onClick={onClick}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="M12 4v14" /><path d="m7 13 5 5 5-5" /><path d="M6 21h12" />
         </svg>
-        <span>Latest</span>
       </button>
     </div>
   )

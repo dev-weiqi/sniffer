@@ -338,22 +338,18 @@ button.danger:hover { color: var(--err); border-color: color-mix(in srgb, var(--
 .list-pane { position: relative; flex: 1; min-width: 0; background: var(--bg-panel); display: flex; flex-direction: column; overflow: hidden; }
 .list-scroll { flex: 1; overflow: auto; min-height: 0; }
 .scroll-bottom-shelf {
-  position: absolute; left: 0; right: 0; bottom: 0; z-index: 3;
-  height: 52px; display: grid; place-items: end center; padding-bottom: 9px;
+  position: absolute; right: 20px; bottom: 20px; z-index: 3;
   pointer-events: none;
-  background: linear-gradient(to top, var(--bg-panel) 0%, color-mix(in srgb, var(--bg-panel) 92%, transparent) 48%, transparent 100%);
 }
 .scroll-bottom-button {
-  display: inline-flex; align-items: center; gap: 6px;
-  height: 30px; padding: 0 11px;
-  color: var(--accent); background: var(--bg-panel);
-  border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--border));
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 48px; height: 48px; padding: 0;
+  color: var(--accent); background: color-mix(in srgb, var(--bg-panel) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
   border-radius: 999px;
-  box-shadow: 0 8px 18px rgb(25 25 35 / .13);
-  font-size: 12px; font-weight: 700;
   pointer-events: auto;
 }
-.scroll-bottom-button:hover { color: var(--bg-panel); background: var(--accent); border-color: var(--accent); }
+.scroll-bottom-button:hover { background: color-mix(in srgb, var(--bg-panel) 35%, transparent); border-color: var(--accent); }
 .scroll-bottom-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .scroll-bottom-button svg { display: block; flex: none; }
 .panel-toolbar {
