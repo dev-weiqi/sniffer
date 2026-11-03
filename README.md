@@ -88,6 +88,8 @@ builds: same API, empty implementation.
 | Native iOS HTTP and WebSocket | Swift Package product `SnifferKit` |
 | Native iOS Socket.IO | Swift Package product `SnifferSocketIO` |
 
+Native iOS: link `SnifferKit` and `SnifferSocketIO` only in **Debug**. Exclude both from **AdHoc / Release** and guard imports and integration code with `#if DEBUG`. See the [Debug build requirements](client/ios/README.md#debug-builds-only); the Swift package has no noop variant.
+
 See [`client/ios/README.md`](client/ios/README.md) for native iOS integration with HTTP, Socket.IO, and `URLSessionWebSocketTask`.
 
 ```kotlin

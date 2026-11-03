@@ -77,6 +77,8 @@ xattr -d com.apple.quarantine /Applications/Sniffer.app
 | 原生 iOS HTTP 與 WebSocket | Swift Package 產品 `SnifferKit` |
 | 原生 iOS Socket.IO | Swift Package 產品 `SnifferSocketIO` |
 
+原生 iOS 的 `SnifferKit` 與 `SnifferSocketIO` 僅能在 **Debug** 連結，**AdHoc／Release** 必須排除，並以 `#if DEBUG` 保護 import 與整合程式碼。詳見[僅限 Debug 建置](client/ios/README.zh-TW.md#僅限-debug-建置)，Swift 套件沒有 noop 版本。
+
 原生 iOS 的 HTTP、Socket.IO 與 `URLSessionWebSocketTask` 整合方式，請參閱[原生 iOS 整合指南](client/ios/README.zh-TW.md)。
 
 ```kotlin
