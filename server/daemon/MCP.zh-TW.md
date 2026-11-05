@@ -35,7 +35,7 @@ node server/daemon/bin/sniffer.js start
 
 替換絕對路徑與 App ID。`env` 可省略。以上 JSON 適用於使用 `mcpServers` 的用戶端；其他用戶端可在 MCP 設定中填入相同的執行檔、參數與環境變數。已安裝且包含此功能的套件可改用 `"command": "sniffer", "args": ["mcp"]`，或 `"command": "npx", "args": ["-y", "@dev-weiqi/sniffer", "mcp"]`。
 
-既有已發布版本不一定包含 MCP。`sniffer mcp` 不會啟動背景服務，stdout 僅供 MCP 訊息使用。
+MCP 自 0.8.0 起提供。`sniffer mcp` 不會啟動背景服務，stdout 僅供 MCP 訊息使用。
 
 也可以連接桌面 App 正在執行的背景服務，將 `SNIFFER_PORT` 設成桌面 App 的連接埠即可。背景服務預設為 9091；9092 也是 iOS USB 監聽端的預設連接埠，在同一主機同時使用時請選擇其他空閒連接埠。
 

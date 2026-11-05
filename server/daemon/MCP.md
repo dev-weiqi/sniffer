@@ -41,7 +41,7 @@ for clients that use `mcpServers`; in other clients set the same executable, arg
 and environment through their MCP settings. For an installed package containing
 this feature, use `"command": "sniffer", "args": ["mcp"]`, or
 `"command": "npx", "args": ["-y", "@dev-weiqi/sniffer", "mcp"]`.
-Existing published versions may not contain MCP yet. `sniffer mcp` does not start
+MCP is included starting with version 0.8.0. `sniffer mcp` does not start
 the daemon and reserves stdout for MCP messages.
 
 The desktop app's running daemon can also be used; set `SNIFFER_PORT` to its port.

@@ -49,7 +49,7 @@ SNIFFER_BIND=0.0.0.0 sniffer start
 
 ```bash
 npm install -g @dev-weiqi/sniffer@latest
-npm install -g @dev-weiqi/sniffer@0.7.4
+npm install -g @dev-weiqi/sniffer@0.8.0
 ```
 
 ## 桌面應用程式
@@ -74,7 +74,7 @@ xattr -d com.apple.quarantine /Applications/Sniffer.app
 | Ktor WebSocket | `io.github.dev-weiqi.sniffer:ktor-ws` |
 
 ```kotlin
-val snifferVersion = "0.7.2"
+val snifferVersion = "0.8.0"
 
 dependencies {
     debugImplementation("io.github.dev-weiqi.sniffer:core:$snifferVersion")
