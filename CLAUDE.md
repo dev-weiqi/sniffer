@@ -8,14 +8,14 @@ Self-hosted Flipper alternative for monitoring and mocking an app's HTTP and Soc
 | Path | What |
 |------|------|
 | `client/` | KMP SDK. `core` (required) plus `okhttp` / `ktor` / `ktor-ws` / `socketio`, each with a `-noop` release twin. `sample` (Android, all plugins) and `sample-cmp` (Compose Multiplatform, ktor only, Android + iOS). |
-| `server/daemon` | Node/TS. WebSocket hub, per-device mock store, `adb reverse`, test endpoints. |
+| `server/daemon` | Node/TS. WebSocket hub, per-device mock store, `adb reverse`, test endpoints, MCP over stdio (`sniffer mcp`; see `server/daemon/MCP.md`). |
 | `server/ui` | React/TS. API / Socket / Mocks tabs. |
 | `PROTOCOL.md` | Wire protocol; source of truth for both sides. |
 
 ## Golden rules
 
 1. **A protocol change updates `PROTOCOL.md` in the same change.** A new message field lands in `PROTOCOL.md`, `client/core/.../Protocol.kt` and `server/ui/src/state.ts` together. The daemon passes rules and messages through (`normalizeMocks`) without validating new fields.
-   A new mock-rule field must also be checked in: the daemon store (`normalizeMocks`, starred split, `~/.sniffer/mocks.json`), device sync (stripped like `starred`, or seen by the SDK?), the UI editors, duplicate detection (`httpSig` / `socketSig`) and `orderForSync`, and export/import (fields re-enter through the PUT path).
+   A new mock-rule field must also be checked in: the daemon store (`normalizeMocks`, starred split, `~/.sniffer/mocks.json`), device sync (stripped like `starred`, or seen by the SDK?), the UI editors, duplicate detection (`httpSig` / `socketSig`) and `orderForSync`, export/import (fields re-enter through the PUT path), and MCP schemas, handlers, tests and both language guides.
 2. **Non-trivial logic ships with a test.** Pure logic (mock matching, placeholder expansion, protocol serialization) goes in `client/core/src/commonTest`, in the style of `MockRegistryTest` / `MockPlaceholdersTest`.
 3. **The SDK must never affect the host app.** Swallow errors, reconnect silently, cap buffers (1000 messages offline).
 4. **Keep `sample` and `sample-cmp` in parity:** same layout, headers and action labels. Only difference: CMP is ktor only.

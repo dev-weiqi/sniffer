@@ -188,6 +188,31 @@ PUT    /api/breakpoints         body: { "deviceId": "...", "rules": [...] }   fu
 POST   /api/breakpoints/resolve body: { "deviceId": "...", "id": "<hit uuid>", "action": "resume"|"abort",
                                          "status"?, "headers"?, "body"? }
 DELETE /api/entries            clear recorded traffic
+DELETE /api/entries/http       clear HTTP records and resume paused responses unchanged
+DELETE /api/entries/socket     clear Socket events and acks
 DELETE /api/entries/firebase   clear Firebase records for all devices; prevents replay of pre-clear Analytics events
-GET    /api/state              debug snapshot: devices, entry count, mocks
+GET    /api/entries            read-only snapshot: { "entries": [{ "deviceId": "...", "message": {...} }] }
+                               optional filters: deviceId, appId, id, type=http|socket|firebase,
+                               method, status, urlContains, bodyContains, userId, event, connectionId, limit
+                               HTTP method/status/URL/userId filters correlate request and response per device;
+                               Socket event/connection filters correlate events and acks.
+                               bodyContains searches body/payload/params on each message; event matches
+                               socket event or Analytics name. limit takes the last N messages after filtering.
+                               known secrets masked by default in headers, body, payload, params and URLs;
+                               redact=0 explicitly returns raw data. /ui WS is never redacted.
+GET    /api/state              devices, entryCount, mocksByDevice, breakpointsByDevice, pausedHits
+                               pausedHits uses [{ "deviceId": "...", "hit": {...} }], as in /ui init.
+                               redact=1 masks known secrets in state (used by MCP); default stays raw.
+DELETE /api/devices/offline    remove offline device records and their device-specific mocks
+DELETE /api/devices/<deviceId> remove a device, disconnect it if online
 ```
+
+## MCP
+
+`sniffer mcp` exposes the daemon through stdio. It uses the REST routes above;
+there are no additional device messages or SDK changes for MCP. Tools cover traffic
+(including Analytics), HTTP and socket mocks, push events, and response breakpoints.
+See [MCP setup and tool schemas](server/daemon/MCP.md). MCP never requests raw
+traffic; state reads use `redact=1`. Custom redaction fields are configured on the
+daemon, not the MCP process. Redaction is best effort, not a guarantee that every
+secret or image content is removed.

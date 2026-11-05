@@ -292,6 +292,14 @@ rules remember their expanded state and the selected Query/Body tab in this brow
 including after closing the panel or reloading. Delay settings remain beside the response.
 **Break on path** matches the HTTP method and path only, ignoring query and body conditions.
 
+## AI tools through MCP
+
+The main checkout includes `sniffer mcp`, a stdio server for reading HTTP, Socket
+and Firebase Analytics traffic, editing mocks, injecting events and managing
+response breakpoints. It connects to an already running daemon; no additional
+app SDK integration is needed. See [MCP setup](server/daemon/MCP.md) for local
+build instructions, client configuration, available tools and data masking.
+
 ## Modules
 
 | Artifact | Use it for |

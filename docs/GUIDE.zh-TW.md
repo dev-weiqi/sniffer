@@ -115,6 +115,10 @@ adb shell setprop debug.sniffer.host 192.168.1.20
 * **重新啟動後紀錄消失**：流量只儲存在記憶體（最多 2000 筆訊息），模擬規則則保存在 `~/.sniffer/mocks.json`。
 * **內容遭截斷**：超過 1 MB 的內容會被截斷並標記；二進位內容只記錄大小。
 
+## MCP
+
+AI 工具可透過 `sniffer mcp` 的 stdio 介面操作同一個背景服務，包含 Analytics 查詢、HTTP query／body 條件、Socket payload 條件及回應斷點。設定、參數與範例請見 [MCP 指南](../server/daemon/MCP.zh-TW.md)。UI 與 MCP 共用模擬規則和流量，透過 MCP 清除流量會影響所有裝置。
+
 ## 開發
 
 ```bash

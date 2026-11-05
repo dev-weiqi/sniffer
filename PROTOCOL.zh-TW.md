@@ -170,17 +170,37 @@ WebSocket `/ui` 在連線時傳送快照，之後持續傳送即時串流：
 { "type": "breakpoints-released", "deviceId": "..." }   // 裝置已斷線，SDK 自動繼續暫停的呼叫
 ```
 
-REST（介面 → 背景服務）：
+REST（介面／MCP → 背景服務）：
 
 ```
-PUT    /api/mocks              body: { "deviceId": "...", "http": [...], "socket": [...] }   完整取代單一裝置的規則；
-                               "starred": true 的規則按 appId 儲存，並傳送至該 App 的所有裝置，
-                               包含之後才連線的裝置
+PUT    /api/mocks              body: { "deviceId": "...", "http": [...], "socket": [...] }
+                               完整取代單一裝置的規則；starred 規則按 appId 分享給同 App 的裝置
 POST   /api/push-event         body: { "deviceId": "...", "connectionId": null, "event": "...", "payload": "..." }
-PUT    /api/breakpoints         body: { "deviceId": "...", "rules": [...] }   完整取代裝置已啟用的規則
+PUT    /api/breakpoints        body: { "deviceId": "...", "rules": [...] }，完整取代裝置的斷點規則
 POST   /api/breakpoints/resolve body: { "deviceId": "...", "id": "<hit uuid>", "action": "resume"|"abort",
                                          "status"?, "headers"?, "body"? }
-DELETE /api/entries            清除已記錄的流量
-DELETE /api/entries/firebase   清除所有裝置的 Firebase 紀錄，並防止清除前的 Analytics 事件重送還原
-GET    /api/state              偵錯快照：裝置、紀錄筆數、模擬規則
+DELETE /api/entries            清除所有流量，並原樣放行暫停中的回應
+DELETE /api/entries/http       清除 HTTP 紀錄，並原樣放行暫停中的回應
+DELETE /api/entries/socket     清除 Socket 事件與 ack
+DELETE /api/entries/firebase   清除所有裝置的 Firebase 紀錄，防止清除前的 Analytics 事件重送還原
+GET    /api/entries            唯讀快照：{ "entries": [{ "deviceId": "...", "message": {...} }] }
+                               選填篩選：deviceId、appId、id、type=http|socket|firebase、
+                               method、status、urlContains、bodyContains、userId、event、connectionId、limit
+                               HTTP 的 method／status／URL／userId 篩選會在同一裝置內關聯請求與回應；
+                               Socket 的事件／連線篩選會關聯事件與 ack。
+                               bodyContains 搜尋各則訊息的 body／payload／params；event 比對 Socket
+                               事件或 Analytics 名稱。limit 取篩選後最後 N 則訊息。
+                               預設遮罩 headers、body、payload、params、URL 中的已知敏感資料；
+                               redact=0 明確要求原始資料。/ui WebSocket 不遮罩。
+GET    /api/state              devices、entryCount、mocksByDevice、breakpointsByDevice、pausedHits
+                               pausedHits 為 [{ "deviceId": "...", "hit": {...} }]，格式與 /ui init 相同。
+                               redact=1 遮罩狀態中的已知敏感資料，MCP 使用此選項；預設仍為原始資料。
+DELETE /api/devices/offline    移除離線裝置紀錄及其專屬模擬規則
+DELETE /api/devices/<deviceId> 移除裝置；在線上時也中斷連線
 ```
+
+## MCP
+
+`sniffer mcp` 透過 stdio 提供上述 REST 功能，不新增裝置訊息，也不需要為 MCP 修改 SDK。工具涵蓋流量（含 Analytics）、HTTP 與 Socket 模擬、事件注入及回應斷點。
+
+設定與完整參數見 [MCP 說明](server/daemon/MCP.zh-TW.md)。MCP 不會要求未遮罩的流量，狀態查詢使用 `redact=1`。自訂敏感欄位必須設在背景服務，不是 MCP 程序。遮罩只能處理已知格式，無法保證移除所有機密或圖片內容。

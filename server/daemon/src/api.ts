@@ -1,7 +1,12 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { redact } from './redact.js'
+import type { Entry } from './entryStore.js'
 import { json, readBody } from './http.js'
 import { isStarred, normalizeMocks, type MockStore, type Mocks } from './mockStore.js'
 
+const HTTP_ENTRY_TYPES = new Set(['http-request', 'http-response'])
+const SOCKET_ENTRY_TYPES = new Set(['socket-status', 'socket-event', 'socket-ack'])
+const FIREBASE_ENTRY_TYPES = new Set(['firebase-analytics-event'])
 interface ApiDevice {
   info: {
     deviceId: string
@@ -24,13 +29,15 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, url: 
     clearHttp(): void
     clearSocket(): void
     clearFirebase(): void
-    snapshot(): unknown[]
+    snapshot(): Entry[]
   }
   broadcastToUi(msg: unknown): void
   sendMocksToDevice(deviceId: string): void
   mocksFor(deviceId: string): Mocks
   mergedMocksByDevice(): Record<string, Mocks>
   removeDeviceRecord(deviceId: string): { removed: boolean; mocksChanged: boolean }
+  getBreakpoints(): Record<string, unknown[]>
+  getPendingHits(): Array<{ deviceId: string; hit: Record<string, unknown> }>
   setBreakpoints(deviceId: string, rules: unknown[]): void
   sendBreakpointsToDevice(deviceId: string): void
   resolvePendingHit(id: string): void
@@ -148,10 +155,61 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, url: 
     return json(res, 200, { ok: true })
   }
   if (req.method === 'GET' && url.pathname === '/api/state') {
-    return json(res, 200, {
+    const state = {
       devices: [...deps.devices.values()].map(d => ({ ...d.info, connected: d.connected })),
       entryCount: deps.entryStore.snapshot().length, mocksByDevice: deps.mergedMocksByDevice(),
-    })
+      breakpointsByDevice: deps.getBreakpoints(), pausedHits: deps.getPendingHits(),
+    }
+    return json(res, 200, url.searchParams.get('redact') === '1' ? redact(state) : state)
+  }
+  if (req.method === 'GET' && url.pathname === '/api/entries') {
+    const params = url.searchParams
+    if (params.has('type') && !['http', 'socket', 'firebase'].includes(params.get('type')!))
+      return json(res, 400, { error: 'type must be http, socket or firebase' })
+    for (const key of ['limit', 'status']) {
+      if (params.has(key) && (!/^\d+$/.test(params.get(key)!) || Number(params.get(key)) < (key === 'limit' ? 1 : 0)))
+        return json(res, 400, { error: `${key} must be a nonnegative integer (limit must be positive)` })
+    }
+    const appId = params.get('appId')
+    const entries = deps.entryStore.snapshot().filter(entry => !appId || deps.devices.get(entry.deviceId)?.info.appId === appId)
+    return json(res, 200, { entries: queryEntries(entries, params) })
   }
   json(res, 404, { error: 'not found' })
+}
+
+function queryEntries(entries: Entry[], params: URLSearchParams): Entry[] {
+  const kind = params.get('type') === 'http' ? HTTP_ENTRY_TYPES
+    : params.get('type') === 'socket' ? SOCKET_ENTRY_TYPES
+      : params.get('type') === 'firebase' ? FIREBASE_ENTRY_TYPES : null
+  const requests = new Map<string, Record<string, unknown>>()
+  const responses = new Map<string, Record<string, unknown>>()
+  const events = new Map<string, Record<string, unknown>>()
+  const key = (entry: Entry) => JSON.stringify([entry.deviceId, entry.message.id])
+  for (const entry of entries) {
+    if (entry.message.type === 'http-request') requests.set(key(entry), entry.message)
+    if (entry.message.type === 'http-response') responses.set(key(entry), entry.message)
+    if (entry.message.type === 'socket-event') events.set(key(entry), entry.message)
+  }
+  let out = entries.filter(entry => {
+    const m = entry.message
+    const request = HTTP_ENTRY_TYPES.has(String(m.type)) ? requests.get(key(entry)) ?? m
+      : m.type === 'socket-ack' ? events.get(key(entry)) ?? m : m
+    const response = HTTP_ENTRY_TYPES.has(String(m.type)) ? responses.get(key(entry)) ?? m : m
+    if (params.has('deviceId') && entry.deviceId !== params.get('deviceId')) return false
+    if (params.has('id') && m.id !== params.get('id')) return false
+    if (kind && !kind.has(String(m.type))) return false
+    if (params.has('method') && String(request.method ?? '').toUpperCase() !== params.get('method')!.toUpperCase()) return false
+    if (params.has('status') && response.status !== Number(params.get('status'))) return false
+    if (params.has('urlContains') && !String(request.url ?? '').includes(params.get('urlContains')!)) return false
+    if (params.has('userId') && request.userId !== params.get('userId')) return false
+    if (params.has('event') && (request.event ?? request.name) !== params.get('event')) return false
+    if (params.has('connectionId') && request.connectionId !== params.get('connectionId')) return false
+    if (params.has('bodyContains')) {
+      const bodies = [m.body, m.payload, m.params].filter(value => value != null)
+      if (!bodies.some(value => (typeof value === 'string' ? value : JSON.stringify(value)).includes(params.get('bodyContains')!))) return false
+    }
+    return true
+  })
+  if (params.has('limit')) out = out.slice(-Number(params.get('limit')))
+  return params.get('redact') === '0' ? out : out.map(entry => redact(entry) as Entry)
 }

@@ -133,6 +133,14 @@ they keep working offline.
   rules persist in `~/.sniffer/mocks.json`.
 - **Truncated bodies**: bodies over 1 MB are cut and flagged; binary bodies record size only.
 
+## MCP
+
+AI clients can use the same daemon through `sniffer mcp` (stdio). The tools include
+Analytics queries, HTTP query/body conditions, Socket payload conditions and
+response breakpoints. See [the MCP guide](../server/daemon/MCP.md) for setup,
+arguments and examples. The UI and MCP share mock rules and traffic; clearing
+traffic through MCP clears it for all devices.
+
 ## Development
 
 ```bash

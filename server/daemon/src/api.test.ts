@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { handleApi } from './api.js'
+import type { Entry } from './entryStore.js'
 import type { MockStore, Mocks } from './mockStore.js'
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -41,6 +42,36 @@ function bodyOf(res: ReturnType<typeof fakeRes>) {
 
 function makeDeps() {
   let mockStore: MockStore = { devices: {}, shared: {} }
+  const entrySnapshot: Entry[] = [
+    {
+      deviceId: 'd1',
+      message: {
+        type: 'http-response',
+        id: 'flow-1',
+        method: 'GET',
+        status: 200,
+        url: '/api/users/1',
+        headers: { Authorization: 'Bearer top-secret', Accept: 'application/json' },
+        body: JSON.stringify({ accessToken: 'token-1', nested: { password: 'pw-1' }, data: 'needle' }),
+      },
+    },
+    {
+      deviceId: 'd2',
+      message: {
+        type: 'socket-event',
+        id: 'socket-1',
+        body: { data: 'objectNeedle' },
+      },
+    },
+    {
+      deviceId: 'd1',
+      message: {
+        type: 'http-response',
+        id: 'flow-2',
+        body: 'plain Bearer secret-value',
+      },
+    },
+  ]
   const sends: Array<{ deviceId: string; text: string }> = []
   const closes: string[] = []
   const broadcasts: unknown[] = []
@@ -77,7 +108,7 @@ function makeDeps() {
       clearHttp: () => entryCalls.push('http'),
       clearSocket: () => entryCalls.push('socket'),
       clearFirebase: () => entryCalls.push('firebase'),
-      snapshot: () => [{ id: 'entry' }],
+      snapshot: () => entrySnapshot,
     },
     broadcastToUi: (msg: unknown) => broadcasts.push(msg),
     sendMocksToDevice: (deviceId: string) => sentMocks.push(deviceId),
@@ -88,12 +119,14 @@ function makeDeps() {
       removed.push({ deviceId, result })
       return result
     },
+    getBreakpoints: () => ({ d1: [{ id: 'b1', urlPattern: '/orders' }] }),
+    getPendingHits: () => [{ deviceId: 'd1', hit: { id: 'paused', body: '{"token":"secret"}' } }],
     setBreakpoints: (deviceId: string, rules: unknown[]) => breakpointSets.push({ deviceId, rules }),
     sendBreakpointsToDevice: (deviceId: string) => breakpointSends.push(deviceId),
     resolvePendingHit: (id: string) => resolvedHits.push(id),
     releasePendingHits: () => { releasedHits += 1 },
   }
-  return { deps, addDevice, get mockStore() { return mockStore }, sends, closes, broadcasts, sentMocks, get persisted() { return persisted }, removed, entryCalls, breakpointSets, breakpointSends, resolvedHits, get releasedHits() { return releasedHits } }
+  return { deps, entrySnapshot, addDevice, get mockStore() { return mockStore }, sends, closes, broadcasts, sentMocks, get persisted() { return persisted }, removed, entryCalls, breakpointSets, breakpointSends, resolvedHits, get releasedHits() { return releasedHits } }
 }
 
 let ctx = makeDeps()
@@ -225,12 +258,71 @@ assertEqual(ctx.persisted, 1, 'delete device persists when mocks changed')
 res = fakeRes()
 await handleApi(fakeReq('GET'), res as unknown as ServerResponse, new URL('http://localhost/api/state'), ctx.deps)
 assertEqual(bodyOf(res).devices.length, 1, 'state devices')
-assertEqual(bodyOf(res).entryCount, 1, 'state entry count')
+assertEqual(bodyOf(res).entryCount, 3, 'state entry count')
 assertEqual(bodyOf(res).mocksByDevice.d1.http[0].id, 'h-d1', 'state mocks')
+
+res = fakeRes()
+await handleApi(fakeReq('GET'), res as unknown as ServerResponse, new URL('http://localhost/api/entries?deviceId=d1&type=http&method=get&status=200&urlContains=users&bodyContains=needle&limit=1'), ctx.deps)
+assertEqual(bodyOf(res).entries.length, 1, 'entries filtered result')
+assertEqual(bodyOf(res).entries[0].deviceId, 'd1', 'entries filtered device')
+assertEqual(bodyOf(res).entries[0].message.headers.Authorization, '‹redacted›', 'entries redact header')
+assert(String(bodyOf(res).entries[0].message.body).includes('‹redacted›'), 'entries redact body fields')
+assert(!String(bodyOf(res).entries[0].message.body).includes('token-1'), 'entries hide token body')
+
+res = fakeRes()
+await handleApi(fakeReq('GET'), res as unknown as ServerResponse, new URL('http://localhost/api/entries?type=socket&bodyContains=objectNeedle&redact=0'), ctx.deps)
+assertEqual(bodyOf(res).entries.length, 1, 'entries socket object body filter')
+assertEqual(bodyOf(res).entries[0].message.id, 'socket-1', 'entries redact opt out keeps entry')
+
+res = fakeRes()
+await handleApi(fakeReq('GET'), res as unknown as ServerResponse, new URL('http://localhost/api/entries?deviceId=d1&bodyContains=Bearer'), ctx.deps)
+assertEqual(bodyOf(res).entries.length, 1, 'entries non-json secret body filter')
+assertEqual(bodyOf(res).entries[0].message.body, 'plain ‹redacted›', 'entries redact non-json secret')
 
 res = fakeRes()
 await handleApi(fakeReq('GET'), res as unknown as ServerResponse, new URL('http://localhost/api/missing'), ctx.deps)
 assertEqual(res.status, 404, 'unknown API status')
 assertEqual(bodyOf(res).error, 'not found', 'unknown API body')
 
+ctx = makeDeps()
+ctx.addDevice('d1', 'app', true)
+ctx.entrySnapshot.push(
+  { deviceId: 'd1', message: { type: 'http-request', id: 'paired', method: 'POST', url: 'https://host/orders?token=url-secret', userId: 'user-7', headers: { Cookie: 'session=secret' } } },
+  { deviceId: 'd1', message: { type: 'http-response', id: 'paired', status: 503, body: '{"password":"hidden"}', bodyBase64: false } },
+  { deviceId: 'd2', message: { type: 'http-response', id: 'paired', status: 200 } },
+  { deviceId: 'd1', message: { type: 'socket-event', id: 'event', connectionId: 'c1', event: 'echo', payload: '[{"access_token":"socket-secret","data":"needle"}]', label: 'test' } },
+  { deviceId: 'd1', message: { type: 'socket-ack', id: 'event', payload: '{"password":"ack-secret"}' } },
+  { deviceId: 'd1', message: { type: 'firebase-analytics-event', id: 'analytics', name: 'screen_view', userId: 'user-7', params: { screen: 'home', secret: 'analytics-secret' }, truncated: false, firebaseSdkCalled: true } },
+  { deviceId: 'd1', message: { type: 'http-response', id: 'image', bodyBase64: true, body: 'iVBORw0KGgo=', bodySize: 8, bodyTruncated: false } },
+)
+async function query(path: string) {
+  const response = fakeRes()
+  await handleApi(fakeReq('GET'), response as unknown as ServerResponse, new URL(`http://localhost${path}`), ctx.deps)
+  return response
+}
+let queried = bodyOf(await query('/api/entries?type=http&method=POST&status=503&urlContains=orders&userId=user-7')).entries
+assertEqual(queried.length, 2, 'HTTP filters join request and response per device')
+assert(!queried[0].message.url.includes('url-secret'), 'URL token masked')
+assertEqual(queried[0].message.headers.Cookie, '‹redacted›', 'cookies masked')
+queried = bodyOf(await query('/api/entries?type=socket&connectionId=c1&event=echo&bodyContains=needle')).entries
+assertEqual(queried.length, 1, 'socket filters inspect payload')
+assert(!queried[0].message.payload.includes('socket-secret'), 'socket payload masked')
+queried = bodyOf(await query('/api/entries?id=event')).entries
+assertEqual(queried.length, 2, 'get event and ack')
+assert(!queried[1].message.payload.includes('ack-secret'), 'ack payload masked')
+queried = bodyOf(await query('/api/entries?type=firebase&event=screen_view&userId=user-7&bodyContains=home')).entries
+assertEqual(queried.length, 1, 'Analytics filters inspect name, user and params')
+assertEqual(queried[0].message.params.secret, '‹redacted›', 'Analytics params masked')
+assertEqual(queried[0].message.firebaseSdkCalled, true, 'Analytics delivery metadata preserved')
+assertEqual(bodyOf(await query('/api/entries?id=image')).entries[0].message.body, 'iVBORw0KGgo=', 'image base64 preserved')
+assertEqual(bodyOf(await query('/api/entries?appId=unknown')).entries.length, 0, 'app filter excludes unrelated devices')
+assertEqual(bodyOf(await query('/api/entries?appId=app&id=paired')).entries.length, 2, 'app filter includes matching device')
+for (const invalid of ['type=typo', 'limit=-1', 'limit=1.5', 'status=nope']) {
+  assertEqual((await query(`/api/entries?${invalid}`)).status, 400, 'invalid query rejected')
+}
+const maskedState = bodyOf(await query('/api/state?redact=1'))
+assertEqual(maskedState.breakpointsByDevice.d1[0].id, 'b1', 'state includes armed rules')
+assert(!maskedState.pausedHits[0].hit.body.includes('secret'), 'paused response masked')
+assert(ctx.deps.getPendingHits()[0].hit.body.includes('secret'), 'masking leaves actual paused response intact')
+assert(bodyOf(await query('/api/entries?id=analytics&redact=0')).entries[0].message.params.secret === 'analytics-secret', 'explicit raw REST read preserved')
 console.log('api.test: all assertions passed')

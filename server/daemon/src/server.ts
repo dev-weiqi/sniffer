@@ -182,6 +182,8 @@ const server = createServer(async (req, res) => {
       mocksFor,
       mergedMocksByDevice,
       removeDeviceRecord,
+      getBreakpoints: () => breakpointsByDevice,
+      getPendingHits: () => [...pendingHits.values()],
       setBreakpoints: (deviceId, rules) => { breakpointsByDevice[deviceId] = rules },
       sendBreakpointsToDevice,
       resolvePendingHit: (id) => { pendingHits.delete(id) },

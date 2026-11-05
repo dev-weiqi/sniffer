@@ -15,7 +15,9 @@
   "files": [
     "bin",
     "dist",
-    "ui-dist"
+    "ui-dist",
+    "MCP.md",
+    "MCP.zh-TW.md"
   ],
   "engines": {
     "node": ">=20"
@@ -23,13 +25,14 @@
   "scripts": {
     "dev": "SNIFFER_NO_OPEN=1 tsx watch src/server.ts",
     "start": "tsx src/server.ts",
-    "test:unit": "tsc -p tsconfig.test.json && node build/test/doctor.test.js && node build/test/adb.test.js && node build/test/api.test.js && node build/test/entryStore.test.js && node build/test/http.test.js && node build/test/mockStore.test.js && node build/test/png.test.js && node build/test/static.test.js && node build/test/testHandlers.test.js && node build/test/usbmux.test.js",
+    "test:unit": "tsc -p tsconfig.test.json && node build/test/doctor.test.js && node build/test/adb.test.js && node build/test/api.test.js && node build/test/entryStore.test.js && node build/test/http.test.js && node build/test/mcpCore.test.js && node build/test/mcp.test.js && node build/test/mockStore.test.js && node build/test/png.test.js && node build/test/static.test.js && node build/test/testHandlers.test.js && node build/test/usbmux.test.js",
     "typecheck": "tsc --noEmit",
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "prepack": "npm run build && npm --prefix ../ui run build && rm -rf ui-dist && cp -R ../ui/dist ui-dist",
     "postpack": "rm -rf ui-dist"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "socket.io": "^4.8.1",
     "ws": "^8.18.0"
   },

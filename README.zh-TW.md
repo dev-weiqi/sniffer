@@ -245,6 +245,10 @@ HTTP 規則可同時使用 **Query parameters** 與 JSON **Body conditions**，�
 
 HTTP 與 Socket 編輯器預設收合 **Request conditions**。建立模擬時若帶入擷取條件，會自動展開並選取對應分頁；同時包含 Query 與 Body 時選取 Body。每個裝置的規則都會在此瀏覽器記住展開狀態及 Query／Body 分頁，關閉面板或重新載入後也會保留。延遲設定仍放在回應旁邊。**Break on path** 只比對 HTTP 方法與路徑，忽略 Query 與 Body 條件。
 
+## 透過 MCP 使用 AI 工具
+
+目前 main 的原始碼包含 `sniffer mcp`，提供 stdio 介面，讓 AI 工具讀取 HTTP、Socket 與 Firebase Analytics 紀錄、編輯模擬規則、注入事件及管理回應斷點。它連接已啟動的背景服務，不需要額外整合 App SDK。建置步驟、用戶端設定、工具與資料遮罩說明請見 [MCP 設定](server/daemon/MCP.zh-TW.md)。
+
 ## 模組
 
 | 套件 | 用途 |
