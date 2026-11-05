@@ -65,6 +65,15 @@ Cover logic with unit tests in `client/core` / `client/okhttp`, not device runs.
 
 Credentials never live in the repo.
 
+**GitHub release notes**:
+
+* Write release notes in English bullet points for every new release and any requested historical edits.
+* Summarize user-facing features, significant fixes, compatibility changes and required upgrade steps from the actual changes. State the minimum SDK version when relevant.
+* Omit internal cleanup, removed design prototypes, refactors, test results, build chores and trivial cosmetic changes.
+* Verify the published notes follow these rules before announcing the release, including releases initially created with empty notes by CI.
+* When asked to remove release notes, clear only the release body. Preserve the release, tags and downloadable assets. Deleting a release requires an explicit request to delete the release itself.
+* Apply historical edits only to the versions requested by the user.
+
 **SDK to Maven Central** (`io.github.dev-weiqi.sniffer:*`, vanniktech maven-publish):
 
 1. Bump `VERSION_NAME` in `client/gradle.properties` (the only version to touch) and `snifferVersion` in README.
