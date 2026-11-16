@@ -667,9 +667,11 @@ export function Section({ title, action, className, children }: {
   const [open, setOpen] = useState(true)
   return (
     <section className={`detail-section ${className ?? ''}`}>
-      <h3 onClick={() => setOpen(!open)}>
-        <span className="chev" data-open={open || undefined}>▸</span> {title}
-        {action && <span className="section-action" onClick={e => e.stopPropagation()}>{action}</span>}
+      <h3>
+        <button type="button" className="section-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
+          <span className="chev" aria-hidden="true" data-open={open || undefined}>▸</span> {title}
+        </button>
+        {action && <span className="section-action">{action}</span>}
       </h3>
       {open && children}
     </section>
