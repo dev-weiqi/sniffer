@@ -80,6 +80,7 @@ event, payload), a light / dark toggle and a clear button.
 - Live table of time (click the header to flip sort), method, status, URL, size and
   duration. `okhttp` / `ktor` badges show the library; a purple **MOCK** badge marks mocks.
 - Row details: URL, query, headers and bodies (JSON pretty printed, collapsible, copyable).
+- In JSON Tree, zoned ISO timestamps have a dashed underline. Hover or focus to see local time and its UTC offset; Escape dismisses the tooltip. Text selection, Copy, and Raw retain the original timestamp. Dates without a time zone and numeric values are not converted.
 - **Copy cURL** reproduces the request.
 - **Mock this request** prefills a rule from the method, path and real response body.
 

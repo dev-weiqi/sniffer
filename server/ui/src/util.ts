@@ -6,6 +6,27 @@ export function fmtTime(ts: number): string {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`
 }
 
+/** Only zoned ISO timestamps are safe to interpret without guessing a timezone or unit. */
+export function localTimestamp(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?(Z|[+-]\d{2}:\d{2})$/i.exec(value)
+  if (!match) return null
+  const [, year, month, day, hour, minute, second, fraction = '', zone] = match
+  const y = Number(year), m = Number(month), d = Number(day)
+  const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0)
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+  if (m < 1 || m > 12 || d < 1 || d > days[m - 1] || Number(hour) > 23 ||
+      Number(minute) > 59 || Number(second) > 59 || zone === '-00:00') return null
+  if (zone.toUpperCase() !== 'Z' && (Number(zone.slice(1, 3)) > 23 || Number(zone.slice(4)) > 59)) return null
+  const date = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}${zone.toUpperCase()}`)
+  if (!Number.isFinite(date.getTime())) return null
+  const pad = (n: number, width = 2) => String(n).padStart(width, '0')
+  const offset = -date.getTimezoneOffset()
+  const local = `${pad(date.getFullYear(), 4)}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}${fraction}`
+  return `${local} UTC${offset < 0 ? '-' : '+'}${pad(Math.floor(Math.abs(offset) / 60))}:${pad(Math.abs(offset) % 60)}`
+}
+
 export function fmtSize(n: number | undefined): string {
   if (n === undefined) return ''
   if (n < 1024) return `${n} B`

@@ -1,3 +1,4 @@
+declare const process: { env: { TZ?: string } }
 import {
   copyText,
   httpMockFromRequest,
@@ -6,6 +7,7 @@ import {
   fmtDuration,
   fmtSize,
   fmtTime,
+  localTimestamp,
   splitLinks,
   newRuleId,
   prettyJson,
@@ -243,3 +245,27 @@ assertEqual(socketAckMockFromEvent(event).payloadMatch, undefined, 'ack default 
 const ack = socketAckMockFromEvent(event, true)
 assertEqual(ack.payloadMatch, JSON.stringify({ page: 1, tags: ['a'] }, null, 2), 'ack condition uses only the first argument')
 assertEqual(ack.ackPayload, event.ackPayload, 'ack response remains separate from outgoing condition')
+
+
+for (const invalid of [null, 1794899190, '1794899190000', '2026-05-29', '2026-05-29T10:20:18',
+  '2026-02-29T00:00:00Z', '2026-04-31T00:00:00Z', '2026-13-01T00:00:00Z',
+  '2026-01-01T24:00:00Z', '2026-01-01T00:00:60Z', '2026-01-01T00:00:00+25:00',
+  '2026-01-01T00:00:00+08:99', '2026-01-01T00:00:00-00:00', 'prefix 2026-01-01T00:00:00Z']) {
+  assertEqual(localTimestamp(invalid), null, 'ambiguous or invalid values stay ordinary text')
+}
+const env = process.env
+const previousTZ = env.TZ
+try {
+  env.TZ = 'Asia/Taipei'
+  assertEqual(localTimestamp('2026-05-29T10:20:18.739Z'), '2026-05-29 18:20:18.739 UTC+08:00', 'UTC to local time')
+  assertEqual(localTimestamp('2026-12-31T23:30:00-05:00'), '2027-01-01 12:30:00 UTC+08:00', 'offset and year rollover')
+  assertEqual(localTimestamp('2024-02-29T00:00:00.123456Z'), '2024-02-29 08:00:00.123456 UTC+08:00', 'leap day and fractional precision')
+  env.TZ = 'America/New_York'
+  assertEqual(localTimestamp('2026-01-15T12:00:00Z'), '2026-01-15 07:00:00 UTC-05:00', 'winter offset')
+  assertEqual(localTimestamp('2026-07-15T12:00:00Z'), '2026-07-15 08:00:00 UTC-04:00', 'summer offset uses timestamp date')
+  env.TZ = 'Asia/Kathmandu'
+  assertEqual(localTimestamp('2026-01-15T12:00:00Z'), '2026-01-15 17:45:00 UTC+05:45', 'fractional-hour timezone')
+} finally {
+  if (previousTZ === undefined) delete env.TZ
+  else env.TZ = previousTZ
+}

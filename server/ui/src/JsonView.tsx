@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState, type CSSProperties, type FocusEvent, type MouseEvent } from 'react'
+import { createPortal } from 'react-dom'
+import { localTimestamp } from './util'
 import { Highlight, LinkText } from './HttpView'
 
 // Collapsible JSON tree; falls back to raw text when the body isn't JSON.
@@ -101,9 +103,48 @@ function Node({ name, value, depth, query, expandAll }: {
     <div className="jn-node jn-leaf">
       <span className="jn-chev-spacer" />
       {key}{sep}
-      <span className={'jn-val ' + valClass(value)}><LinkText text={fmt(value)} query={query} /></span>
+      <Value value={value} query={query} />
     </div>
   )
+}
+
+function Value({ value, query }: { value: unknown; query: string }) {
+  const local = localTimestamp(value)
+  const id = useId()
+  const [position, setPosition] = useState<CSSProperties | null>(null)
+  useEffect(() => {
+    if (!position) return
+    const hide = () => setPosition(null)
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.stopPropagation(); hide() }
+    }
+    window.addEventListener('scroll', hide, true)
+    window.addEventListener('resize', hide)
+    window.addEventListener('keydown', escape, true)
+    return () => {
+      window.removeEventListener('scroll', hide, true)
+      window.removeEventListener('resize', hide)
+      window.removeEventListener('keydown', escape, true)
+    }
+  }, [position])
+  const show = (event: MouseEvent<HTMLSpanElement> | FocusEvent<HTMLSpanElement>) => {
+    if (!local) return
+    const rect = event.currentTarget.getBoundingClientRect()
+    setPosition({ left: Math.max(8, Math.min(rect.left, window.innerWidth - 348)),
+      ...(window.innerHeight - rect.bottom >= 110 ? { top: rect.bottom + 6 } : { bottom: window.innerHeight - rect.top + 6 }) })
+  }
+  return <>
+    <span className={'jn-val ' + valClass(value) + (local ? ' jn-timestamp' : '')}
+      tabIndex={local ? 0 : undefined} aria-describedby={local && position ? id : undefined}
+      onMouseEnter={show} onFocus={show} onMouseLeave={() => setPosition(null)} onBlur={() => setPosition(null)}>
+      <LinkText text={fmt(value)} query={query} />
+    </span>
+    {local && position && createPortal(<div className="jn-time-tooltip" role="tooltip" id={id} style={position}>
+      <span className="dim">Local time</span>
+      <div className="jn-local-time">{local}</div>
+      <span className="dim">{Intl.DateTimeFormat().resolvedOptions().timeZone}</span>
+    </div>, document.body)}
+  </>
 }
 
 function valClass(v: unknown): string {

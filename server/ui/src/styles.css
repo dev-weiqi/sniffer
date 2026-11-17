@@ -1073,6 +1073,16 @@ button.add { margin-top: 2px; }
 .jn-string { color: var(--ok); }
 .jn-link { color: var(--info); text-decoration: underline; cursor: pointer; }
 .jn-link:hover { filter: brightness(1.2); }
+.jn-timestamp { text-decoration-line: underline; text-decoration-style: dashed; text-decoration-color: var(--text-dim); text-underline-offset: 4px; cursor: text; }
+.jn-timestamp:focus-visible { outline: 1px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+.jn-time-tooltip {
+  position: fixed; z-index: 150; width: 340px; max-width: calc(100vw - 16px);
+  padding: 10px 12px; background: var(--bg-panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 14px rgb(0 0 0 / 0.18);
+  font: 12px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  pointer-events: none; user-select: none; overflow-wrap: anywhere;
+}
+.jn-local-time { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
 .jn-number { color: var(--info); }
 .jn-boolean { color: var(--accent); }
 .jn-null { color: var(--text-dim); }
