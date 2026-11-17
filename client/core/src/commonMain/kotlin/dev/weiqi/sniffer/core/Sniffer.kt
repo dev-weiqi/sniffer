@@ -49,7 +49,7 @@ object Sniffer {
     internal var reportSinkForTests: ((DeviceMessage) -> Unit)? = null
 
     @Volatile
-    private var capabilities: Set<String> = setOf("http-query-mocks", "http-body-mocks", "socket-payload-mocks")
+    private var capabilities: Set<String> = setOf("mock-observability", "http-query-mocks", "http-body-mocks", "socket-payload-mocks")
 
     @Volatile
     private var pushHandlers: Map<String, (event: String, payload: String) -> Unit> = emptyMap()
@@ -206,7 +206,10 @@ internal fun handleDaemonMessage(
 ) {
     val msg = runCatching { SnifferJson.decodeFromString<DaemonMessage>(text) }.getOrNull() ?: return
     when (msg) {
-        is MockRules -> MockRegistry.update(msg)
+        is MockRules -> {
+            MockRegistry.update(msg)
+            msg.revision?.let { revision -> runCatching { Sniffer.report(MockRulesApplied(revision)) } }
+        }
         is BreakpointRules -> BreakpointRegistry.update(msg.rules)
         is BreakpointResolveMsg -> Breakpoints.resolve(
             msg.id,

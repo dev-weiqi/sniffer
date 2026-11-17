@@ -60,6 +60,11 @@ const scenarioRule = { type: 'object', additionalProperties: false, properties: 
 } }
 
 const definitions: Tool[] = [
+  { name: 'get_run_status', description: 'Read SDK readiness and exact matched rule IDs for a run. Optional bounded wait stops on readiness, disconnect or unsupported SDK. A hit is not completion or UI success.',
+    inputSchema: { type: 'object', additionalProperties: false, required: ['runId'], properties: {
+      runId: identifier, waitMs: { type: 'integer', minimum: 0, maximum: 30000 },
+    } } },
+
   { name: 'start_run', description: 'Start a persistent device-local verification run, optionally applying a scenario atomically. Run-owned rules can later be removed without clearing unrelated traffic or mocks.',
     inputSchema: { type: 'object', additionalProperties: false, properties: { deviceId: identifier, name: text, scenarioId: identifier,
       parameters: { type: 'object', additionalProperties: { type: ['string', 'number', 'boolean', 'null'] } } } } },
@@ -157,8 +162,8 @@ const definitions: Tool[] = [
 ]
 
 export const TOOLS: Tool[] = definitions.map(tool => ({ ...tool, annotations: {
-  readOnlyHint: ['get_state', 'list_traffic', 'get_entry', 'list_scenarios', 'list_runs'].includes(tool.name),
-  destructiveHint: !['get_state', 'list_traffic', 'get_entry', 'list_scenarios', 'list_runs'].includes(tool.name),
+  readOnlyHint: ['get_state', 'list_traffic', 'get_entry', 'list_scenarios', 'list_runs', 'get_run_status'].includes(tool.name),
+  destructiveHint: !['get_state', 'list_traffic', 'get_entry', 'list_scenarios', 'list_runs', 'get_run_status'].includes(tool.name),
 } }))
 
 const validator = new AjvJsonSchemaValidator()
@@ -241,6 +246,14 @@ export function createMcpRuntime(options: McpRuntimeOptions = {}) {
     if (!checked.valid) throw new Error(`Invalid ${name} arguments: ${checked.errorMessage}`)
     const args = checked.data
     if (name === 'get_state') return daemon('/api/state?redact=1')
+    if (name === 'get_run_status') {
+      const deadline = Date.now() + Number(args.waitMs ?? 0)
+      while (true) {
+        const state = await daemon('/api/runs/status?runId=' + encodeURIComponent(String(args.runId))) as { ready: boolean; supported: boolean; connected: boolean }
+        if (state.ready || !state.supported || !state.connected || Date.now() >= deadline) return state
+        await new Promise(resolve => setTimeout(resolve, Math.min(100, deadline - Date.now())))
+      }
+    }
     if (name === 'start_run') return post('/api/runs', { ...args, deviceId: await resolveDevice(args.deviceId, true) })
     if (name === 'list_runs') {
       const query = new URLSearchParams()

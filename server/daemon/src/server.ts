@@ -1,3 +1,4 @@
+import { createMockSync } from './mockSync.js'
 import { createServer } from 'node:http'
 import { mkdirSync, writeFileSync, renameSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -63,6 +64,7 @@ interface DeviceInfo {
   capabilities: string[]
 }
 
+const mockSync = createMockSync()
 const devices = new Map<string, { info: DeviceInfo; ws: WebSocket; connected: boolean }>()
 
 // mock rules survive daemon restarts and are scoped by deviceId; traffic stays in-memory by design
@@ -112,7 +114,8 @@ function sendMocksToDevice(deviceId: string) {
   const device = devices.get(deviceId)
   if (!device?.connected) return
   const merged = stripUiOnlyFields(mocksFor(deviceId), device.info.capabilities)
-  device.ws.send(JSON.stringify({ type: 'mock-rules', http: merged.http, socket: merged.socket }))
+  const revision = mockSync.sent(deviceId, merged)
+  device.ws.send(JSON.stringify({ type: 'mock-rules', http: merged.http, socket: merged.socket, revision }))
 }
 
 // ---------- breakpoints (in-memory: ephemeral debug state, unlike persisted mocks) ----------
@@ -144,6 +147,7 @@ function releasePendingHits() {
 }
 
 function removeDeviceRecord(deviceId: string): { removed: boolean; mocksChanged: boolean } {
+  mockSync.disconnect(deviceId)
   delete breakpointsByDevice[deviceId]
   clearDeviceHits(deviceId)
   const hadDevice = devices.delete(deviceId)
@@ -171,7 +175,7 @@ const server = createServer(async (req, res) => {
       return json(res, 200, await buildDoctorReport({ port: PORT, bindHost: BIND_HOST }))
     }
     if (url.pathname.startsWith('/api/')) return await handleApi(req, res, url, {
-      devices,
+      devices, mockSync,
       getMockStore: () => mockStore,
       setMockStore: store => { mockStore = store },
       persistMocks,
@@ -237,6 +241,10 @@ deviceWss.on('connection', ws => {
       }
       return
     }
+    if (deviceId && devices.get(deviceId)?.ws === ws && ['mock-rules-applied', 'mock-hit'].includes(String(msg.type))) {
+      mockSync.receive(deviceId, msg)
+      return
+    }
     // a paused response is not recorded traffic: relay it to the UI and track it for resolve
     if (msg.type === 'breakpoint-hit' && deviceId) {
       pendingHits.set(String(msg.id), { deviceId, hit: msg })
@@ -251,6 +259,7 @@ deviceWss.on('connection', ws => {
     if (!deviceId) return
     const d = devices.get(deviceId)
     if (d?.ws === ws) {
+      mockSync.disconnect(deviceId)
       d.connected = false
       console.log(`🔴 [device] ${d.info.deviceName} disconnected`)
       // the SDK releases its own paused calls on disconnect; clear the UI's view of them

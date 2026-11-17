@@ -235,3 +235,14 @@ block cleanup until explicitly unshared. Offline cleanup updates persistent daem
 returns `cleanup-pending-device`; online cleanup returns `cleanup-sent`, not an SDK ACK.
 No automatic expiry is assumed. End every run explicitly, including after failed verification.
 No SDK update is required for run ownership and daemon-side cleanup.
+
+## Device readiness and hits
+
+`get_run_status({runId, waitMs?})` reads `supported`, `connected`, `ready`, `revision`,
+`acknowledged`, `omittedRuleIds` and recent exact-rule `hits`. waitMs is 0 to 30000 and
+waits only for readiness, stopping early for unsupported/offline devices. Poll again after
+UI interaction for hits. Active runs are ready only when every owned rule was included and
+the SDK ACKed the current sync. Ended runs are ready when the SDK ACKs their removal.
+This requires SDK capability `mock-observability`. Hits are bounded, in-memory matching
+evidence; they do not prove response completion or UI correctness. A shared rule may take
+precedence even when a local run is ready. No network request is blocked by waiting in MCP.

@@ -397,3 +397,7 @@ export const api = {
   deleteOfflineDevices: () => fetch('/api/devices/offline', { method: 'DELETE' }),
   deleteDevice: (deviceId: string) => fetch(`/api/devices/${encodeURIComponent(deviceId)}`, { method: 'DELETE' }),
 }
+
+// Optional SDK observability messages are consumed by the daemon, not traffic rows.
+export interface MockRulesApplied { type: 'mock-rules-applied'; revision: string }
+export interface MockHit { type: 'mock-hit'; ruleId: string; revision: string; timestamp: number }

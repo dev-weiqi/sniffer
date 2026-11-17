@@ -1,3 +1,4 @@
+import type { createMockSync } from './mockSync.js'
 import { randomUUID } from 'node:crypto'
 import { buildMock } from './mcpCore.js'
 import { scenarioParameters, instantiateScenario, withScenarioMocks } from './scenarios.js'
@@ -15,6 +16,7 @@ interface ApiDevice {
   info: {
     deviceId: string
     appId: string
+    capabilities?: string[]
   }
   connected: boolean
   ws: {
@@ -24,6 +26,7 @@ interface ApiDevice {
 }
 
 export async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL, deps: {
+  mockSync?: ReturnType<typeof createMockSync>
   devices: Map<string, ApiDevice>
   getMockStore(): MockStore
   setMockStore(store: MockStore): void
@@ -55,6 +58,16 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, url: 
   const sync = (deviceId: string) => {
     deps.sendMocksToDevice(deviceId)
     deps.broadcastToUi({ type: 'mocks-changed', deviceId, mocks: deps.mocksFor(deviceId) })
+  }
+  if (url.pathname === '/api/runs/status' && req.method === 'GET') {
+    const run = deps.getMockStore().runs?.find(r => r.id === url.searchParams.get('runId'))
+    if (!run) return json(res, 404, { error: 'Run not found' })
+    const device = deps.devices.get(run.deviceId)
+    const supported = !!device?.info.capabilities?.includes('mock-observability')
+    const status = deps.mockSync?.status(run.deviceId, run.ruleIds, !!run.endedAt)
+    return json(res, 200, { runId: run.id, ended: !!run.endedAt, connected: !!device?.connected, supported,
+      ...status, ready: supported && !!device?.connected && !!status?.ready,
+      meaning: run.endedAt ? 'Device acknowledged removal' : 'Device acknowledged current rules; hits indicate matching, not UI success' })
   }
   if (url.pathname === '/api/runs' && req.method === 'GET') {
     return json(res, 200, { runs: (deps.getMockStore().runs ?? []).filter(run =>

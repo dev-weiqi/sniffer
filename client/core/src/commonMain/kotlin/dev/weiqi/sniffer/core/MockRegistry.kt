@@ -15,7 +15,8 @@ object MockRegistry {
     private var rules: MockRules = MockRules()
 
     fun update(newRules: MockRules) {
-        rules = newRules
+        rules = newRules.copy(http = newRules.http.map { it.copy(syncRevision = newRules.revision) },
+            socket = newRules.socket.map { it.copy(syncRevision = newRules.revision) })
     }
 
     // Exact-path match: [urlPattern] must equal the request's path (scheme, host, query and
@@ -23,7 +24,15 @@ object MockRegistry {
     // pattern matches nothing (a bare path always starts with "/").
     fun matchHttp(method: String, url: String): HttpMockRule? = matchHttp(method, url, null)
 
-    fun matchHttp(method: String, url: String, body: String?): HttpMockRule? {
+    fun matchHttp(method: String, url: String, body: String?): HttpMockRule? = findHttp(method, url, body)?.also {
+        reportHit(it.id, it.syncRevision)
+    }
+
+    private fun reportHit(id: String, revision: String?) {
+        if (revision != null) runCatching { Sniffer.report(MockHitMsg(id, revision, now())) }
+    }
+
+    private fun findHttp(method: String, url: String, body: String?): HttpMockRule? {
         val actual by lazy { body?.takeIf { it.length <= MAX_BODY_CHARS }?.let(::parseJson) }
         val path = pathOf(url)
         val query by lazy {
@@ -58,11 +67,11 @@ object MockRegistry {
     fun matchSocketAck(event: String): SocketMockRule? = matchSocketAck(event, "[]")
 
     fun matchSocketAck(event: String, args: String): SocketMockRule? =
-        matchSocket("socketio", event) { (parseJson(args) as? JsonArray)?.firstOrNull() }
+        matchSocket("socketio", event) { (parseJson(args) as? JsonArray)?.firstOrNull() }?.also { reportHit(it.id, it.syncRevision) }
 
     /** ktor-ws "reply mock": matches outgoing text frames by substring and optional JSON fields. */
     fun matchWsSend(text: String): SocketMockRule? =
-        matchSocket("ktor-ws", text) { parseJson(text) }
+        matchSocket("ktor-ws", text) { parseJson(text) }?.also { reportHit(it.id, it.syncRevision) }
 
     private fun matchSocket(transport: String, event: String, payload: () -> JsonElement?): SocketMockRule? {
         val actual by lazy(payload)

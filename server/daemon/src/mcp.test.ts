@@ -51,7 +51,7 @@ async function call(name: string, args: Record<string, unknown>) {
 try {
   await client.connect(transport)
   const listed = await client.listTools()
-  assert.equal(listed.tools.length, 18)
+  assert.equal(listed.tools.length, 19)
   assert.equal(listed.tools.find(t => t.name === 'get_state')?.annotations?.readOnlyHint, true)
   const analytics = await call('list_traffic', { type: 'firebase', event: 'screen_view', userId: 'user-7' })
   assert.equal(analytics.entries[0].message.params.token, '‹redacted›')
@@ -103,6 +103,7 @@ try {
   const runTwo = await call('start_run', { name: 'Independent run' })
   const runTwoRule = await call('create_mock', { runId: runTwo.run.id, urlPattern: '/other-run' })
   assert.equal((await call('list_runs', {})).runs.length, 2)
+  assert.equal((await call('get_run_status', { runId: runOne.run.id })).supported, false)
   assert.equal((await call('end_run', { runId: runOne.run.id })).removed, 2)
   assert(store.devices.d1.http.some(r => (r as { id: string }).id === runTwoRule.created.id))
   assert(store.devices.d1.http.some(r => (r as { id: string }).id === source.created.id))

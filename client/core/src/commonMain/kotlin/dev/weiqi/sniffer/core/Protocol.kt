@@ -129,10 +129,19 @@ data class FirebaseAnalyticsEventMsg(
 ) : DeviceMessage
 
 @Serializable
+@SerialName("mock-rules-applied")
+data class MockRulesApplied(val revision: String) : DeviceMessage
+
+@Serializable
+@SerialName("mock-hit")
+data class MockHitMsg(val ruleId: String, val revision: String, val timestamp: Long) : DeviceMessage
+
+@Serializable
 @SerialName("mock-rules")
 data class MockRules(
     val http: List<HttpMockRule> = emptyList(),
     val socket: List<SocketMockRule> = emptyList(),
+    val revision: String? = null,
 ) : DaemonMessage
 
 @Serializable
@@ -177,6 +186,7 @@ data class HttpMockRule(
     val queryParams: Map<String, String> = emptyMap(),
     // JSON object of required request body fields; blank means no body constraint.
     val bodyMatch: String? = null,
+    @kotlinx.serialization.Transient val syncRevision: String? = null,
 )
 
 @Serializable
@@ -207,4 +217,5 @@ data class SocketMockRule(
     val pushPayload: String = "[]",
     // JSON object of required payload fields. Socket.IO uses its first argument; WS uses the frame.
     val payloadMatch: String? = null,
+    @kotlinx.serialization.Transient val syncRevision: String? = null,
 )

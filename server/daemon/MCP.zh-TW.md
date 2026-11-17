@@ -159,3 +159,9 @@ UI 預覽使用 `POST /api/mock-body/replace-fields`，傳入 `{body, replacemen
 
 `end_run({runId})` 只刪所記錄的本輪規則 ID，不清流量、不動其他輪或原有規則，可重複呼叫。若本輪規則被改成共享，會拒絕清理，必須先明確取消共享。
 裝置離線時清理 daemon 儲存狀態，回報 `cleanup-pending-device`；在線時回報 `cleanup-sent`，不冒充 SDK 已確認。沒有自動過期，驗證失敗也需明確結束本輪。這部分不需更新 SDK。
+
+## 裝置就緒與命中
+
+`get_run_status({runId, waitMs?})` 回傳 supported、connected、ready、revision、acknowledged、omittedRuleIds 與近期精準規則 hits。waitMs 可為 0 至 30000，只等待就緒；裝置不支援或離線會提早返回。操作畫面後再查一次取得命中。
+進行中的工作階段必須所有規則都已下發且 SDK 確認目前同步才算 ready；結束後則確認本輪規則已移除。需要 SDK 的 `mock-observability` 能力。
+命中只是有限筆數的記憶體證據，不代表回覆完成或 UI 正確；共享規則仍可能優先命中。MCP 等待不阻擋 App 網路請求。

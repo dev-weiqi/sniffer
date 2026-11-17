@@ -204,3 +204,9 @@ DELETE /api/devices/<deviceId> 移除裝置；在線上時也中斷連線
 `sniffer mcp` 透過 stdio 提供上述 REST 功能，不新增裝置訊息，也不需要為 MCP 修改 SDK。工具涵蓋流量（含 Analytics）、HTTP 與 Socket 模擬、事件注入及回應斷點。
 
 設定與完整參數見 [MCP 說明](server/daemon/MCP.zh-TW.md)。MCP 不會要求未遮罩的流量，狀態查詢使用 `redact=1`。自訂敏感欄位必須設在背景服務，不是 MCP 程序。遮罩只能處理已知格式，無法保證移除所有機密或圖片內容。
+
+## Mock 同步證據
+
+宣告 `mock-observability` 的 SDK 接受 `mock-rules` 的選填 revision。安裝整組規則後送出 `{"type":"mock-rules-applied","revision":"..."}`；選中規則時送出 `{"type":"mock-hit","ruleId":"...","revision":"...","timestamp":0}`。
+命中只表示選中規則，不代表回覆成功完成或 UI 驗證通過。這些是控制訊息，不加入流量表。
+daemon 只接受目前 WebSocket 連線及同步 revision；重連或再次同步會使舊確認失效。最多保留 1000 筆近期命中，daemon 重啟後不保留。舊 SDK 不會被宣稱已支援或已就緒。

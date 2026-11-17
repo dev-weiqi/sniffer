@@ -216,3 +216,14 @@ See [MCP setup and tool schemas](server/daemon/MCP.md). MCP never requests raw
 traffic; state reads use `redact=1`. Custom redaction fields are configured on the
 daemon, not the MCP process. Redaction is best effort, not a guarantee that every
 secret or image content is removed.
+
+## Mock synchronization evidence
+
+An SDK advertising `mock-observability` accepts optional `revision` on `mock-rules`.
+After installing the full rule set it sends `{"type":"mock-rules-applied","revision":"..."}`.
+Matching sends `{"type":"mock-hit","ruleId":"...","revision":"...","timestamp":0}`.
+A hit means rule selection, not successful response completion or UI verification.
+These are daemon control messages, not traffic rows. The daemon accepts only the current
+WebSocket session and current synchronization revision; reconnect and subsequent sends
+invalidate prior ACKs. At most 1000 recent hits are retained in memory, not across daemon
+restarts. Old SDKs ignore revision and are explicitly reported as unsupported.
