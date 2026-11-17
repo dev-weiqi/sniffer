@@ -127,3 +127,28 @@ Call `socket.cancel()` when the owner closes the connection. Native WebSocket in
 ## Failure behavior
 
 Sniffer is fail-open. Unsupported traffic, malformed daemon messages, SDK failures, and daemon disconnects clear active rules and continue the owner's original behavior. Only an explicitly matched mock, delay, or armed breakpoint intentionally changes traffic.
+
+## Verification workflows on the iOS branch
+
+Use server 0.9.0 and this branch's native SDK for parameterized scenarios, isolated
+verification runs, synchronization acknowledgment, exact HTTP/Socket hit reporting,
+`wait_for_hits`, and `export_run_summary`. The historical `ios/0.7.2` tag does not
+include these additions. Feature negotiation uses `mock-observability`,
+`http-sequences`, and `http-sse-mocks`; do not infer support from the version string.
+
+HTTP sequences reserve a step atomically per matching request. Repeat-last, loop,
+and stop behavior match the Kotlin SDK. Stop fails locally without sending the
+request to the backend. Identical rule resends and temporary daemon disconnects
+preserve the position; changing the sequence/reset token, deleting the rule, or
+restarting the app resets it. Background requests can also consume steps.
+
+Timed SSE mocks emit UTF-8 frames through URLProtocol, with per-event delay, optional
+event/id/retry fields and placeholder expansion for data. They support normal close,
+open until the caller cancels or times out, and disconnect errors. Content-Length
+and Transfer-Encoding are removed. Each request starts its own stream; cancelled
+loads stop scheduled delivery. Streaming mock telemetry omits the response body.
+A rule hit confirms selection, not completion or UI correctness.
+
+Unmatched HTTP traffic keeps the existing forwarding path. Socket wrappers keep
+existing reply/ACK behavior and additionally report the matched rule ID. No new
+HTTP endpoint or iOS-only MCP tool is required. See [MCP workflows](../../server/daemon/MCP.md).

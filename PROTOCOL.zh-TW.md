@@ -229,3 +229,9 @@ DELETE /api/devices/<deviceId> 移除裝置，在線上時也中斷連線
 close 正常結束，open 在最後一筆後等候呼叫端取消或逾時，disconnect 在送出最後一筆後讓讀取失敗，尚未讀取的緩衝資料可能遺失。SDK 強制使用 text/event-stream UTF-8，移除 Content-Length 與 Transfer-Encoding。紀錄僅包含回應標頭與 null body，命中不代表事件已被全部讀取。呼叫端取消會關閉模擬串流，原有重試與重連策略仍適用，也可能開啟另一條全新串流。
 
 Ktor 沿用 SSEClientContent 的既有 SSE adapter，原始讀取則使用 ByteReadChannel，未知 adapter 不轉換。OkHttp 使用可取消且遵守讀取逾時的串流來源。真實串流維持原有行為。
+
+### 原生 Swift 驗證支援
+
+`ios` 分支的原生 Swift SDK 沿用上述 `revision`、`mock-rules-applied`、
+`mock-hit`（含可選的零起算 `stepIndex`）、HTTP `sequence` 與 HTTP `sse` 欄位。
+能力協商與不支援規則的省略方式與 Kotlin SDK 相同，不新增 iOS 專屬 wire 訊息。

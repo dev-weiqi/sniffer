@@ -62,7 +62,7 @@ final class SnifferRuntime {
     private func connectionChanged(_ connected: Bool) {
         BreakpointStore.shared.setConnected(connected)
         guard connected else {
-            RuleStore.shared.clear()
+            RuleStore.shared.disconnect()
             return
         }
         let state = lock.withLock { (connection, Array(liveConnections.values)) }
@@ -82,6 +82,7 @@ final class SnifferRuntime {
         case "mock-rules":
             if let message = try? decoder.decode(MockRulesMessage.self, from: data) {
                 RuleStore.shared.update(mocks: message)
+                if let revision = message.revision { report(MockRulesAppliedMessage(revision: revision)) }
             } else {
                 RuleStore.shared.clearMocks()
             }

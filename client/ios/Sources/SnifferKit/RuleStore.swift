@@ -7,13 +7,20 @@ final class RuleStore {
     private let lock = NSLock()
     private var httpRules: [HTTPMockRule] = []
     private var socketRules: [SocketMockRule] = []
+    private var revision: String?
+    private var sequenceStates: [String: (sequence: HTTPSequence, next: Int)] = [:]
     private var breakpointRules: [BreakpointRule] = []
 
     private init() {}
 
     func update(mocks: MockRulesMessage) {
         lock.withLock {
-            httpRules = mocks.http
+            sequenceStates = sequenceStates.filter { id, state in mocks.http.contains { $0.id == id && $0.sequence == state.sequence } }
+            revision = mocks.revision
+            httpRules = mocks.http.filter {
+                ($0.sequence == nil || ($0.sequence!.isValid && !$0.delayOnly && $0.sse == nil))
+                    && ($0.sse == nil || ($0.sse!.isValid && !$0.delayOnly && $0.sequence == nil && $0.status == 200))
+            }
             socketRules = mocks.socket
         }
     }
@@ -24,6 +31,8 @@ final class RuleStore {
 
     func clear() {
         lock.withLock {
+            revision = nil
+            sequenceStates.removeAll()
             httpRules.removeAll()
             socketRules.removeAll()
             breakpointRules.removeAll()
@@ -32,9 +41,52 @@ final class RuleStore {
 
     func clearMocks() {
         lock.withLock {
+            revision = nil
+            sequenceStates.removeAll()
             httpRules.removeAll()
             socketRules.removeAll()
         }
+    }
+
+    func disconnect() {
+        lock.withLock {
+            revision = nil
+            httpRules.removeAll()
+            socketRules.removeAll()
+            breakpointRules.removeAll()
+        }
+    }
+
+    private func selected(_ rule: HTTPMockRule) -> HTTPMockRule {
+        var resolved = rule
+        if let sequence = rule.sequence {
+            let next = sequenceStates[rule.id]?.next ?? 0
+            if sequence.onExhausted == "stop" && next >= sequence.steps.count {
+                resolved.sequenceExhausted = true
+                return resolved
+            }
+            let index = sequence.onExhausted == "loop" ? next % sequence.steps.count : min(next, sequence.steps.count - 1)
+            sequenceStates[rule.id] = (sequence, sequence.onExhausted == "loop" ? (index + 1) % sequence.steps.count : min(next + 1, sequence.steps.count))
+            let step = sequence.steps[index]
+            resolved.status = step.status
+            resolved.headers = step.headers
+            resolved.body = step.body
+            resolved.delayMs = step.delayMs
+            resolved.stepIndex = index
+        }
+        reportHit(rule.id, stepIndex: resolved.stepIndex)
+        return resolved
+    }
+
+    private func selected(_ rule: SocketMockRule) -> SocketMockRule {
+        reportHit(rule.id, stepIndex: nil)
+        return rule
+    }
+
+    private func reportHit(_ ruleId: String, stepIndex: Int?) {
+        guard let revision else { return }
+        SnifferRuntime.shared.report(MockHitMessage(ruleId: ruleId, revision: revision,
+            timestamp: nowMillis(), stepIndex: stepIndex))
     }
 
     func clearBreakpoints() {
@@ -71,10 +123,10 @@ final class RuleStore {
                     !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         && query.contains { $0.name == key && ($0.value ?? "") == value }
                 }) && (expected.isEmpty || matchesJSON(expected, actual)) {
-                    return rule
+                    return selected(rule)
                 }
             }
-            return fallback
+            return fallback.map { selected($0) }
         }
     }
 
@@ -99,10 +151,10 @@ final class RuleStore {
                 if expected.isEmpty {
                     if fallback == nil { fallback = rule }
                 } else if matchesJSON(expected, actual) {
-                    return rule
+                    return selected(rule)
                 }
             }
-            return fallback
+            return fallback.map { selected($0) }
         }
     }
 

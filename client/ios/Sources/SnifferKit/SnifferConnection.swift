@@ -154,7 +154,7 @@ private struct HelloMessage: Encodable {
     let platform = "ios"
     let appId: String
     let sdkVersion = "0.7.2"
-    let capabilities = ["http", "http-query-mocks", "http-body-mocks", "socket-payload-mocks", "breakpoint", "ktor-ws", "socketio"]
+    let capabilities = ["mock-observability", "http-sequences", "http-sse-mocks", "http", "http-query-mocks", "http-body-mocks", "socket-payload-mocks", "breakpoint", "ktor-ws", "socketio"]
 
     var json: String {
         guard let data = try? JSONEncoder().encode(self) else { return "" }
