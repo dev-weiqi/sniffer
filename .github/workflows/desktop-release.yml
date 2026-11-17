@@ -2,6 +2,12 @@ name: Desktop Release
 
 # Push a tag like v0.3.0 to build Sniffer.app and attach a dmg to a GitHub Release.
 on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build
+        required: true
+        type: string
   push:
     tags: ['v*']
 
@@ -10,9 +16,11 @@ permissions:
 
 jobs:
   dmg:
-    runs-on: macos-14 # arm64
+    runs-on: macos-15 # arm64
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -40,4 +48,5 @@ jobs:
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" Sniffer-server-mac-*.dmg --title "$GITHUB_REF_NAME" --notes ""
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: gh release create "$RELEASE_TAG" Sniffer-server-mac-*.dmg --title "$RELEASE_TAG" --notes ""
