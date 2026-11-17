@@ -220,3 +220,18 @@ embedded replacements remain strings and are escaped by JSON serialization. Path
 must be nonempty single segments using letters, digits, `_`, `.`, `~` or `-`.
 SDK placeholders such as `${randomId}` remain unchanged. Repeated application creates new
 rules; use returned IDs for cleanup. No UI redesign or SDK change is required.
+
+## Verification runs
+
+`start_run({deviceId?, name?, scenarioId?, parameters?})` creates a persistent run, optionally
+applying a scenario in the same transaction. Returns `{run, status: "sent"}`. Use
+`create_mock({runId, ...fields})` to add more rules; the run supplies the device and forces
+new rules to be device-local. `list_runs({deviceId?})` includes finished and unfinished runs
+and survives daemon restarts. The MCP appId setting scopes this listing.
+
+`end_run({runId})` removes only the recorded IDs from that device. It never clears traffic,
+other runs, or existing rules. Calling it again is safe. Rules moved into the shared bucket
+block cleanup until explicitly unshared. Offline cleanup updates persistent daemon state but
+returns `cleanup-pending-device`; online cleanup returns `cleanup-sent`, not an SDK ACK.
+No automatic expiry is assumed. End every run explicitly, including after failed verification.
+No SDK update is required for run ownership and daemon-side cleanup.

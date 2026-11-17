@@ -150,3 +150,12 @@ UI 預覽使用 `POST /api/mock-body/replace-fields`，傳入 `{body, replacemen
 
 所有參數都必須提供，不接受多餘參數。JSON 中完整的 `{{parameter}}` 字串會轉成傳入的 JSON 純量，字串內嵌替換則保留字串且正確跳脫。URL 參數限單一路徑片段，只接受英數字、底線、點、波浪號與連字號。SDK 原有 `${randomId}` 等 placeholder 不變。
 重複執行會產生新規則，清理時使用回傳的 ruleIds。現有 UI 會顯示產生的規則，不需改 SDK。
+
+## 驗證工作階段
+
+`start_run({deviceId?, name?, scenarioId?, parameters?})` 建立可跨 daemon 重啟保留的工作階段，可同時套用情境，回傳 `{run, status: "sent"}`。
+用 `create_mock({runId, ...fields})` 加入本輪規則，裝置由工作階段決定，新增規則強制不共享。
+`list_runs({deviceId?})` 列出已結束及未結束的工作階段，會遵守 MCP 設定的 appId 範圍。
+
+`end_run({runId})` 只刪所記錄的本輪規則 ID，不清流量、不動其他輪或原有規則，可重複呼叫。若本輪規則被改成共享，會拒絕清理，必須先明確取消共享。
+裝置離線時清理 daemon 儲存狀態，回報 `cleanup-pending-device`；在線時回報 `cleanup-sent`，不冒充 SDK 已確認。沒有自動過期，驗證失敗也需明確結束本輪。這部分不需更新 SDK。

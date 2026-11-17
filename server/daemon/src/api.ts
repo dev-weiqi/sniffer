@@ -56,6 +56,65 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, url: 
     deps.sendMocksToDevice(deviceId)
     deps.broadcastToUi({ type: 'mocks-changed', deviceId, mocks: deps.mocksFor(deviceId) })
   }
+  if (url.pathname === '/api/runs' && req.method === 'GET') {
+    return json(res, 200, { runs: (deps.getMockStore().runs ?? []).filter(run =>
+      (!url.searchParams.has('deviceId') || run.deviceId === url.searchParams.get('deviceId')) &&
+      (!url.searchParams.has('appId') || run.appId === url.searchParams.get('appId'))) })
+  }
+  if (url.pathname === '/api/runs' && req.method === 'POST') {
+    try {
+      const body = JSON.parse(await readBody(req))
+      const device = deps.devices.get(body.deviceId)
+      if (!device?.connected) throw new Error('Connected device required')
+      const store = deps.getMockStore()
+      let mocks: Mocks = { http: [], socket: [] }
+      if (body.scenarioId !== undefined) {
+        const scenario = store.scenarios?.find(s => s.id === body.scenarioId && s.appId === device.info.appId)
+        if (!scenario) throw new Error('Scenario not found for this app')
+        mocks = instantiateScenario(scenario, body.parameters ?? {}, buildMock)
+      } else if (body.parameters && Object.keys(body.parameters).length) throw new Error('parameters require scenarioId')
+      if (body.name !== undefined && typeof body.name !== 'string') throw new Error('name must be a string')
+      const run = { id: randomUUID(), deviceId: body.deviceId, appId: device.info.appId, name: body.name ?? '',
+        startedAt: Date.now(), ruleIds: [...mocks.http, ...mocks.socket].map(r => (r as { id: string }).id) }
+      commit({ ...withScenarioMocks(store, body.deviceId, mocks), runs: [...(store.runs ?? []), run] })
+      sync(body.deviceId)
+      return json(res, 200, { run, status: 'sent' })
+    } catch (error) { return json(res, 400, { error: String(error) }) }
+  }
+  if (url.pathname === '/api/runs/rules' && req.method === 'POST') {
+    try {
+      const body = JSON.parse(await readBody(req))
+      const store = deps.getMockStore()
+      const run = store.runs?.find(r => r.id === body.runId && !r.endedAt)
+      if (!run || (body.deviceId !== undefined && body.deviceId !== run.deviceId)) throw new Error('Active run for this device required')
+      if (deps.devices.get(run.deviceId)?.info.appId !== run.appId) throw new Error('Run device appId changed')
+      const rule = { ...buildMock(body.fields), id: randomUUID(), starred: false, createdAt: Date.now() }
+      const mocks = { http: body.fields.type === 'socket' ? [] : [rule], socket: body.fields.type === 'socket' ? [rule] : [] }
+      commit({ ...withScenarioMocks(store, run.deviceId, mocks),
+        runs: store.runs!.map(r => r.id === run.id ? { ...r, ruleIds: [...r.ruleIds, rule.id] } : r) })
+      sync(run.deviceId)
+      return json(res, 200, { deviceId: run.deviceId, runId: run.id, created: { id: rule.id } })
+    } catch (error) { return json(res, 400, { error: String(error) }) }
+  }
+  if (url.pathname === '/api/runs/end' && req.method === 'POST') {
+    try {
+      const body = JSON.parse(await readBody(req))
+      const store = deps.getMockStore()
+      const run = store.runs?.find(r => r.id === body.runId)
+      if (!run) throw new Error('Run not found')
+      const owned = new Set(run.ruleIds)
+      if (Object.values(store.shared).some(m => [...m.http, ...m.socket].some(r => owned.has((r as { id: string }).id))))
+        throw new Error('Run rules were shared; unshare them before cleanup to avoid affecting other devices')
+      const current = store.devices[run.deviceId] ?? { http: [], socket: [] }
+      const keep = (rules: unknown[]) => rules.filter(r => !owned.has((r as { id: string }).id))
+      const remaining = { http: keep(current.http), socket: keep(current.socket) }
+      commit({ ...store, devices: { ...store.devices, [run.deviceId]: remaining },
+        runs: store.runs!.map(r => r.id === run.id ? { ...r, endedAt: r.endedAt ?? Date.now() } : r) })
+      sync(run.deviceId)
+      return json(res, 200, { runId: run.id, removed: current.http.length + current.socket.length - remaining.http.length - remaining.socket.length,
+        status: deps.devices.get(run.deviceId)?.connected ? 'cleanup-sent' : 'cleanup-pending-device' })
+    } catch (error) { return json(res, 400, { error: String(error) }) }
+  }
   if (url.pathname === '/api/scenarios' && req.method === 'GET') {
     const scenarios = deps.getMockStore().scenarios ?? []
     return json(res, 200, { scenarios: scenarios.filter(s => !url.searchParams.has('appId') || s.appId === url.searchParams.get('appId'))

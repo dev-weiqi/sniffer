@@ -60,6 +60,14 @@ const scenarioRule = { type: 'object', additionalProperties: false, properties: 
 } }
 
 const definitions: Tool[] = [
+  { name: 'start_run', description: 'Start a persistent device-local verification run, optionally applying a scenario atomically. Run-owned rules can later be removed without clearing unrelated traffic or mocks.',
+    inputSchema: { type: 'object', additionalProperties: false, properties: { deviceId: identifier, name: text, scenarioId: identifier,
+      parameters: { type: 'object', additionalProperties: { type: ['string', 'number', 'boolean', 'null'] } } } } },
+  { name: 'list_runs', description: 'List persistent verification runs and their owned rule IDs, including unfinished runs after a daemon restart.',
+    inputSchema: { type: 'object', additionalProperties: false, properties: { deviceId: identifier } } },
+  { name: 'end_run', description: 'Remove only this run\'s device-local rules. Idempotent. Offline cleanup removes daemon rules but cannot confirm device cleanup. Shared owned rules block cleanup until unshared.',
+    inputSchema: { type: 'object', additionalProperties: false, required: ['runId'], properties: { runId: identifier } } },
+
   { name: 'save_scenario', description: 'Save a reusable app-scoped set of HTTP/socket mock templates. Use {{parameter}} in string values; no device mutation.',
     inputSchema: { type: 'object', additionalProperties: false, required: ['name', 'appId', 'rules'], properties: {
       id: identifier, name: identifier, appId: identifier, rules: { type: 'array', minItems: 1, maxItems: 100, items: scenarioRule },
@@ -97,7 +105,7 @@ const definitions: Tool[] = [
     name: 'create_mock', description: 'Create an HTTP mock (default) or socket mock. New rules take priority within their device/shared group. starred shares with the same app. Conditions require SDK support.',
     inputSchema: { type: 'object', additionalProperties: false, properties: {
       deviceId: identifier, type: { type: 'string', enum: ['http', 'socket'] },
-      ...commonFields, ...httpFields, ...socketFields,
+      runId: identifier, ...commonFields, ...httpFields, ...socketFields,
     }, allOf: [{ if: { properties: { type: { const: 'socket' } }, required: ['type'] },
       then: { required: ['event'] }, else: { required: ['urlPattern'] } }] },
   },
@@ -149,8 +157,8 @@ const definitions: Tool[] = [
 ]
 
 export const TOOLS: Tool[] = definitions.map(tool => ({ ...tool, annotations: {
-  readOnlyHint: ['get_state', 'list_traffic', 'get_entry', 'list_scenarios'].includes(tool.name),
-  destructiveHint: !['get_state', 'list_traffic', 'get_entry', 'list_scenarios'].includes(tool.name),
+  readOnlyHint: ['get_state', 'list_traffic', 'get_entry', 'list_scenarios', 'list_runs'].includes(tool.name),
+  destructiveHint: !['get_state', 'list_traffic', 'get_entry', 'list_scenarios', 'list_runs'].includes(tool.name),
 } }))
 
 const validator = new AjvJsonSchemaValidator()
@@ -233,6 +241,14 @@ export function createMcpRuntime(options: McpRuntimeOptions = {}) {
     if (!checked.valid) throw new Error(`Invalid ${name} arguments: ${checked.errorMessage}`)
     const args = checked.data
     if (name === 'get_state') return daemon('/api/state?redact=1')
+    if (name === 'start_run') return post('/api/runs', { ...args, deviceId: await resolveDevice(args.deviceId, true) })
+    if (name === 'list_runs') {
+      const query = new URLSearchParams()
+      if (args.deviceId) query.set('deviceId', String(args.deviceId))
+      if (appId) query.set('appId', appId)
+      return daemon('/api/runs?' + query)
+    }
+    if (name === 'end_run') return post('/api/runs/end', args)
     if (name === 'save_scenario') return post('/api/scenarios', args)
     if (name === 'list_scenarios') {
       const scope = args.appId ?? appId
@@ -269,6 +285,10 @@ export function createMcpRuntime(options: McpRuntimeOptions = {}) {
       return { entries }
     }
 
+    if (name === 'create_mock' && args.runId) {
+      const { runId, deviceId, ...fields } = args
+      return post('/api/runs/rules', { runId, deviceId, fields })
+    }
     if (name === 'create_mock') {
       const deviceId = (await resolveDevice(args.deviceId, true))!
       const mocks = await mocksFor(deviceId)

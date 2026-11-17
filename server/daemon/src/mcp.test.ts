@@ -23,7 +23,7 @@ const daemon = createServer((req, res) => {
     devices, entryStore,
     getMockStore: () => store, setMockStore: next => { store = next }, persistMocks: () => {},
     broadcastToUi: () => {}, sendMocksToDevice: () => {},
-    mocksFor: id => normalizeMocks(store.devices[id]), mergedMocksByDevice: () => store.devices,
+    mocksFor: id => ({ http: [...(store.shared.test?.http ?? []), ...normalizeMocks(store.devices[id]).http], socket: [...(store.shared.test?.socket ?? []), ...normalizeMocks(store.devices[id]).socket] }), mergedMocksByDevice: () => Object.fromEntries(Object.entries(store.devices).map(([id, own]) => [id, { http: [...(store.shared.test?.http ?? []), ...own.http], socket: [...(store.shared.test?.socket ?? []), ...own.socket] }])),
     removeDeviceRecord: () => ({ removed: false, mocksChanged: false }),
     getBreakpoints: () => ({ d1: breakpoints }), getPendingHits: () => [...hits.values()],
     setBreakpoints: (_id, rules) => { breakpoints = rules }, sendBreakpointsToDevice: () => {},
@@ -51,7 +51,7 @@ async function call(name: string, args: Record<string, unknown>) {
 try {
   await client.connect(transport)
   const listed = await client.listTools()
-  assert.equal(listed.tools.length, 15)
+  assert.equal(listed.tools.length, 18)
   assert.equal(listed.tools.find(t => t.name === 'get_state')?.annotations?.readOnlyHint, true)
   const analytics = await call('list_traffic', { type: 'firebase', event: 'screen_view', userId: 'user-7' })
   assert.equal(analytics.entries[0].message.params.token, '‹redacted›')
@@ -99,6 +99,21 @@ try {
   }
   await call('update_mock', { id: copied.created.id, name: 'Retained metadata' })
   assert.equal((await call('list_scenarios', {})).scenarios.length, 1)
+  const runOne = await call('start_run', { scenarioId: scenario.id, parameters: { characterId: '194', count: 0, label: 'empty' } })
+  const runTwo = await call('start_run', { name: 'Independent run' })
+  const runTwoRule = await call('create_mock', { runId: runTwo.run.id, urlPattern: '/other-run' })
+  assert.equal((await call('list_runs', {})).runs.length, 2)
+  assert.equal((await call('end_run', { runId: runOne.run.id })).removed, 2)
+  assert(store.devices.d1.http.some(r => (r as { id: string }).id === runTwoRule.created.id))
+  assert(store.devices.d1.http.some(r => (r as { id: string }).id === source.created.id))
+  assert.equal((await call('end_run', { runId: runOne.run.id })).removed, 0)
+  await call('update_mock', { id: runTwoRule.created.id, starred: true })
+  assert.equal((await client.callTool({ name: 'end_run', arguments: { runId: runTwo.run.id } })).isError, true)
+  assert(store.shared.test.http.some(r => (r as { id: string }).id === runTwoRule.created.id))
+  await call('update_mock', { id: runTwoRule.created.id, starred: false })
+  devices.get('d1')!.connected = false
+  assert.equal((await call('end_run', { runId: runTwo.run.id })).status, 'cleanup-pending-device')
+  devices.get('d1')!.connected = true
   await call('delete_scenario', { id: scenario.id })
   assert.equal((await call('list_scenarios', {})).scenarios.length, 0)
   assert(store.devices.d1.http.some(r => (r as { id: string }).id === applied.ruleIds[0]))

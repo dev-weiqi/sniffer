@@ -145,3 +145,6 @@ assertEqual(scenarioState.scenarios?.[0].id, 'scenario', 'scenarios survive pers
 const withScenario = migrateStarredToSharedStore({ ...migration.store, scenarios: scenarioState.scenarios,
   devices: { d1: { http: [{ id: 'new-shared', starred: true }], socket: [] } } }, 'd1', 'app')
 assertEqual(withScenario.store.scenarios?.[0].id, 'scenario', 'star migration preserves scenarios')
+
+const runState = parseMockStoreJson(JSON.stringify({ devices: {}, shared: {}, runs: [{ id: 'run', deviceId: 'd1', appId: 'app', name: '', startedAt: 1, ruleIds: ['owned'] }] }))
+assertEqual(runState.runs?.[0].ruleIds[0], 'owned', 'run ownership survives daemon restart')

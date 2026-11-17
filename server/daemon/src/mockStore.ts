@@ -6,7 +6,18 @@ export interface Mocks {
   socket: unknown[]
 }
 
+export interface VerificationRun {
+  id: string
+  deviceId: string
+  appId: string
+  name: string
+  startedAt: number
+  endedAt?: number
+  ruleIds: string[]
+}
+
 export interface MockStore {
+  runs?: VerificationRun[]
   scenarios?: Scenario[]
   devices: Record<string, Mocks>
   shared: Record<string, Mocks>
@@ -100,7 +111,7 @@ export function parseMockStoreJson(text: string): MockStore {
         shared[appId] = normalizeMocks(mocks)
       }
     }
-    return { devices: scoped, shared, ...(Array.isArray(m.scenarios) ? { scenarios: m.scenarios } : {}) }
+    return { devices: scoped, shared, ...(Array.isArray(m.runs) ? { runs: m.runs } : {}), ...(Array.isArray(m.scenarios) ? { scenarios: m.scenarios } : {}) }
   }
   const legacy = normalizeMocks(m)
   return legacy.http.length || legacy.socket.length
