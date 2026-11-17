@@ -102,9 +102,7 @@ export default function App() {
   const [deletingDevices, setDeletingDevices] = useState(false)
   const [deviceNotice, setDeviceNotice] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
-  const [showUnreadBadges, setShowUnreadBadges] = useState(() => localStorage.getItem('sniffer-unread-badges') !== 'false')
   const [followLatest, setFollowLatest] = useState(() => localStorage.getItem('sniffer-follow-latest') === 'true')
-  useEffect(() => { localStorage.setItem('sniffer-unread-badges', String(showUnreadBadges)) }, [showUnreadBadges])
   useEffect(() => { localStorage.setItem('sniffer-follow-latest', String(followLatest)) }, [followLatest])
   const settingsRef = useRef<HTMLDivElement>(null)
   const [adbStatus, setAdbStatus] = useState<'ok' | 'warn' | 'loading' | 'unknown'>('unknown')
@@ -493,16 +491,16 @@ export default function App() {
 
         <nav className="tabs">
           <button data-active={tab === 'http' || undefined} onClick={() => setTab('http')}
-            aria-label={`API, ${filteredHttp.length} entries${showUnreadBadges && tab !== 'http' && httpUnread ? `, ${httpUnread} new` : ''}`}
-            title={showUnreadBadges && tab !== 'http' && httpUnread ? `${httpUnread} new requests since last viewed` : undefined}>
+            aria-label={`API, ${filteredHttp.length} entries${tab !== 'http' && httpUnread ? `, ${httpUnread} new` : ''}`}
+            title={tab !== 'http' && httpUnread ? `${httpUnread} new requests since last viewed` : undefined}>
             <HttpIcon /> API <span className="count">{filteredHttp.length}</span>
-            {showUnreadBadges && tab !== 'http' && httpUnread > 0 && <span className="tab-unread" aria-hidden="true">{httpUnread > 99 ? '99+' : httpUnread}</span>}
+            {tab !== 'http' && httpUnread > 0 && <span className="tab-unread" aria-hidden="true">{httpUnread > 99 ? '99+' : httpUnread}</span>}
           </button>
           <button data-active={tab === 'socket' || undefined} onClick={() => setTab('socket')}
-            aria-label={`Socket, ${filteredSocketEvents.length} entries${showUnreadBadges && tab !== 'socket' && socketUnread ? `, ${socketUnread} new` : ''}`}
-            title={showUnreadBadges && tab !== 'socket' && socketUnread ? `${socketUnread} new events since last viewed` : undefined}>
+            aria-label={`Socket, ${filteredSocketEvents.length} entries${tab !== 'socket' && socketUnread ? `, ${socketUnread} new` : ''}`}
+            title={tab !== 'socket' && socketUnread ? `${socketUnread} new events since last viewed` : undefined}>
             <SocketIcon /> Socket <span className="count">{filteredSocketEvents.length}</span>
-            {showUnreadBadges && tab !== 'socket' && socketUnread > 0 && <span className="tab-unread" aria-hidden="true">{socketUnread > 99 ? '99+' : socketUnread}</span>}
+            {tab !== 'socket' && socketUnread > 0 && <span className="tab-unread" aria-hidden="true">{socketUnread > 99 ? '99+' : socketUnread}</span>}
           </button>
         </nav>
 
@@ -583,15 +581,6 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                <label className="filter-switch settings-toggle">
-                  <span className="settings-toggle-copy">
-                    <strong>Unread badges</strong>
-                    <span id="unread-badges-help">Show new activity on other tabs.</span>
-                  </span>
-                  <input type="checkbox" role="switch" aria-label="Unread badges" aria-describedby="unread-badges-help"
-                    checked={showUnreadBadges} onChange={e => setShowUnreadBadges(e.target.checked)} />
-                  <span className="track" aria-hidden="true"><i /></span>
-                </label>
                 <label className="filter-switch settings-toggle">
                   <span className="settings-toggle-copy">
                     <strong>Follow new traffic</strong>
