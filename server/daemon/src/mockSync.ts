@@ -3,6 +3,8 @@ import type { Mocks } from './mockStore.js'
 
 /** Session-bound acknowledgements: a reconnect or newer send invalidates earlier ACKs. */
 export function createMockSync() {
+  const evidenceStartedAt = Date.now()
+  let historyTruncated = false
   const states = new Map<string, { revision: string; acknowledged: boolean; ruleIds: string[] }>()
   const hits: Array<{ deviceId: string; ruleId: string; revision: string; timestamp: number; stepIndex?: number }> = []
   return {
@@ -19,7 +21,7 @@ export function createMockSync() {
       if (msg.type === 'mock-hit' && typeof msg.ruleId === 'string' && state.ruleIds.includes(msg.ruleId)) {
         hits.push({ deviceId, ruleId: msg.ruleId, revision: state.revision, timestamp: Date.now(),
           ...(Number.isInteger(msg.stepIndex) && Number(msg.stepIndex) >= 0 && Number(msg.stepIndex) < 100 ? { stepIndex: Number(msg.stepIndex) } : {}) })
-        if (hits.length > 1000) hits.shift()
+        if (hits.length > 1000) { hits.shift(); historyTruncated = true }
       }
     },
     status(deviceId: string, ruleIds: string[], ended: boolean) {
@@ -28,7 +30,7 @@ export function createMockSync() {
       return { revision: state?.revision ?? null, acknowledged: state?.acknowledged ?? false,
         ready: !!state?.acknowledged && (ended ? omitted.length === ruleIds.length : omitted.length === 0),
         omittedRuleIds: omitted, hits: hits.filter(h => h.deviceId === deviceId && ruleIds.includes(h.ruleId)),
-        evidenceLimit: 1000 }
+        evidenceLimit: 1000, evidenceStartedAt, historyTruncated }
     },
   }
 }

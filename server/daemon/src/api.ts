@@ -70,7 +70,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, url: 
     const device = deps.devices.get(run.deviceId)
     const supported = !!device?.info.capabilities?.includes('mock-observability')
     const status = deps.mockSync?.status(run.deviceId, run.ruleIds, !!run.endedAt)
-    return json(res, 200, { runId: run.id, ended: !!run.endedAt, connected: !!device?.connected, supported,
+    return json(res, 200, { runId: run.id, deviceId: run.deviceId, ruleIds: run.ruleIds, startedAt: run.startedAt, endedAt: run.endedAt ?? null, ended: !!run.endedAt, connected: !!device?.connected, supported,
       ...status, ready: supported && !!device?.connected && !!status?.ready,
       meaning: run.endedAt ? 'Device acknowledged removal' : 'Device acknowledged current rules; hits indicate matching, not UI success' })
   }

@@ -174,3 +174,24 @@ Socket 必須指定 `type: "socket"` 與 `event`。選填欄位為 `transport`�
 
 `create_mock`／`update_mock` 可設定 `sse: {events:[{data:"first",delayMs:100},{event:"done",data:"second",delayMs:500}],ending:"close"}`。事件支援 data、event、id、retry、delayMs。需要 status 200 與 SDK 能力 `http-sse-mocks`，不可搭配 sequence 或 delayOnly；切換模式時將舊模式設為 null。data 填純文字或序列化 JSON，不加 SSE 前綴。JSON data 與序列步驟 body 支援情境參數跳脫。
 結束方式為 close 正常結束、open 等候呼叫端取消／逾時、disconnect 在送出最後一筆後產生讀取錯誤，尚未讀取的緩衝資料可能遺失。每個命中請求都從第一筆開始；用戶端自動重連可能建立新串流，本功能不會停用重連。`get_run_status` 確認同步與規則命中，不代表已讀取事件或完成 UI 渲染。定時串流刻意回報 null body，事件時序須透過 App 的串流讀取端驗證。
+
+## 等待命中與匯出驗證摘要
+
+`wait_for_hits({runId, ruleIds, minHits?, timeoutMs?, sinceTimestamp?, stepIndex?})`
+等待指定的每條 run 所屬規則都累積至少 `minHits` 次命中（預設 1 次），且裝置已確認目前規則。
+預設從 run 開始計算；`sinceTimestamp` 可指定更晚的起點，`stepIndex` 可限定從 0 起算的序列步驟。
+要排除舊命中，請在操作 App 前記下時間並傳入。預設等待 10 秒，上限 30 秒，0 代表只查一次。
+符合相同規則的背景請求也會計數。
+
+回傳 `matched`、`reason`、每條規則的 `observedHits`、首次與最後命中時間及證據限制。
+原因包含 `matched`、`timeout`、`ended`、`disconnected`、`unsupported`。
+不屬於此 run 的規則會報錯。工具不修改規則或流量。
+
+`export_run_summary({runId})` 回傳 `{summary, markdown}`，由呼叫端另存 JSON 或 Markdown，
+工具本身不寫入檔案路徑。內容包含 run 所屬規則 ID、同步與連線狀態、保留的命中次數及時間，
+不包含規則 body、headers 或流量內容。請在 daemon 關閉前匯出；run 結束後的 ready 代表清理確認。
+
+兩個工具都使用記憶體中的命中證據，全裝置合計保留最新 1000 筆，daemon 重啟會清空。
+`historyTruncated` 表示本次 daemon 曾淘汰舊紀錄；`runPredatesEvidence` 表示 run 早於本次啟動。
+次數可能不完整，0 次不能證明從未命中。命中不代表回應完成、SSE 已被讀取或 UI 正確。
+沿用現有 `mock-observability` 能力，不需額外修改 SDK。

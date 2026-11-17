@@ -54,7 +54,7 @@ async function call(name: string, args: Record<string, unknown>) {
 try {
   await client.connect(transport)
   const listed = await client.listTools()
-  assert.equal(listed.tools.length, 19)
+  assert.equal(listed.tools.length, 21)
   assert.equal(listed.tools.find(t => t.name === 'get_state')?.annotations?.readOnlyHint, true)
   const flow = await call('list_traffic', { type: 'http', method: 'GET', status: 503, urlContains: '/orders' })
   assert.equal(flow.entries.length, 2)
@@ -145,7 +145,39 @@ try {
   const observed = await call('get_run_status', { runId: runOne.run.id, waitMs: 50 })
   assert.equal(observed.ready, true)
   assert.equal(observed.hits[0].stepIndex, 1)
+  const watched = { runId: runOne.run.id, ruleIds: [runOne.run.ruleIds[0]], timeoutMs: 0 }
+  assert.equal((await call('wait_for_hits', watched)).matched, true)
+  assert.equal((await call('wait_for_hits', { ...watched, stepIndex: 0 })).reason, 'timeout')
+  assert.equal((await call('wait_for_hits', { ...watched, minHits: 2 })).matched, false)
+  assert.equal((await call('wait_for_hits', { ...watched, sinceTimestamp: Date.now() + 1000 })).matched, false)
+  assert.equal((await client.callTool({ name: 'wait_for_hits', arguments: { ...watched, ruleIds: [runTwoRule.created.id] } })).isError, true)
+  assert.equal((await client.callTool({ name: 'wait_for_hits', arguments: { ...watched, timeoutMs: 30001 } })).isError, true)
+  const waiting = call('wait_for_hits', { ...watched, timeoutMs: 2000, minHits: 2, stepIndex: 1 })
+  const hitTimer = setTimeout(() => sync.receive('d1', { type: 'mock-hit', revision, ruleId: runOne.run.ruleIds[0], stepIndex: 1 }), 120)
+  try { assert.equal((await waiting).matched, true) } finally { clearTimeout(hitTimer) }
+  assert.equal((await call('wait_for_hits', { ...watched, ruleIds: runOne.run.ruleIds })).reason, 'timeout')
+  devices.get('d1')!.connected = false
+  assert.equal((await call('wait_for_hits', watched)).reason, 'disconnected')
+  devices.get('d1')!.connected = true
+  devices.get('d1')!.info.capabilities = []
+  assert.equal((await call('wait_for_hits', watched)).reason, 'unsupported')
+  devices.get('d1')!.info.capabilities = ['mock-observability', 'http-sequences', 'http-sse-mocks']
+  const report = await call('export_run_summary', { runId: runOne.run.id })
+  assert.equal(report.summary.rules[0].observedHits, 2)
+  assert.equal(report.summary.rules[1].observedHits, 0)
+  assert.equal(report.summary.ready, true)
+  assert.equal(report.summary.historyTruncated, false)
+  assert(!JSON.stringify(report).includes('secret'))
+  assert(report.markdown.includes('not response completion or UI success'))
+
   assert.equal((await call('end_run', { runId: runOne.run.id })).removed, 2)
+  assert.equal((await call('wait_for_hits', watched)).reason, 'ended')
+  assert.equal((await call('export_run_summary', { runId: runOne.run.id })).summary.ended, true)
+  for (let i = 0; i < 1001; i++) sync.receive('d1', { type: 'mock-hit', revision: sync.status('d1', [], false).revision, ruleId: runTwoRule.created.id })
+  const truncated = await call('export_run_summary', { runId: runTwo.run.id })
+  assert.equal(truncated.summary.historyTruncated, true)
+  assert.equal(truncated.summary.rules[0].observedHits, 1000)
+
   assert(store.devices.d1.http.some(r => (r as { id: string }).id === runTwoRule.created.id))
   assert(store.devices.d1.http.some(r => (r as { id: string }).id === source.created.id))
   assert.equal((await call('end_run', { runId: runOne.run.id })).removed, 0)

@@ -249,3 +249,30 @@ Use `create_mock` or `update_mock` with `sequence: {steps:[{status:503,body:"ret
 
 Use `create_mock` / `update_mock` with `sse: {events:[{data:"first",delayMs:100},{event:"done",data:"second",delayMs:500}],ending:"close"}`. Each event supports data, event, id, retry and delayMs. Requires status 200 and SDK capability `http-sse-mocks`. Cannot combine with sequence or delayOnly; clear old modes with null when switching. SSE data is plain text or serialized JSON, without wire prefixes. JSON data and sequence step bodies support escaped scenario parameters.
 Endings: close normally, open until caller cancellation/timeout, or disconnect with a read error after emitting the last event (unread buffered bytes may be lost). Each matching request starts from event 1. Client auto-reconnect can create another stream; this feature does not disable it. `get_run_status` confirms synchronization and rule matching, not consumption or UI rendering. Responses deliberately report null body for timed streams. Use the app's stream consumer to verify event timing.
+
+## Wait for hits and export evidence
+
+`wait_for_hits({runId, ruleIds, minHits?, timeoutMs?, sinceTimestamp?, stepIndex?})`
+waits until **every** selected run-owned rule has at least `minHits` retained hits
+(default 1) and the device has acknowledged the current rules. Counts include hits
+since the run started, or since `sinceTimestamp` when later. `stepIndex` optionally
+selects a zero-based sequence step. Use a timestamp captured before triggering the
+app to exclude earlier hits. The default timeout is 10 seconds, capped at 30 seconds;
+0 checks once. Background requests matching the same rule also count.
+
+The result contains `matched`, `reason`, per-rule `observedHits`, first/last hit times
+and evidence limits. Reasons are `matched`, `timeout`, `ended`, `disconnected` or
+`unsupported`. Unknown or unrelated rule IDs are errors. No traffic or rules change.
+
+`export_run_summary({runId})` returns `{summary, markdown}` for the caller to save as
+JSON or Markdown. It does not write arbitrary filesystem paths. The snapshot includes
+run-owned rule IDs, synchronization, connection state, retained counts and timestamps;
+it excludes rule bodies, headers and traffic content. Export before daemon shutdown.
+After ending a run, readiness describes cleanup acknowledgment, not its original setup.
+
+Both tools use in-memory matching evidence: the latest 1000 hits across all devices,
+reset on daemon restart. `historyTruncated` flags any eviction in this daemon session;
+`runPredatesEvidence` flags a run older than the session. Counts may be incomplete, and
+a zero does not prove a rule never matched. A hit does not prove response completion,
+SSE consumption, or UI correctness. These tools need no additional SDK changes beyond
+existing `mock-observability` support.

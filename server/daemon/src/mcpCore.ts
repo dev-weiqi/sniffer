@@ -76,7 +76,24 @@ const scenarioRule = { type: 'object', additionalProperties: false, properties: 
   type: { type: 'string', enum: ['http', 'socket'] }, ...commonFields, ...httpFields, ...socketFields,
 } }
 
+interface RunStatus {
+  runId: string; deviceId: string; ruleIds: string[]; startedAt: number; endedAt: number | null
+  ended: boolean; ready: boolean; supported: boolean; connected: boolean
+  revision: string | null; acknowledged: boolean; omittedRuleIds: string[]
+  hits: Array<{ ruleId: string; timestamp: number; revision: string; stepIndex?: number }>
+  evidenceLimit: number; evidenceStartedAt: number; historyTruncated: boolean
+}
+
 const definitions: Tool[] = [
+  { name: 'wait_for_hits', description: 'Wait for every specified run-owned rule to reach minHits (default 1). Counts retained hits since sinceTimestamp or run start, optionally for a zero-based sequence step. Stops on match, timeout, ended run, disconnect or unsupported SDK. Does not prove response completion.',
+    inputSchema: { type: 'object', additionalProperties: false, required: ['runId', 'ruleIds'], properties: {
+      runId: identifier, ruleIds: { type: 'array', minItems: 1, maxItems: 100, uniqueItems: true, items: identifier },
+      minHits: { type: 'integer', minimum: 1, maximum: 1000 },
+      timeoutMs: { type: 'integer', minimum: 0, maximum: 30000 },
+      sinceTimestamp: { type: 'integer', minimum: 0 }, stepIndex: { type: 'integer', minimum: 0, maximum: 99 },
+    } } },
+  { name: 'export_run_summary', description: 'Return a JSON evidence summary and English Markdown report for saving by the caller. Includes run-owned rule counts, synchronization and retained hit times, never response bodies or headers. Does not write files or claim UI success; history is limited to this daemon session.',
+    inputSchema: { type: 'object', additionalProperties: false, required: ['runId'], properties: { runId: identifier } } },
   { name: 'get_run_status', description: 'Read SDK readiness and exact matched rule IDs for a run. Optional bounded wait stops on readiness, disconnect or unsupported SDK. A hit is not completion or UI success.',
     inputSchema: { type: 'object', additionalProperties: false, required: ['runId'], properties: {
       runId: identifier, waitMs: { type: 'integer', minimum: 0, maximum: 30000 },
@@ -179,8 +196,8 @@ const definitions: Tool[] = [
 ]
 
 export const TOOLS: Tool[] = definitions.map(tool => ({ ...tool, annotations: {
-  readOnlyHint: ['get_state', 'list_traffic', 'get_entry', 'list_scenarios', 'list_runs', 'get_run_status'].includes(tool.name),
-  destructiveHint: !['get_state', 'list_traffic', 'get_entry', 'list_scenarios', 'list_runs', 'get_run_status'].includes(tool.name),
+  readOnlyHint: ['get_state', 'list_traffic', 'get_entry', 'list_scenarios', 'list_runs', 'get_run_status', 'wait_for_hits', 'export_run_summary'].includes(tool.name),
+  destructiveHint: !['get_state', 'list_traffic', 'get_entry', 'list_scenarios', 'list_runs', 'get_run_status', 'wait_for_hits', 'export_run_summary'].includes(tool.name),
 } }))
 
 const validator = new AjvJsonSchemaValidator()
@@ -265,6 +282,43 @@ export function createMcpRuntime(options: McpRuntimeOptions = {}) {
     if (!checked.valid) throw new Error(`Invalid ${name} arguments: ${checked.errorMessage}`)
     const args = checked.data
     if (name === 'get_state') return daemon('/api/state?redact=1')
+    if (name === 'wait_for_hits' || name === 'export_run_summary') {
+      const started = Date.now()
+      const deadline = started + Number(args.timeoutMs ?? 10000)
+      while (true) {
+        const state = await daemon('/api/runs/status?runId=' + encodeURIComponent(String(args.runId))) as RunStatus
+        const ruleIds = name === 'wait_for_hits' ? args.ruleIds as string[] : state.ruleIds
+        if (ruleIds.some(id => !state.ruleIds.includes(id))) throw new Error('Every ruleId must belong to this run')
+        const since = Math.max(state.startedAt, Number(args.sinceTimestamp ?? state.startedAt))
+        const rules = ruleIds.map(ruleId => {
+          const hits = (state.hits ?? []).filter(hit => hit.ruleId === ruleId && hit.timestamp >= since &&
+            (args.stepIndex === undefined || hit.stepIndex === args.stepIndex))
+          return { ruleId, observedHits: hits.length, firstHitAt: hits[0]?.timestamp ?? null,
+            lastHitAt: hits.at(-1)?.timestamp ?? null }
+        })
+        const evidence = { evidenceLimit: state.evidenceLimit, evidenceStartedAt: state.evidenceStartedAt,
+          historyTruncated: state.historyTruncated, runPredatesEvidence: state.startedAt < state.evidenceStartedAt }
+        if (name === 'export_run_summary') {
+          const summary = { runId: state.runId, deviceId: state.deviceId, startedAt: state.startedAt,
+            endedAt: state.endedAt, generatedAt: Date.now(), ended: state.ended, connected: state.connected,
+            supported: state.supported, ready: state.ready, acknowledged: state.acknowledged,
+            revision: state.revision, omittedRuleIds: state.omittedRuleIds, rules, ...evidence }
+          const markdown = ['# Sniffer verification evidence', '',
+            '```json', JSON.stringify(summary, null, 2), '```', '',
+            'Counts cover retained matching evidence only, not response completion or UI success.',
+            'Evidence is in memory, resets when the daemon restarts, and retains at most 1000 hits across all devices.',
+            'A zero count does not prove a rule never matched. Ready on an ended run confirms removal, not initial synchronization.',
+          ].join('\n')
+          return { summary, markdown }
+        }
+        const reason = state.ended ? 'ended' : !state.connected ? 'disconnected' : !state.supported ? 'unsupported'
+          : state.ready && rules.every(rule => rule.observedHits >= Number(args.minHits ?? 1)) ? 'matched'
+            : Date.now() >= deadline ? 'timeout' : null
+        if (reason) return { runId: state.runId, matched: reason === 'matched', reason,
+          elapsedMs: Date.now() - started, ready: state.ready, rules, sinceTimestamp: since, ...evidence }
+        await new Promise(resolve => setTimeout(resolve, Math.max(1, Math.min(100, deadline - Date.now()))))
+      }
+    }
     if (name === 'get_run_status') {
       const deadline = Date.now() + Number(args.waitMs ?? 0)
       while (true) {
