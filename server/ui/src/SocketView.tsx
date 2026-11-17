@@ -3,7 +3,7 @@ import type { SocketConn, SocketMockRule, SocketRow } from './state'
 import { FilterMenu } from './FilterMenu'
 import { TrafficEmpty, type TrafficEmptyProps } from './TrafficEmpty'
 import type { TrafficFilter } from './trafficFilter'
-import { fmtTime, jsonObjectCondition, newRuleId, socketAckMockFromEvent } from './util'
+import { fmtTime, urlParts, jsonObjectCondition, newRuleId, socketAckMockFromEvent } from './util'
 import { MockAction } from './MockAction'
 import { useDetailWidth, useFollowLatestRow, useListKeys, useUnreadRows } from './hooks'
 import { JsonView } from './JsonView'
@@ -47,6 +47,11 @@ export function SocketView({ active, followLatest, emptyState, mockCount, onOpen
   const selectedFrame = selected && selected.transport === 'ktor-ws' ? decodeEngineIoFrame(selected.payload) : null
   const displayedPayload = selectedFrame ? selectedFrame.data : selected?.payload
   const liveConns = conns.filter(c => c.deviceId === deviceId && c.status === 'connected')
+  const connectionCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const event of events) counts.set(event.connectionId, (counts.get(event.connectionId) ?? 0) + 1)
+    return counts
+  }, [events])
   const filtered = useMemo(() => connFilter ? events.filter(e => e.connectionId === connFilter) : events, [events, connFilter])
   useUnreadRows(allRows, filtered, active, unreadScope, onUnreadChange)
   const sorted = sortDesc ? [...filtered].reverse() : filtered
@@ -97,19 +102,25 @@ export function SocketView({ active, followLatest, emptyState, mockCount, onOpen
           }}
         >
         {liveConns.length > 0 && (
-          <div className="conn-bar">
+          <div className="conn-bar" role="group" aria-label="Socket connections">
             <button className="conn-chip all" data-active={connFilter === null || undefined}
+              aria-pressed={connFilter === null}
               title="Show events from all connections" onClick={() => setConnFilter(null)}>
-              All
+              All <span className="conn-count">{events.length}</span>
             </button>
-            {liveConns.map(c => (
-              <button key={c.connectionId} className="conn-chip" data-on
+            {liveConns.map(c => {
+              const { domain, path } = urlParts(c.url || '')
+              return <button key={c.connectionId} className="conn-chip"
                 data-active={c.connectionId === connFilter || undefined}
-                title="Show only this connection"
+                aria-pressed={c.connectionId === connFilter}
+                title={`Connected / ${c.transport} / ${c.connectionId}\n${c.url || '(unknown url)'}`}
                 onClick={() => setConnFilter(c.connectionId)}>
-                {c.transport} · {c.url || '(unknown url)'}
+                <span className="conn-dot" aria-hidden="true" />
+                <span className="conn-endpoint">{domain + path || '(unknown url)'}</span>
+                <span className="conn-transport">{c.transport}</span>
+                <span className="conn-count">{connectionCounts.get(c.connectionId) ?? 0}</span>
               </button>
-            ))}
+            })}
           </div>
         )}
         <table className="grid">
