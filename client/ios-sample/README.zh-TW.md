@@ -2,15 +2,24 @@
 
 # iOS 範例
 
-此範例使用原生 iOS 網路功能與本機 `SnifferKit` Swift 套件，連接既有的 Sniffer 背景服務。
+用這個範例測試原生 HTTP、Socket.IO 與 WebSocket 的流量擷取和 Mock。它使用儲存庫內的 Swift 套件。
 
-實際 App 的原生 iOS 整合步驟，請參閱[原生 iOS 整合指南](../ios/README.zh-TW.md)。
+先從儲存庫根目錄啟動已建置的背景服務：
 
 ```sh
-cd server/daemon
-npm start
+npm --prefix server/daemon start
 ```
 
-開啟 `SnifferIOSSample.xcodeproj`，選擇 iOS 模擬器並執行。Control deck 與 Android samples 採用相同的四欄操作、獨立捲動操作區、固定底部 Activity 紀錄及系統淺色／深色模式。只在點擊操作時送出請求，開啟 App 不會消耗序列步驟。HTTP 提供 GET、POST、錯誤、圖片、外部 API 與 URLSession.AsyncBytes SSE 串流。Socket.IO 與原生 WebSocket 提供連線、傳送、ACK、斷線；Socket.IO 另有 Req/Res。Clear 只清除 sample 紀錄。
+開啟 `client/ios-sample/SnifferIOSSample.xcodeproj`，選擇 iOS 模擬器並執行。點擊操作才會送出請求，開啟 App 不會消耗 Mock 序列步驟。
 
-使用實機時，請在 scheme 的環境變數中，將 `SNIFFER_HOST` 設為 Mac 的區域網路 IP。
+Control deck 沿用 Android 範例的四欄操作、獨立捲動操作區、固定底部 Activity 紀錄及系統淺色／深色模式。Clear 只清除範例的紀錄。
+
+| 群組 | 操作 |
+| --- | --- |
+| HTTP | GET、POST、錯誤、圖片、外部 API，以及透過 `URLSession.AsyncBytes` 讀取 SSE |
+| Socket.IO | Connect、Send、ACK、Req/Res、Disconnect |
+| 原生 WebSocket | Connect、Send、ACK、Disconnect |
+
+使用實機時，以 `SNIFFER_BIND=0.0.0.0` 啟動背景服務，並在 scheme 將 `SNIFFER_HOST` 設為 Mac 的區域網路 IP。
+
+整合到自己的 App 時，請依[原生 iOS 整合指南](../ios/README.zh-TW.md)設定 Debug 專用連結。

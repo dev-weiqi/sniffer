@@ -2,42 +2,26 @@
 
 # 原生 iOS 整合
 
-Swift 套件提供兩個產品：
+在偵錯版 App 加入 Swift 套件，啟動 SDK 並接入網路用戶端，就能從 Sniffer 查看流量與設定 Mock。若要先試用，請執行 [iOS 範例](../ios-sample/README.zh-TW.md)。
+
+依 App 使用的網路用戶端選擇產品：
 
 | 產品 | 整合對象 |
 | --- | --- |
 | `SnifferKit` | Apple `Foundation.URLSession` HTTP 與 `URLSessionWebSocketTask` |
 | `SnifferSocketIO` | `Socket.IO Client Swift` 流量 |
 
-在 Xcode 選擇 **File > Add Package Dependencies**，輸入 `https://github.com/dev-weiqi/sniffer.git`，並選擇 `ios` 分支。HTTP 請連結 `SnifferKit`；App 使用 Socket.IO 時，另連結 `SnifferSocketIO`。使用本機原始碼時，選擇 **File > Add Local Package**，並選取包含 `Package.swift` 的儲存庫根目錄。
+在 Xcode 選擇 **File > Add Package Dependencies**，輸入 `https://github.com/dev-weiqi/sniffer.git`，並選擇 `ios` 分支。HTTP 請連結 `SnifferKit`，App 使用 Socket.IO 時，另連結 `SnifferSocketIO`。
+
+使用本機原始碼時，選擇 **File > Add Local Package**，並選取包含 `Package.swift` 的儲存庫根目錄。
 
 0.7.2 版本快照的 Git 標籤為 `ios/0.7.2`。既有 SPM 整合仍追蹤 `ios` 分支。在 Xcode 更新套件版本，即可取得 HTTP Query／Body 條件與 Socket 負載比對功能。
 
 ## 僅限 Debug 建置
 
-`SnifferKit` 與 `SnifferSocketIO` 僅限 Debug 連結，AdHoc／Release 必須排除。Swift 套件沒有 noop 版本；只加 `#if DEBUG` 或選擇 Do Not Embed 都不會取消連結。
+`SnifferKit` 與 `SnifferSocketIO` 僅限 Debug 連結，AdHoc／Release 必須排除。Swift 套件沒有 noop 版本，只加 `#if DEBUG` 或選擇 Do Not Embed 都不會取消連結。
 
-用 `#if DEBUG` 包住 Sniffer 的 import 與整合程式碼，並確認 `DEBUG` 只在 Debug 組態啟用。若專案使用 `DEVELOPMENT`，請套用相同限制。非 Debug 保留原本的網路實作，共用介面不要依賴 Sniffer 型別。下方 Socket.IO 與 WebSocket 範例僅供 Debug 使用。
-
-### Xcode 設定
-
-以下為 `SnifferKit.o` 的實測設定。套件仍會在各組態建置，只有 Debug 連入 App。
-
-1. 從 App target 的 Build Phases > Link Binary With Libraries 移除 `SnifferKit`。
-2. 在專案檔新增 `PBXTargetDependency`，以 `productRef` 指向 SnifferKit 套件產品，並加入 App target 的 `dependencies`。確認 Target Dependencies 有 SnifferKit。只移除 Frameworks 項目或修改 `packageProductDependencies`，仍可能自動連結。
-3. 僅在 Debug 的 Other Linker Flags 加入 `"$(BUILT_PRODUCTS_DIR)/SnifferKit.o"`，保留既有旗標與 `$(inherited)`。AdHoc／Release 不得繼承此路徑。
-
-不要從 General > Frameworks 把 SnifferKit 加回去，否則 AdHoc／Release 會再次連入，且建置不會報錯。首次套用與更新 SDK 後，請 clean 一次，避免物件檔更新未觸發重新連結。
-
-### 驗證
-
-在 Debug 確認 API／Socket 流量正常，再分別封存 AdHoc／Release。對 App 主執行檔執行以下指令，確認 `nm` 無錯誤且結果為 `0`：
-
-```bash
-nm -U /path/to/App.app/App | grep -c '10SnifferKit'
-```
-
-若符號已被 strip，請另查連結輸入或 Link Map。以上實測僅涵蓋 SnifferKit，`SnifferSocketIO` 與其相依項目需另行驗證。
+用 `#if DEBUG` 包住 Sniffer 的 import 與整合程式碼，並確認 `DEBUG` 只在 Debug 組態啟用。若專案使用 `DEVELOPMENT`，請套用相同限制。非 Debug 保留原本的網路實作，共用介面不要依賴 Sniffer 型別。下方 Socket.IO 與 WebSocket 範例僅供 Debug 使用。完整連結設定與封存檢查見文末的[安全性](#安全性)。
 
 ## 啟動 SDK
 
@@ -72,7 +56,7 @@ Sniffer.configure(configuration)
 let session = URLSession(configuration: configuration)
 ```
 
-將這個 session 注入既有網路層。請求建構、解碼、驗證與呼叫處都不需變更。設定後的 session 支援流量檢視、HTTP 回應模擬、僅延遲規則、佔位符與回應中斷點。
+讓既有網路層使用這個 session，保留原有的請求建構、解碼與驗證流程。這個 session 支援流量檢視、HTTP 回應模擬、僅延遲規則、placeholder 與回應斷點。
 
 ## Socket.IO
 
@@ -126,23 +110,47 @@ Task {
 
 ## 失敗時的行為
 
-Sniffer 在失敗時會放行流量。遇到不支援的流量、格式錯誤的背景服務訊息、SDK 失敗或背景服務斷線時，會清除啟用中的規則，並繼續執行宿主原本的行為。只有明確命中的模擬、延遲或已啟用中斷點，才會刻意改變流量。
+遇到不支援的流量或 SDK 錯誤時，Sniffer 保留 App 原有的網路行為。規則訊息格式錯誤或背景服務斷線時，會清除受影響的啟用規則。明確命中的 Mock、延遲與斷點則依設定改變流量。
 
 ## iOS 分支的驗證流程
 
-使用 server 0.9.0 與此分支的原生 SDK，可使用參數化情境、獨立驗證 run、同步確認、
+使用 server 0.9.0 以上與此分支的原生 SDK，可使用參數化情境、獨立驗證 run、同步確認、
 HTTP／Socket 精確命中回報、`wait_for_hits` 與 `export_run_summary`。
 既有 `ios/0.7.2` 標籤不含這些新增功能。能力協商依據 `mock-observability`、
 `http-sequences`、`http-sse-mocks`，不要只根據版本字串判斷支援程度。
 
 HTTP 序列會為每次匹配的請求原子保留一個步驟，支援重複最後一步、循環與停止。
-停止會在本機回報錯誤，不會將請求送到真實後端。相同規則重送與暫時斷線保留進度；
+停止會在本機回報錯誤，不會將請求送到真實後端。相同規則重送與暫時斷線保留進度，
 修改序列或 reset token、刪除規則、App 重啟會重設。符合條件的背景請求也會消耗步驟。
 
 SSE 透過 URLProtocol 依各事件延遲傳送 UTF-8 frame，支援 event／id／retry 與 data placeholder。
 結尾可正常關閉、保持連線直到呼叫端取消或逾時，或回報斷線錯誤。
 會移除 Content-Length 與 Transfer-Encoding。每次請求獨立從第一段開始，取消後停止後續排程。
-串流 Mock 的遙測不包含回應 body。命中只代表選到規則，不代表回應完成或 UI 正確。
+串流 Mock 的流量紀錄不包含回應 body。命中只代表選到規則，不代表回應完成或 UI 正確。
 
 未匹配的 HTTP 維持原有轉送路徑。Socket 保留既有回覆與 ACK 行為，額外回報規則 ID。
 不需新增 iOS 專屬 MCP 工具，詳見 [MCP 流程](../../server/daemon/MCP.zh-TW.md)。
+
+## 安全性
+
+Debug 專用連結設定與封存檢查如下。資料遮罩範圍及背景服務存取限制，見 [MCP 安全性說明](../../server/daemon/MCP.zh-TW.md#安全性)。
+
+### Xcode 設定
+
+以下為 `SnifferKit.o` 的實測設定。套件仍會在各組態建置，只有 Debug 連入 App。
+
+1. 從 App target 的 Build Phases > Link Binary With Libraries 移除 `SnifferKit`。
+2. 在專案檔新增 `PBXTargetDependency`，以 `productRef` 指向 SnifferKit 套件產品，並加入 App target 的 `dependencies`。確認 Target Dependencies 有 SnifferKit。只移除 Frameworks 項目或修改 `packageProductDependencies`，仍可能自動連結。
+3. 僅在 Debug 的 Other Linker Flags 加入 `"$(BUILT_PRODUCTS_DIR)/SnifferKit.o"`，保留既有旗標與 `$(inherited)`。AdHoc／Release 不得繼承此路徑。
+
+不要從 General > Frameworks 把 SnifferKit 加回去，否則 AdHoc／Release 會再次連入，且建置不會報錯。首次套用與更新 SDK 後，請 clean 一次，避免物件檔更新未觸發重新連結。
+
+### 驗證
+
+在 Debug 確認 API／Socket 流量正常，再分別封存 AdHoc／Release。對 App 主執行檔執行以下指令，確認 `nm` 無錯誤且結果為 `0`：
+
+```bash
+nm -U /path/to/App.app/App | grep -c '10SnifferKit'
+```
+
+若符號已被 strip，請另查連結輸入或 Link Map。以上實測僅涵蓋 SnifferKit，`SnifferSocketIO` 與其相依項目需另行驗證。
