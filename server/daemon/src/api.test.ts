@@ -325,4 +325,43 @@ assertEqual(maskedState.breakpointsByDevice.d1[0].id, 'b1', 'state includes arme
 assert(!maskedState.pausedHits[0].hit.body.includes('secret'), 'paused response masked')
 assert(ctx.deps.getPendingHits()[0].hit.body.includes('secret'), 'masking leaves actual paused response intact')
 assert(bodyOf(await query('/api/entries?id=analytics&redact=0')).entries[0].message.params.secret === 'analytics-secret', 'explicit raw REST read preserved')
+
+const previewStore = JSON.stringify(ctx.deps.getMockStore())
+async function previewFields(body: unknown, replacements: unknown) {
+  const response = fakeRes()
+  await handleApi(fakeReq('POST', { body, replacements }), response as unknown as ServerResponse,
+    new URL('http://localhost/api/mock-body/replace-fields'), ctx.deps)
+  return response
+}
+const originalBody = '{"data":{"commentCount":0,"items":[{"name":"old"}]},"a/b":{"~":true},"keep":null}'
+const preview = await previewFields(originalBody, [
+  { path: '/data/commentCount', value: 36 }, { path: '/data/items/0/name', value: 'new' }, { path: '/a~1b/~0', value: false },
+])
+assertEqual(preview.status, 200, 'field preview succeeds')
+const replaced = JSON.parse(bodyOf(preview).body)
+assertEqual(replaced.data.commentCount, 36, 'nested number replaced')
+assertEqual(replaced.data.items[0].name, 'new', 'array field replaced')
+assertEqual(replaced['a/b']['~'], false, 'escaped pointer replaced')
+assertEqual(replaced.keep, null, 'unrelated field retained')
+assertEqual(bodyOf(preview).changes[0].before, 0, 'preview includes original value')
+for (const [body, replacements] of [
+  ['not JSON', [{ path: '/x', value: 1 }]],
+  [originalBody, [{ path: '/data/commentCount', value: 36 }, { path: '/missing', value: 0 }]],
+  [originalBody, [{ path: '/data/commentCount', value: '36' }]],
+  [originalBody, [{ path: '/data/items/01/name', value: 'new' }]],
+  [originalBody, [{ path: '/data/items/-', value: {} }]],
+  [originalBody, [{ path: '/data/items/length', value: 0 }]],
+  [originalBody, [{ path: '/a~2b', value: 0 }]],
+  [originalBody, [{ path: '', value: {} }]],
+  [originalBody, [{ path: '/__proto__/polluted', value: true }]],
+  [originalBody, [{ path: '/data', value: {} }, { path: '/data/commentCount', value: 1 }]],
+  [originalBody, [{ path: '/data/commentCount', value: 1 }, { path: '/data/commentCount', value: 2 }]],
+  ['{"id":9007199254740993,"count":0}', [{ path: '/count', value: 1 }]],
+  [originalBody, []],
+  [originalBody, [{ path: '/keep' }]],
+] as const) {
+  assertEqual((await previewFields(body, replacements)).status, 400, 'invalid edit rejected')
+}
+assertEqual(JSON.stringify(ctx.deps.getMockStore()), previewStore, 'preview never mutates stored rules')
+
 console.log('api.test: all assertions passed')

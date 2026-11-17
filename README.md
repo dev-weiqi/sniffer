@@ -292,6 +292,8 @@ rules remember their expanded state and the selected Query/Body tab in this brow
 including after closing the panel or reloading. Delay settings remain beside the response.
 **Break on path** matches the HTTP method and path only, ignoring query and body conditions.
 
+HTTP response editors also offer **Copy with field changes**: preview an existing JSON field replacement, then create a disabled, device-local copy. The original rule stays unchanged. MCP exposes the same operation as `copy_mock_with_fields`; no SDK update is needed. See [field-copy details](server/daemon/MCP.md#copy-with-json-field-changes).
+
 ## AI tools through MCP
 
 The main checkout includes `sniffer mcp`, a stdio server for reading HTTP, Socket

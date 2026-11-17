@@ -1,3 +1,4 @@
+import { replaceJsonFields } from './replaceJsonFields.js'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { redact } from './redact.js'
 import type { Entry } from './entryStore.js'
@@ -43,6 +44,14 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, url: 
   resolvePendingHit(id: string): void
   releasePendingHits(): void
 }) {
+  if (req.method === 'POST' && url.pathname === '/api/mock-body/replace-fields') {
+    try {
+      const body = JSON.parse(await readBody(req))
+      return json(res, 200, replaceJsonFields(body.body, body.replacements))
+    } catch (error) {
+      return json(res, 400, { error: error instanceof Error ? error.message : 'Invalid field replacements' })
+    }
+  }
   if (req.method === 'PUT' && url.pathname === '/api/mocks') {
     const body = JSON.parse(await readBody(req))
     const deviceId = typeof body.deviceId === 'string' ? body.deviceId : ''

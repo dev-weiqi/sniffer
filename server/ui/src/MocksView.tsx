@@ -1,3 +1,4 @@
+import { CopyWithFields } from './CopyWithFields'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { HttpMockRule, Mocks, SocketConn, SocketMockRule } from './state'
 import { api } from './state'
@@ -481,8 +482,9 @@ export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supports
                 <HttpRuleEditor deviceId={deviceId} key={`${deviceId}:${draft.http[httpAt].id}`} rule={draft.http[httpAt]} number={httpAt + 1} conflicts={httpConflicts.get(draft.http[httpAt].id) ?? []} onSelectConflict={setSelHttp}
                   prefilled={prefilledRules.current.has(draft.http[httpAt].id)}
                   supportsQueryMocks={supportsQueryMocks} supportsBodyMocks={supportsBodyMocks}
-                  onDuplicate={() => {
-                    const copy = { ...draft.http[httpAt], id: newRuleId(), createdAt: Date.now() }
+                  onDuplicate={body => {
+                    const copy = { ...draft.http[httpAt], id: newRuleId(), createdAt: Date.now(),
+                      ...(body !== undefined ? { body, enabled: false, starred: undefined } : {}) }
                     update({ ...draft, http: [...draft.http.slice(0, httpAt + 1), copy, ...draft.http.slice(httpAt + 1)] })
                     setSelHttp(copy.id)
                   }}
@@ -1101,7 +1103,7 @@ function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, p
   supportsBodyMocks: boolean
   onChange: (r: HttpMockRule) => void
   onDelete: () => void
-  onDuplicate: () => void
+  onDuplicate: (body?: string) => void
 }) {
   const [conditionView, setConditionView] = useConditionView(
     `sniffer-mock-conditions:${JSON.stringify([deviceId, 'http', rule.id])}`, rule.bodyMatch ? 'body' : 'query',
@@ -1142,7 +1144,7 @@ function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, p
         </select>
         <input ref={urlRef} className="grow mono" placeholder="exact path, e.g. /api/users/3" value={rule.urlPattern}
           onChange={e => onChange({ ...rule, urlPattern: e.target.value })} />
-        <button className="ghost icon-btn" title="Duplicate rule" onClick={onDuplicate}><CopyIcon /></button>
+        <button className="ghost icon-btn" title="Duplicate rule" onClick={() => onDuplicate()}><CopyIcon /></button>
         <button className="ghost icon-btn danger" title="Delete rule" onClick={onDelete}><TrashIcon /></button>
       </div>
       </div>
@@ -1243,6 +1245,7 @@ function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, p
             <>
               <textarea ref={bodyRef} className="mono rule-response-editor" rows={14} aria-label="Response body" placeholder="response body"
                 value={bodyView.text} onChange={e => bodyView.onText(e.target.value)} />
+              <CopyWithFields body={rule.body} onCopy={onDuplicate} />
               <div className="rule-body-tools">
                 <JsonTool label="Pretty JSON" body={bodyView.text} transform={v => JSON.stringify(v, null, 2)}
                   onResult={bodyView.onText} />

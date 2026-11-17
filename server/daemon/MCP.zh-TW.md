@@ -67,6 +67,7 @@ SNIFFER_REDACT_BODY_FIELDS=sessionKey,otp SNIFFER_REDACT_HEADERS=X-My-Token node
 | `list_traffic` | 讀取紀錄，遮罩已知敏感資料。 | `deviceId?`、`type?`（`http`、`socket`、`firebase`）、`method?`、`status?`、`urlContains?`、`bodyContains?`、`userId?`、`event?`、`connectionId?`、`limit?` |
 | `get_entry` | 讀取同一 ID 的所有訊息，包括請求／回應、事件／ack 或 Analytics 事件。 | `id`、`deviceId?` |
 | `create_mock` | 建立 HTTP 規則（預設）或 Socket 規則，回傳 `{deviceId, created: {id}}`。 | `deviceId?`、`type?`（`http`、`socket`），以及下方欄位 |
+| `copy_mock_with_fields` | 複製 HTTP JSON Mock 並修改指定欄位，新副本停用且不共享。 | `id`、`replacements: [{path, value}]`、`deviceId?`、`name?` |
 | `update_mock` | 修改規則，保留未指定欄位，回傳 `{deviceId, updated: {id}}`。 | `id`、`deviceId?`，以及下方欄位 |
 | `delete_mock` | 依 ID 刪除規則。 | `id`、`deviceId?` |
 | `push_event` | 向 App 注入收到的 Socket 事件。省略 `connectionId` 或設為 null，會廣播至該裝置的連線。 | `event`、`payload`、`deviceId?`、`connectionId?` |
@@ -113,3 +114,26 @@ Socket 必須指定 `type: "socket"` 與 `event`。選填欄位為 `transport`�
 遮罩無法保證涵蓋所有內容，任意純文字密碼、圖片內容與未知欄位仍可能保留。請在背景服務設定專案特有的敏感欄位名稱。背景服務沒有驗證機制，請維持預設的本機監聽，或只在可信任網路使用。
 
 參考[傳輸協定](../../PROTOCOL.zh-TW.md)與[使用指南](../../docs/GUIDE.zh-TW.md)。
+
+
+### 複製並修改 JSON 欄位
+
+先從 `get_state` 取得既有 HTTP 規則 ID，再呼叫 `copy_mock_with_fields`：
+
+```json
+{
+  "id": "source-rule-id",
+  "replacements": [{ "path": "/data/commentCount", "value": 36 }],
+  "name": "36 comments"
+}
+```
+
+原始回覆必須是有效 JSON。路徑使用 JSON Pointer，例如 `/items/0/name`；欄位名稱中的 `/` 寫成 `~1`，`~` 寫成 `~0`。只替換已存在且型別相同的欄位，不新增、不刪除、不替換整份根節點。可一次修改 1 至 100 個不重複、不互相包含的路徑。任何一處無效都不寫入；包含不安全整數的底稿也會被拒絕，以免編輯時改壞其他數值。JSON 會重新排版，格式與鍵順序不保證保留。只驗證 JSON 結構與型別，不驗證 Eden 業務 schema。
+
+回傳 `{deviceId, sourceId, created: {id, enabled: false, starred: false}, changedPaths}`，不回傳欄位內容。原規則、其他規則與其他裝置不變；來源即使共享，副本仍只屬於所選裝置。副本保留匹配條件、狀態、標頭與延遲，可用 `update_mock` 明確啟用。共享規則原有的優先權不變，因此啟用副本不保證覆蓋共享來源。
+
+不呼叫真實後端，不需要更新 SDK。僅延遲規則、Socket 規則、非 JSON 及不能解析成 JSON 的 placeholder 底稿不支援。
+
+UI 在 Response body 下方提供 **Copy with field changes**。輸入路徑和值，按 **Preview change** 比較前後，再按 **Create disabled copy**。預覽不儲存；修改輸入或底稿後需要重新預覽。原有 Copy 按鈕行為不變。
+
+UI 預覽使用 `POST /api/mock-body/replace-fields`，傳入 `{body, replacements}`，成功回傳 `{body, changes: [{path, before, after}]}`，錯誤回傳 HTTP 400。此本機預覽端點不儲存規則，前後值不遮罩，僅供本機編輯器使用。

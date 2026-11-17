@@ -79,6 +79,7 @@ and breakpoints. `clear_traffic` always affects **all devices**, regardless of a
 | `list_traffic` | Read captured messages, with secrets masked. | `deviceId?`, `type?` (`http`, `socket`, `firebase`), `method?`, `status?`, `urlContains?`, `bodyContains?`, `userId?`, `event?`, `connectionId?`, `limit?` |
 | `get_entry` | All messages for one ID: request/response, event/ack or Analytics event. | `id`, `deviceId?` |
 | `create_mock` | Create an HTTP rule (default) or socket rule. Returns `{deviceId, created: {id}}`. | `deviceId?`, `type?` (`http`, `socket`), fields below |
+| `copy_mock_with_fields` | Copy an HTTP JSON mock with field replacements; the copy is disabled and device-local. | `id`, `replacements: [{path, value}]`, `deviceId?`, `name?` |
 | `update_mock` | Patch a rule, retaining unspecified fields. Returns `{deviceId, updated: {id}}`. | `id`, `deviceId?`, fields below |
 | `delete_mock` | Remove a rule by ID. | `id`, `deviceId?` |
 | `push_event` | Inject an inbound socket event into the app. Omit/null `connectionId` broadcasts within the device. | `event`, `payload`, `deviceId?`, `connectionId?` |
@@ -154,3 +155,42 @@ field names may remain. Add project-specific names on the daemon. The daemon has
 no authentication; keep the default loopback binding or use a trusted network.
 
 See [the protocol](../../PROTOCOL.md) and [the user guide](../../docs/GUIDE.md).
+
+
+### Copy with JSON field changes
+
+Use an existing HTTP rule ID from `get_state` with `copy_mock_with_fields`:
+
+```json
+{
+  "id": "source-rule-id",
+  "replacements": [{ "path": "/data/commentCount", "value": 36 }],
+  "name": "36 comments"
+}
+```
+
+The source body must be valid JSON. Paths are JSON Pointers, for example `/items/0/name`;
+escape `/` in a field name as `~1` and `~` as `~0`. Only existing fields of the same JSON
+type can be replaced. Additions, deletions and root replacement are not supported.
+Supply 1 to 100 distinct, non-overlapping paths. Any invalid replacement rejects the entire
+copy. Bodies containing unsafe integers are rejected to avoid corrupting unrelated values.
+JSON is reformatted; whitespace and key order are not preserved. Validation covers JSON
+structure and types, not the app's business schema.
+
+Returns `{deviceId, sourceId, created: {id, enabled: false, starred: false}, changedPaths}`,
+without field values. The source and other rules stay unchanged. Even a shared source creates
+a device-local copy. Conditions, status, headers and delay are retained; explicitly enable
+with `update_mock` after review. Existing shared-rule precedence still applies, so enabling
+a local copy does not guarantee it overrides a shared source.
+
+No backend request or SDK update is needed. Delay-only rules, Socket rules, non-JSON bodies
+and placeholder templates that cannot be parsed as JSON are unsupported.
+
+In the UI, expand **Copy with field changes** below Response body, enter a path and JSON
+value, select **Preview change**, review Before/After, then **Create disabled copy**.
+Preview never saves; changing the input or source requires another preview. The existing
+Copy button is unchanged.
+
+The UI preview endpoint is `POST /api/mock-body/replace-fields` with `{body, replacements}`.
+It returns `{body, changes: [{path, before, after}]}` or HTTP 400 on invalid input. It does not
+persist rules. Preview values are unmasked for the local editor.

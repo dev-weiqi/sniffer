@@ -233,4 +233,33 @@ await Promise.all([
 ])
 saved = ctx.calls.at(-1)!.body as typeof saved
 assert(saved.http.some(r => r.urlPattern === '/concurrent-a') && saved.http.some(r => r.urlPattern === '/concurrent-b'), 'concurrent MCP mock edits retained')
+
+ctx = makeDaemon()
+runtime = createMcpRuntime({ daemon: ctx.daemon, appId: 'app', randomId: () => 'field-copy' })
+const sourceWithFields = { ...ctx.state.mocksByDevice.d1.http[0], enabled: true, starred: true,
+  body: '{"data":{"commentCount":0},"keep":[1,2]}', headers: { 'content-type': 'application/json' },
+  queryParams: { page: '2' }, bodyMatch: '{"role":"author"}', delayMs: 30 }
+ctx.state.mocksByDevice.d1.http[0] = sourceWithFields
+const sourceSnapshot = JSON.stringify(sourceWithFields)
+const copiedFields = await runtime.call('copy_mock_with_fields', { id: 'h1', name: '36 comments',
+  replacements: [{ path: '/data/commentCount', value: 36 }] }) as { created: { id: string } }
+const savedFields = ctx.calls.at(-1)!.body as { http: Array<Record<string, unknown>>; socket: unknown[] }
+assertEqual(copiedFields.created.id, 'field-copy', 'field copy returns new ID')
+assertEqual(JSON.stringify(savedFields.http[1]), sourceSnapshot, 'shared source remains unchanged')
+assertEqual(savedFields.http[0].enabled, false, 'copy starts disabled')
+assertEqual(savedFields.http[0].starred, false, 'copy is device local')
+assertEqual(savedFields.http[0].bodyMatch, sourceWithFields.bodyMatch, 'matching conditions retained')
+assertEqual(savedFields.http[0].delayMs, 30, 'delay retained')
+assertEqual(JSON.parse(String(savedFields.http[0].body)).data.commentCount, 36, 'copy contains edited field')
+assertEqual(savedFields.socket.length, 1, 'socket rules unaffected')
+for (const args of [
+  { id: 's1', replacements: [{ path: '/count', value: 1 }] },
+  { id: 'h1', replacements: [{ path: '/missing', value: 1 }] },
+  { id: 'h1', replacements: [] },
+]) {
+  const writes = ctx.calls.filter(c => c.init?.method).length
+  await assertRejects(() => runtime.call('copy_mock_with_fields', args), 'invalid field copy rejected', '')
+  assertEqual(ctx.calls.filter(c => c.init?.method).length, writes, 'invalid copy performs no write')
+}
+
 console.log('mcpCore.test: all assertions passed')

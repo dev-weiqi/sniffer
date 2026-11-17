@@ -247,6 +247,8 @@ HTTP 與 Socket 編輯器預設收合 **Request conditions**。建立模擬時�
 
 ## 透過 MCP 使用 AI 工具
 
+HTTP 回應編輯器提供 **Copy with field changes**：預覽指定 JSON 欄位的修改後，建立停用且不共享的副本，原規則不變。MCP 對應工具為 `copy_mock_with_fields`，不需要更新 SDK。詳見 [欄位複製說明](server/daemon/MCP.zh-TW.md)。
+
 目前 main 的原始碼包含 `sniffer mcp`，提供 stdio 介面，讓 AI 工具讀取 HTTP、Socket 與 Firebase Analytics 紀錄、編輯模擬規則、注入事件及管理回應斷點。它連接已啟動的背景服務，不需要額外整合 App SDK。建置步驟、用戶端設定、工具與資料遮罩說明請見 [MCP 設定](server/daemon/MCP.zh-TW.md)。
 
 ## 模組

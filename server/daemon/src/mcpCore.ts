@@ -1,3 +1,4 @@
+import { replaceJsonFields } from './replaceJsonFields.js'
 import { randomUUID } from 'node:crypto'
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv'
 import type { JsonSchemaType } from '@modelcontextprotocol/sdk/validation'
@@ -82,6 +83,17 @@ const definitions: Tool[] = [
       ...commonFields, ...httpFields, ...socketFields,
     }, allOf: [{ if: { properties: { type: { const: 'socket' } }, required: ['type'] },
       then: { required: ['event'] }, else: { required: ['urlPattern'] } }] },
+  },
+  {
+    name: 'copy_mock_with_fields',
+    description: 'Copy an existing HTTP JSON mock and replace existing fields by JSON Pointer. Original stays unchanged. Copy is disabled and device-local; enable explicitly after review. No backend request.',
+    inputSchema: { type: 'object', additionalProperties: false, required: ['id', 'replacements'], properties: {
+      deviceId: identifier, id: identifier, name: text,
+      replacements: { type: 'array', minItems: 1, maxItems: 100, items: {
+        type: 'object', additionalProperties: false, required: ['path', 'value'],
+        properties: { path: identifier, value: {} },
+      } },
+    } },
   },
   {
     name: 'update_mock', description: 'Patch an HTTP or socket mock by ID, retaining unspecified fields. Null clears method/bodyMatch/payloadMatch/pushEvent. Shared rules affect the same app on other devices.',
@@ -241,6 +253,22 @@ export function createMcpRuntime(options: McpRuntimeOptions = {}) {
       return { deviceId, created: { id: rule.id } }
     }
 
+    if (name === 'copy_mock_with_fields') {
+      const deviceId = (await resolveDevice(args.deviceId, true))!
+      const mocks = await mocksFor(deviceId)
+      const source = mocks.http.find(rule => rule.id === args.id)
+      if (!source) throw new Error('HTTP source mock not found on this device')
+      if (source.delayOnly) throw new Error('Delay-only rules do not have a mock response')
+      const result = replaceJsonFields(source.body, args.replacements)
+      const copy = { ...source, id: randomId(), createdAt: Date.now(), enabled: false, starred: false,
+        body: result.body, ...(typeof args.name === 'string' ? { name: args.name } : {}) }
+      mocks.http.unshift(copy)
+      await put('/api/mocks', { deviceId, ...mocks })
+      // Return paths only: arbitrary field values can contain secrets outside known redaction names.
+      return { deviceId, sourceId: source.id, created: { id: copy.id, enabled: false, starred: false },
+        changedPaths: result.changes.map(change => change.path) }
+    }
+
     if (name === 'update_mock') {
       const deviceId = (await resolveDevice(args.deviceId, true))!
       const mocks = await mocksFor(deviceId)
@@ -304,7 +332,7 @@ export function createMcpRuntime(options: McpRuntimeOptions = {}) {
 
   let pendingMutation: Promise<unknown> = Promise.resolve()
   return { base, tools: TOOLS, call: (name: string, args: unknown) => {
-    if (!['create_mock', 'update_mock', 'delete_mock'].includes(name)) return call(name, args)
+    if (!['create_mock', 'copy_mock_with_fields', 'update_mock', 'delete_mock'].includes(name)) return call(name, args)
     // shortcut: serializes this MCP session only; avoid concurrent UI/other-session mock edits.
     const result = pendingMutation.then(() => call(name, args))
     pendingMutation = result.catch(() => {})
