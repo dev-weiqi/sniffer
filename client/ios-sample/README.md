@@ -11,6 +11,6 @@ cd server/daemon
 npm start
 ```
 
-Open `SnifferIOSSample.xcodeproj`, select an iOS simulator, and run. The app automatically exercises HTTP, native WebSocket, and Socket.IO through the local SDK. The buttons run each transport again so mock, delay, breakpoint, ack, reply, and push rules can be checked from Sniffer.
+Open `SnifferIOSSample.xcodeproj`, select an iOS simulator, and run. The Control deck matches the Android samples: compact four-column action groups, an independently scrolling action area, a fixed Activity log, and system light/dark colors. Requests run only when you press an action, so opening the sample does not consume sequence steps. HTTP includes GET, POST, errors, images, external API, and SSE streaming through URLSession.AsyncBytes. Socket.IO and native WebSocket provide connect, send, ACK, and disconnect controls; Socket.IO also provides Req/Res. The Clear button clears only the sample log.
 
 For a physical device, set the `SNIFFER_HOST` scheme environment variable to the Mac's LAN IP.
