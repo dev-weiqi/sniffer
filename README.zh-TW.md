@@ -245,6 +245,8 @@ HTTP 與 Socket 編輯器預設收合 **Request conditions**。建立模擬時�
 
 ## 本機開發
 
+兩個 sample 採用 Control deck 排版：四欄操作、固定底部 Activity 紀錄區，以及跟隨系統的淺色／深色模式。Android 提供 OkHttp 與 Ktor，CMP 沿用相同控制項，提供 Ktor。
+
 ```bash
 npm run setup
 npm start

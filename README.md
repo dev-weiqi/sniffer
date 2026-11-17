@@ -289,6 +289,8 @@ Each artifact has a `-noop` twin with the same API.
 
 ## Local development
 
+Both sample apps use the Control deck layout: four-column action groups, a fixed Activity dock, and system light/dark colors. Android exposes OkHttp and Ktor; CMP exposes Ktor with the same controls.
+
 ```bash
 npm run setup
 npm start
