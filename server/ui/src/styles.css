@@ -660,7 +660,7 @@ tr.bp-row td { background: color-mix(in srgb, var(--err) 10%, var(--bg-panel)); 
 .conn-chip:hover { background: var(--conn-hover); border-color: var(--conn-selected-border); }
 .conn-chip[data-active] {
   background: var(--conn-selected); border-color: var(--conn-selected-border);
-  color: var(--conn-active-ink); box-shadow: inset 0 0 0 1px var(--conn-selected-border);
+  color: var(--conn-active-ink);
 }
 .conn-chip:focus-visible { outline: 2px solid var(--conn-selected-border); outline-offset: 2px; }
 .conn-dot { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--conn-dot); }
