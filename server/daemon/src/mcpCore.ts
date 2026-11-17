@@ -39,7 +39,14 @@ const commonFields = {
   enabled: { type: 'boolean' }, name: text, starred: { type: 'boolean' },
   delayMs: { type: 'integer', minimum: 0 },
 }
+const sequenceSchema = { type: ['object', 'null'], additionalProperties: false, required: ['steps'], properties: {
+  onExhausted: { type: 'string', enum: ['last', 'loop', 'stop'] }, resetToken: text,
+  steps: { type: 'array', minItems: 1, maxItems: 100, items: { type: 'object', additionalProperties: false,
+    properties: { status: { type: 'integer', minimum: 100, maximum: 599 }, headers: stringMap,
+      body: text, delayMs: { type: 'integer', minimum: 0, maximum: 300000 } } } },
+} }
 const httpFields = {
+  sequence: sequenceSchema,
   method: nullableText, urlPattern: identifier, status: { type: 'integer', minimum: 100, maximum: 599 },
   headers: stringMap, body: text, delayOnly: { type: 'boolean' },
   queryParams: { ...stringMap, propertyNames: { pattern: '\\S' } }, bodyMatch: nullableText,
@@ -185,6 +192,7 @@ function validateMockFields(args: Record<string, unknown>, socket: boolean) {
   for (const key of Object.keys(socket ? httpFields : socketFields)) {
     if (key in args) throw new Error(`${key} is not a ${socket ? 'socket' : 'HTTP'} mock field`)
   }
+  if (args.sequence != null && args.delayOnly === true) throw new Error("Sequence cannot be delay-only")
   validateConditions(args)
 }
 
@@ -326,6 +334,7 @@ export function createMcpRuntime(options: McpRuntimeOptions = {}) {
       const mocks = await mocksFor(deviceId)
       const source = mocks.http.find(rule => rule.id === args.id)
       if (!source) throw new Error('HTTP source mock not found on this device')
+      if (source.sequence) throw new Error("Select a static response before copying JSON fields")
       if (source.delayOnly) throw new Error('Delay-only rules do not have a mock response')
       const result = replaceJsonFields(source.body, args.replacements)
       const copy = { ...source, id: randomId(), createdAt: Date.now(), enabled: false, starred: false,
@@ -342,7 +351,7 @@ export function createMcpRuntime(options: McpRuntimeOptions = {}) {
       const mocks = await mocksFor(deviceId)
       const target = [...mocks.http, ...mocks.socket].find(rule => rule.id === args.id)
       if (!target) throw new Error(`no mock rule with id '${String(args.id)}' on device '${deviceId}'`)
-      validateMockFields(args, mocks.socket.includes(target))
+      validateMockFields({ ...target, ...args }, mocks.socket.includes(target))
       for (const [key, value] of Object.entries(args)) {
         if (key !== 'deviceId' && key !== 'id' && value !== undefined) target[key] = value
       }

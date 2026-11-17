@@ -75,6 +75,20 @@ class SnifferKtorTest {
         setReportSink(null)
     }
 
+    @Test fun sequence_exhaustion_never_reaches_engine() = runBlocking {
+        MockRegistry.update(MockRules(http = listOf(HttpMockRule(id = "sequence", urlPattern = "/sequence",
+            sequence = dev.weiqi.sniffer.core.HttpSequence(listOf(dev.weiqi.sniffer.core.HttpResponseStep(body = "first")), "stop")))))
+        var calls = 0
+        val client = HttpClient(MockEngine { calls++; respond("real") }) { install(SnifferKtor) }
+        try {
+            assertEquals("first", client.get("http://example.test/sequence").bodyAsText())
+            assertFailsWith<dev.weiqi.sniffer.core.MockSequenceExhausted> { client.get("http://example.test/sequence") }
+            assertEquals(0, calls)
+            assertEquals("real", client.get("http://example.test/other").bodyAsText())
+            assertEquals(1, calls)
+        } finally { client.close() }
+    }
+
     @Test
     fun post_body_conditions_match_serialized_content_and_preserve_unmatched_requests() = runBlocking {
         val forwarded = mutableListOf<String>()

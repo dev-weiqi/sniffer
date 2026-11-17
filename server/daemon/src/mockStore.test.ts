@@ -165,3 +165,9 @@ assertEqual(sync.status('d1', ['owned'], false).ready, false, 'disconnect invali
 const cleanupRevision = sync.sent('d1', { http: [], socket: [] })
 sync.receive('d1', { type: 'mock-rules-applied', revision: cleanupRevision })
 assertEqual(sync.status('d1', ['owned'], true).ready, true, 'cleanup ACK confirms removal')
+
+const sequenceRules = { http: [{ id: 'sequence', sequence: { steps: [{ status: 503 }, { status: 200 }], onExhausted: 'last' } }], socket: [] }
+assertEqual(stripUiOnlyFields(sequenceRules).http.length, 0, 'old SDK never receives sequence as a static mock')
+assertEqual(stripUiOnlyFields(sequenceRules, ['http-sequences']).http.length, 1, 'capable SDK receives sequence')
+assertEqual(stripUiOnlyFields({ http: [{ sequence: { steps: [] } }], socket: [] }, ['http-sequences']).http.length, 0, 'invalid imported sequence omitted')
+assertEqual(JSON.stringify(parseMockStoreJson(JSON.stringify({ devices: { d: sequenceRules }, shared: {} })).devices.d), JSON.stringify(sequenceRules), 'sequence survives persistence')

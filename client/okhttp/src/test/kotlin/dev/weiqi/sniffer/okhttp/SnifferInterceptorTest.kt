@@ -60,6 +60,24 @@ class SnifferInterceptorTest {
         }.apply { isDaemon = true }.start()
     }
 
+    @Test fun exhausted_sequence_does_not_fall_through() {
+        MockRegistry.update(MockRules(http = listOf(HttpMockRule(id = "sequence", urlPattern = "/sequence",
+            sequence = dev.weiqi.sniffer.core.HttpSequence(listOf(dev.weiqi.sniffer.core.HttpResponseStep(body = "first")), "stop")))))
+        var networkCalls = 0
+        val client = OkHttpClient.Builder().addInterceptor(SnifferOkHttp.interceptor()).addInterceptor { chain ->
+            networkCalls++
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("real")
+                .body("real".toResponseBody()).build()
+        }.build()
+        val request = Request.Builder().url("http://example.test/sequence").build()
+        assertEquals("first", client.newCall(request).execute().use { it.body.string() })
+        val error = assertFailsWith<java.io.IOException> { client.newCall(request).execute() }
+        assertTrue(error.cause is dev.weiqi.sniffer.core.MockSequenceExhausted)
+        assertEquals(0, networkCalls)
+        client.newCall(request.newBuilder().url("http://example.test/other").build()).execute().close()
+        assertEquals(1, networkCalls)
+    }
+
     @Test
     fun pausableResponse_only_holds_readable_text() {
         assertTrue(pausableResponse(200, "application/json", 10))

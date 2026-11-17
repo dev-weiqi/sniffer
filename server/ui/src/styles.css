@@ -1286,3 +1286,13 @@ button.modal-primary:hover {
 .copy-fields-diff { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0; }
 .copy-fields-diff pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 160px; overflow: auto; padding: 8px; background: var(--bg-alt); }
 .copy-fields-error { color: var(--err); }
+
+.sequence-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.sequence-editor { display: grid; grid-template-columns: 145px minmax(0, 1fr); gap: 18px; margin-top: 16px; }
+.sequence-list { display: flex; flex-direction: column; gap: 5px; border-right: 1px solid var(--border); padding-right: 12px; }
+.sequence-list button { text-align: left; padding: 10px; background: transparent; border: 1px solid transparent; }
+.sequence-list button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.sequence-list span { display: block; font-size: 11px; color: var(--text-dim); margin-top: 5px; }
+.sequence-detail { min-width: 0; }
+.sequence-detail textarea { width: 100%; margin: 8px 0; }
+@media (max-width: 640px) { .sequence-editor { grid-template-columns: 110px minmax(0, 1fr); gap: 10px; } }

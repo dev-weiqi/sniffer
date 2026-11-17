@@ -243,3 +243,7 @@ the SDK ACKed the current sync. Ended runs are ready when the SDK ACKs their rem
 This requires SDK capability `mock-observability`. Hits are bounded, in-memory matching
 evidence; they do not prove response completion or UI correctness. A shared rule may take
 precedence even when a local run is ready. No network request is blocked by waiting in MCP.
+
+### Sequential responses
+
+Use `create_mock` or `update_mock` with `sequence: {steps:[{status:503,body:"retry"},{status:200,body:"ok"}],onExhausted:"last",resetToken:""}`. Each step accepts status, headers, body and delayMs. Use `last`, `loop` or `stop` for exhaustion; stop fails matching requests and never falls through to the server. Reset by updating the sequence with a new resetToken. Set sequence to null to return to static responses. Requires SDK capability `http-sequences`; inspect `get_run_status` for readiness and zero-based `hits[].stepIndex`. A hit means selection, not completion. Only matched requests count, including background calls. JSON field copies only support static responses.

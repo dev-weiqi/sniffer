@@ -8,6 +8,7 @@ import dev.weiqi.sniffer.core.HttpRequestMsg
 import dev.weiqi.sniffer.core.HttpResponseMsg
 import dev.weiqi.sniffer.core.MAX_BODY_CHARS
 import dev.weiqi.sniffer.core.MAX_IMAGE_BYTES
+import dev.weiqi.sniffer.core.MockSequenceExhausted
 import dev.weiqi.sniffer.core.MockRegistry
 import dev.weiqi.sniffer.core.Sniffer
 import dev.weiqi.sniffer.core.capBody
@@ -207,6 +208,7 @@ internal fun boundedTextBody(contentType: ContentType?, contentLength: Long?): B
 @OptIn(InternalAPI::class)
 val SnifferKtor = createClientPlugin("SnifferKtor") {
     Sniffer.registerCapability("http")
+        Sniffer.registerCapability("http-sequences")
     Sniffer.registerCapability("breakpoint")
 
     // fires when a response is received, before any response validator can convert it to an exception
@@ -300,6 +302,7 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
                 injectedDelayMs = rule.delayMs
             }
         } catch (t: Throwable) {
+            if (t is MockSequenceExhausted) throw t
             if (t is CancellationException) throw t
             // fall through to the real request
         }

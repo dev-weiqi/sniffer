@@ -40,6 +40,21 @@ export function mergeMocks(own: Mocks, shared: Mocks): Mocks {
   return { http: [...shared.http, ...own.http], socket: [...shared.socket, ...own.socket] }
 }
 
+export function validSequence(rule: Record<string, unknown>): boolean {
+  if (!rule || typeof rule !== 'object') return false
+  const s = rule.sequence as Record<string, unknown> | null | undefined
+  if (s == null) return true
+  if (typeof s !== 'object' || Array.isArray(s) || rule.delayOnly === true ||
+    !Array.isArray(s.steps) || s.steps.length < 1 || s.steps.length > 100 ||
+    (s.onExhausted !== undefined && !['last', 'loop', 'stop'].includes(String(s.onExhausted))) ||
+    (s.resetToken !== undefined && typeof s.resetToken !== 'string')) return false
+  return s.steps.every(step => step && typeof step === 'object' && !Array.isArray(step) &&
+    (step.status === undefined || (Number.isInteger(step.status) && step.status >= 100 && step.status <= 599)) &&
+    (step.delayMs === undefined || (Number.isInteger(step.delayMs) && step.delayMs >= 0 && step.delayMs <= 300000)) &&
+    (step.body === undefined || typeof step.body === 'string') &&
+    (step.headers === undefined || (step.headers && typeof step.headers === 'object' && !Array.isArray(step.headers) && Object.values(step.headers).every(v => typeof v === 'string'))))
+}
+
 export function stripUiOnlyFields(mocks: Mocks, capabilities: string[] = []): Mocks {
   const strip = (rules: unknown[]) => rules.map(r => {
     const { starred: _, ...rest } = r as Record<string, unknown>
@@ -56,7 +71,8 @@ export function stripUiOnlyFields(mocks: Mocks, capabilities: string[] = []): Mo
     } catch { return false }
   }
   const http = mocks.http.filter(r => {
-    const rule = r as { queryParams?: unknown; bodyMatch?: unknown } | null
+    const rule = r as { queryParams?: unknown; bodyMatch?: unknown; sequence?: unknown; delayOnly?: unknown } | null
+    if (rule?.sequence != null && (!capabilities.includes('http-sequences') || !validSequence(rule))) return false
     if (!supportsCondition(rule?.bodyMatch, 'http-body-mocks')) return false
     const query = rule?.queryParams
     if (query === undefined) return true

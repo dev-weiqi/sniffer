@@ -14,7 +14,14 @@ object MockRegistry {
     @Volatile
     private var rules: MockRules = MockRules()
 
-    fun update(newRules: MockRules) {
+    private val positions = mutableMapOf<String, Int>()
+
+    fun update(newRules: MockRules) = mockLocked {
+        positions.keys.toList().forEach { id ->
+            val previous = rules.http.find { it.id == id }
+            val next = newRules.http.find { it.id == id }
+            if (next == null || previous?.sequence != next.sequence) positions.remove(id)
+        }
         rules = newRules.copy(http = newRules.http.map { it.copy(syncRevision = newRules.revision) },
             socket = newRules.socket.map { it.copy(syncRevision = newRules.revision) })
     }
@@ -24,12 +31,29 @@ object MockRegistry {
     // pattern matches nothing (a bare path always starts with "/").
     fun matchHttp(method: String, url: String): HttpMockRule? = matchHttp(method, url, null)
 
-    fun matchHttp(method: String, url: String, body: String?): HttpMockRule? = findHttp(method, url, body)?.also {
-        reportHit(it.id, it.syncRevision)
+    fun matchHttp(method: String, url: String, body: String?): HttpMockRule? = mockLocked {
+        val rule = findHttp(method, url, body) ?: return@mockLocked null
+        val sequence = rule.sequence ?: return@mockLocked rule.also { reportHit(it.id, it.syncRevision) }
+        // Invalid imported rules must never turn into an unrestricted static mock.
+        if (rule.delayOnly || sequence.steps.isEmpty() || sequence.steps.size > 100 ||
+            sequence.onExhausted !in listOf("last", "loop", "stop") ||
+            sequence.steps.any { it.status !in 100..599 || it.delayMs !in 0..300_000 }) return@mockLocked null
+        val position = positions[rule.id] ?: 0
+        if (position >= sequence.steps.size) throw MockSequenceExhausted()
+        positions[rule.id] = when {
+            position < sequence.steps.lastIndex -> position + 1
+            sequence.onExhausted == "loop" -> 0
+            sequence.onExhausted == "last" -> position
+            else -> sequence.steps.size
+        }
+        val step = sequence.steps[position]
+        reportHit(rule.id, rule.syncRevision, position)
+        rule.copy(status = step.status, headers = step.headers, body = step.body,
+            delayMs = step.delayMs, stepIndex = position)
     }
 
-    private fun reportHit(id: String, revision: String?) {
-        if (revision != null) runCatching { Sniffer.report(MockHitMsg(id, revision, now())) }
+    private fun reportHit(id: String, revision: String?, stepIndex: Int? = null) {
+        if (revision != null) runCatching { Sniffer.report(MockHitMsg(id, revision, now(), stepIndex)) }
     }
 
     private fun findHttp(method: String, url: String, body: String?): HttpMockRule? {

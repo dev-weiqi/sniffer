@@ -196,3 +196,10 @@ DELETE /api/devices/<deviceId> 移除裝置；在線上時也中斷連線
 宣告 `mock-observability` 的 SDK 接受 `mock-rules` 的選填 revision。安裝整組規則後送出 `{"type":"mock-rules-applied","revision":"..."}`；選中規則時送出 `{"type":"mock-hit","ruleId":"...","revision":"...","timestamp":0}`。
 命中只表示選中規則，不代表回覆成功完成或 UI 驗證通過。這些是控制訊息，不加入流量表。
 daemon 只接受目前 WebSocket 連線及同步 revision；重連或再次同步會使舊確認失效。最多保留 1000 筆近期命中，daemon 重啟後不保留。舊 SDK 不會被宣稱已支援或已就緒。
+
+### HTTP 依次回覆
+
+`HttpMockRule.sequence` 為選填物件，包含 `steps`、`onExhausted` 與 `resetToken`。每步可設定 `status`、`headers`、`body`、`delayMs`，預設為 200、空標頭、空內容與 0。步驟數為 1 至 100，延遲為 0 至 300000 毫秒，不可搭配 `delayOnly`。
+僅向宣告 `http-sequences` 的裝置下發。命中時先原子保留一步，再執行延遲；未命中不消耗。`last` 重複最後一步，`loop` 從頭開始，`stop` 讓後續命中失敗，絕不送出真實請求。
+一般同步與重新連線保留程序內進度。修改序列或 `resetToken`、刪除規則、重啟 App 會重設。並行請求以命中順序分配，不以完成順序分配。
+`mock-hit.stepIndex` 是從 0 起算的保留步驟，不代表完成。`GET /api/mock-progress?deviceId=...&ruleId=...` 回傳支援狀態、連線、同步狀態及近期命中。

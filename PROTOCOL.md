@@ -213,3 +213,11 @@ These are daemon control messages, not traffic rows. The daemon accepts only the
 WebSocket session and current synchronization revision; reconnect and subsequent sends
 invalidate prior ACKs. At most 1000 recent hits are retained in memory, not across daemon
 restarts. Old SDKs ignore revision and are explicitly reported as unsupported.
+
+### Sequential HTTP responses
+
+`HttpMockRule.sequence` is optional: `{steps:[{status:503,headers:{},body:"retry",delayMs:0},{status:200,body:"ok"}],onExhausted:"last",resetToken:""}`.
+Steps default to status 200, empty headers/body and delay 0. Require 1 to 100 steps; delay is 0 to 300000 ms. Mutually exclusive with `delayOnly`.
+Only devices advertising `http-sequences` receive these rules. Matching reserves one step atomically before delay. Unmatched requests consume nothing. `last` repeats the final step, `loop` starts again, `stop` fails further matching calls without contacting the real server.
+Rule sync/reconnect preserves in-process progress. Changing sequence contents or `resetToken`, deleting the rule, or restarting the app resets it. Concurrent requests consume steps in match order, not completion order.
+`mock-hit.stepIndex` is an optional zero-based reserved step index, not completion evidence. `GET /api/mock-progress?deviceId=...&ruleId=...` returns support, connectivity, synchronization status and recent hits.

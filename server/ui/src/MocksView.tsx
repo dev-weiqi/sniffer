@@ -1,3 +1,4 @@
+import { SequenceEditor } from './SequenceEditor'
 import { CopyWithFields } from './CopyWithFields'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { HttpMockRule, Mocks, SocketConn, SocketMockRule } from './state'
@@ -1211,6 +1212,13 @@ function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, p
         <p className="hint warn">Update the device SDK to use body conditions. This rule is not sent to this device.</p>
       )}
       <div className="mock-response">
+      <div className="sequence-controls">
+        <label className="field">Response mode <select aria-label="Response mode" value={rule.sequence ? 'sequence' : 'static'} onChange={e => onChange({ ...rule, delayOnly: false,
+          sequence: e.target.value === 'sequence' ? { steps: [{ status: rule.status, headers: rule.headers, body: rule.body, delayMs: rule.delayMs }], onExhausted: 'last', resetToken: '' } : null })}>
+          <option value="static">Static response</option><option value="sequence">Sequence</option>
+        </select></label>
+      </div>
+      {rule.sequence ? <SequenceEditor deviceId={deviceId} ruleId={rule.id} value={rule.sequence} onChange={sequence => onChange({ ...rule, sequence })} /> : <>
       <div className="rule-tabs">
         {!rule.delayOnly && (
           <>
@@ -1260,6 +1268,7 @@ function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, p
           )}
         </>
       )}
+      </>}
       </div>
     </div>
   )

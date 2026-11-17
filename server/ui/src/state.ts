@@ -10,6 +10,17 @@ export interface Device {
   connected: boolean
 }
 
+export interface HttpResponseStep {
+  status: number
+  headers: Record<string, string>
+  body: string
+  delayMs: number
+}
+export interface HttpSequence {
+  steps: HttpResponseStep[]
+  onExhausted: 'last' | 'loop' | 'stop'
+  resetToken: string
+}
 export interface HttpMockRule {
   id: string
   /** optional user label; UI-only, ignored by the SDK */
@@ -29,6 +40,7 @@ export interface HttpMockRule {
   headers: Record<string, string>
   body: string
   delayMs: number
+  sequence?: HttpSequence | null
   delayOnly: boolean
 }
 
@@ -374,4 +386,5 @@ export const api = {
 
 // Optional SDK observability messages are consumed by the daemon, not traffic rows.
 export interface MockRulesApplied { type: 'mock-rules-applied'; revision: string }
-export interface MockHit { type: 'mock-hit'; ruleId: string; revision: string; timestamp: number }
+export interface MockHit { type: 'mock-hit'
+  stepIndex?: number; ruleId: string; revision: string; timestamp: number }

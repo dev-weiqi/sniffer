@@ -7,6 +7,7 @@ import dev.weiqi.sniffer.core.HttpRequestMsg
 import dev.weiqi.sniffer.core.HttpResponseMsg
 import dev.weiqi.sniffer.core.MAX_BODY_CHARS
 import dev.weiqi.sniffer.core.MAX_IMAGE_BYTES
+import dev.weiqi.sniffer.core.MockSequenceExhausted
 import dev.weiqi.sniffer.core.MockRegistry
 import dev.weiqi.sniffer.core.Sniffer
 import dev.weiqi.sniffer.core.capBody
@@ -63,6 +64,7 @@ internal class SnifferInterceptor(
 ) : Interceptor {
     init {
         Sniffer.registerCapability("http")
+        Sniffer.registerCapability("http-sequences")
         Sniffer.registerCapability("breakpoint")
     }
 
@@ -85,6 +87,7 @@ internal class SnifferInterceptor(
                 else return mockResponse(id, request, rule)
             }
         } catch (t: Throwable) {
+            if (t is MockSequenceExhausted) throw IOException(t.message, t)
             // restore the flag so host cancellation semantics survive the fence
             if (t is InterruptedException) Thread.currentThread().interrupt()
             // fall through to the real request

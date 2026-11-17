@@ -165,3 +165,7 @@ UI 預覽使用 `POST /api/mock-body/replace-fields`，傳入 `{body, replacemen
 `get_run_status({runId, waitMs?})` 回傳 supported、connected、ready、revision、acknowledged、omittedRuleIds 與近期精準規則 hits。waitMs 可為 0 至 30000，只等待就緒；裝置不支援或離線會提早返回。操作畫面後再查一次取得命中。
 進行中的工作階段必須所有規則都已下發且 SDK 確認目前同步才算 ready；結束後則確認本輪規則已移除。需要 SDK 的 `mock-observability` 能力。
 命中只是有限筆數的記憶體證據，不代表回覆完成或 UI 正確；共享規則仍可能優先命中。MCP 等待不阻擋 App 網路請求。
+
+### 依次回覆
+
+`create_mock` 與 `update_mock` 可設定 `sequence: {steps:[{status:503,body:"retry"},{status:200,body:"ok"}],onExhausted:"last",resetToken:""}`。每步支援 status、headers、body、delayMs。用完後可選 `last` 重複最後一步、`loop` 從頭開始、`stop` 讓後續命中失敗，不會放行真實請求。以新 resetToken 更新完整序列即可重設，設 sequence 為 null 可回到固定回覆。需要 SDK 能力 `http-sequences`；透過 `get_run_status` 確認就緒與從 0 起算的 `hits[].stepIndex`。命中只代表選中，不代表回覆完成。背景請求若命中也會消耗步驟。指定 JSON 欄位複製僅支援固定回覆。

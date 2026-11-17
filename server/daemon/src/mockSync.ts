@@ -4,7 +4,7 @@ import type { Mocks } from './mockStore.js'
 /** Session-bound acknowledgements: a reconnect or newer send invalidates earlier ACKs. */
 export function createMockSync() {
   const states = new Map<string, { revision: string; acknowledged: boolean; ruleIds: string[] }>()
-  const hits: Array<{ deviceId: string; ruleId: string; revision: string; timestamp: number }> = []
+  const hits: Array<{ deviceId: string; ruleId: string; revision: string; timestamp: number; stepIndex?: number }> = []
   return {
     sent(deviceId: string, mocks: Mocks) {
       const revision = randomUUID()
@@ -17,7 +17,8 @@ export function createMockSync() {
       if (!state || msg.revision !== state.revision) return
       if (msg.type === 'mock-rules-applied') state.acknowledged = true
       if (msg.type === 'mock-hit' && typeof msg.ruleId === 'string' && state.ruleIds.includes(msg.ruleId)) {
-        hits.push({ deviceId, ruleId: msg.ruleId, revision: state.revision, timestamp: Date.now() })
+        hits.push({ deviceId, ruleId: msg.ruleId, revision: state.revision, timestamp: Date.now(),
+          ...(Number.isInteger(msg.stepIndex) && Number(msg.stepIndex) >= 0 && Number(msg.stepIndex) < 100 ? { stepIndex: Number(msg.stepIndex) } : {}) })
         if (hits.length > 1000) hits.shift()
       }
     },

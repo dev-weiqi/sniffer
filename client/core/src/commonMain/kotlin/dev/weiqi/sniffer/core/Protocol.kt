@@ -121,7 +121,7 @@ data class MockRulesApplied(val revision: String) : DeviceMessage
 
 @Serializable
 @SerialName("mock-hit")
-data class MockHitMsg(val ruleId: String, val revision: String, val timestamp: Long) : DeviceMessage
+data class MockHitMsg(val ruleId: String, val revision: String, val timestamp: Long, val stepIndex: Int? = null) : DeviceMessage
 
 @Serializable
 @SerialName("mock-rules")
@@ -159,6 +159,23 @@ data class BreakpointResolveMsg(
 ) : DaemonMessage
 
 @Serializable
+data class HttpResponseStep(
+    val status: Int = 200,
+    val headers: Map<String, String> = emptyMap(),
+    val body: String = "",
+    val delayMs: Long = 0,
+)
+
+@Serializable
+data class HttpSequence(
+    val steps: List<HttpResponseStep>,
+    val onExhausted: String = "last",
+    val resetToken: String = "",
+)
+
+class MockSequenceExhausted : Exception("Sniffer mock sequence exhausted")
+
+@Serializable
 data class HttpMockRule(
     val id: String,
     val enabled: Boolean = true,
@@ -173,6 +190,8 @@ data class HttpMockRule(
     val queryParams: Map<String, String> = emptyMap(),
     // JSON object of required request body fields; blank means no body constraint.
     val bodyMatch: String? = null,
+    val sequence: HttpSequence? = null,
+    @kotlinx.serialization.Transient val stepIndex: Int? = null,
     @kotlinx.serialization.Transient val syncRevision: String? = null,
 )
 

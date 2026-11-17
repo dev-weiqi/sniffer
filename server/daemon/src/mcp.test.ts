@@ -95,6 +95,16 @@ try {
   }
   await call('update_mock', { id: copied.created.id, name: 'Retained metadata' })
   assert.equal((await call('list_scenarios', {})).scenarios.length, 1)
+  const sequential = await call('create_mock', { urlPattern: '/sequence', sequence: {
+    steps: [{ status: 503, body: 'first' }, { status: 200, body: 'second' }], onExhausted: 'stop', resetToken: '' } })
+  await call('update_mock', { id: sequential.created.id, sequence: {
+    steps: [{ status: 503 }, { status: 200 }], onExhausted: 'last', resetToken: 'reset' } })
+  assert.equal((store.devices.d1.http.find(r => (r as any).id === sequential.created.id) as any).sequence.resetToken, 'reset')
+  assert.equal((await client.callTool({ name: 'update_mock', arguments: { id: sequential.created.id, delayOnly: true } })).isError, true)
+  for (const sequence of [{ steps: [] }, { steps: [{ delayMs: -1 }] }, { steps: [{}], onExhausted: 'invalid' }]) {
+    assert.equal((await client.callTool({ name: 'create_mock', arguments: { urlPattern: '/bad', sequence } })).isError, true)
+  }
+  await call('delete_mock', { id: sequential.created.id })
   const runOne = await call('start_run', { scenarioId: scenario.id, parameters: { characterId: '194', count: 0, label: 'empty' } })
   const runTwo = await call('start_run', { name: 'Independent run' })
   const runTwoRule = await call('create_mock', { runId: runTwo.run.id, urlPattern: '/other-run' })
