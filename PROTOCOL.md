@@ -36,25 +36,13 @@ Timestamps are epoch millis. Bodies are strings; binary bodies are `null`. Bodie
 { "type": "http-request", "id": "<uuid>", "method": "GET", "url": "https://host/path?q=1",
   "headers": { "Accept": "application/json" }, "body": null, "bodySize": 0,
   "bodyTruncated": false, "library": "okhttp", "timestamp": 0, "userId": "user-7" }
-// userId is the Analytics identity when the request was captured (max 1024 chars).
-// Empty means no user ID was set; absent/null means an older SDK did not capture identity.
-// Responses preserve the request's identity, even if setUserId changes while it is in flight.
+// userId is optional legacy metadata; current SDKs do not capture it.
 
 { "type": "http-response", "id": "<uuid>", "status": 200, "headers": {},
   "body": "{...}", "bodySize": 18879, "bodyTruncated": false,
   "durationMs": 115, "mocked": false, "error": null, "timestamp": 0,
   "delayedMs": 0 }        // optional: latency injected by a delay-only rule (real request still ran)
 // on transport failure: status=0, error=<message>
-
-// Local Analytics mirror of an explicit logEvent call, with an immutable parameter snapshot.
-{ "type": "firebase-analytics-event", "id": "<uuid>", "name": "select_content",
-  "params": { "item_id": "42", "quantity": 2, "value": 9.99 },
-  "timestamp": 0, "userId": "user-7", "truncated": false, "firebaseSdkCalled": true }
-// firebaseSdkCalled means the original SDK call returned normally, never cloud acknowledgement.
-// Parameters preserve strings, numbers, booleans, null, maps, and lists/arrays.
-// Bounds: name 4096 chars; userId 1024; parameter capture budget 65536 chars/nodes,
-// depth 8, 64 keys per object, 200 items per array. Oversized captures set truncated.
-// Events use the normal in-memory offline queue. This is not confirmation of Firebase upload.
 
 // socket connection lifecycle
 { "type": "socket-status", "connectionId": "<uuid>", "transport": "socketio",
@@ -170,7 +158,6 @@ WebSocket `/ui` sends a snapshot on connect, then a live stream:
 { "type": "device-status", "deviceId": "...", "connected": false }
 { "type": "mocks-changed", "deviceId": "...", "mocks": { "http": [], "socket": [] } }
 { "type": "entries-cleared" }
-{ "type": "firebase-entries-cleared" } // Firebase only, all devices
 { "type": "breakpoints-changed", "deviceId": "...", "rules": [ { "...": "breakpoint rule" } ] }
 { "type": "breakpoint-hit", "deviceId": "...", "hit": { "...": "breakpoint-hit message" } }
 { "type": "breakpoint-resolved", "deviceId": "...", "id": "<hit uuid>" }   // user resumed/aborted
@@ -190,14 +177,13 @@ POST   /api/breakpoints/resolve body: { "deviceId": "...", "id": "<hit uuid>", "
 DELETE /api/entries            clear recorded traffic
 DELETE /api/entries/http       clear HTTP records and resume paused responses unchanged
 DELETE /api/entries/socket     clear Socket events and acks
-DELETE /api/entries/firebase   clear Firebase records for all devices; prevents replay of pre-clear Analytics events
 GET    /api/entries            read-only snapshot: { "entries": [{ "deviceId": "...", "message": {...} }] }
-                               optional filters: deviceId, appId, id, type=http|socket|firebase,
+                               optional filters: deviceId, appId, id, type=http|socket,
                                method, status, urlContains, bodyContains, userId, event, connectionId, limit
                                HTTP method/status/URL/userId filters correlate request and response per device;
                                Socket event/connection filters correlate events and acks.
                                bodyContains searches body/payload/params on each message; event matches
-                               socket event or Analytics name. limit takes the last N messages after filtering.
+                               socket event. limit takes the last N messages after filtering.
                                known secrets masked by default in headers, body, payload, params and URLs;
                                redact=0 explicitly returns raw data. /ui WS is never redacted.
 GET    /api/state              devices, entryCount, mocksByDevice, breakpointsByDevice, pausedHits
@@ -211,7 +197,7 @@ DELETE /api/devices/<deviceId> remove a device, disconnect it if online
 
 `sniffer mcp` exposes the daemon through stdio. It uses the REST routes above;
 there are no additional device messages or SDK changes for MCP. Tools cover traffic
-(including Analytics), HTTP and socket mocks, push events, and response breakpoints.
+HTTP and socket mocks, push events, and response breakpoints.
 See [MCP setup and tool schemas](server/daemon/MCP.md). MCP never requests raw
 traffic; state reads use `redact=1`. Custom redaction fields are configured on the
 daemon, not the MCP process. Redaction is best effort, not a guarantee that every

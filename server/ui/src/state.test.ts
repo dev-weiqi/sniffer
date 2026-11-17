@@ -433,8 +433,6 @@ try {
 
 console.log('state.test: all assertions passed')
 
-const firebaseEvent = { type: 'firebase-analytics-event', id: 'f1', timestamp: 100, name: 'screen_view', params: { screen: 'home' } }
-assertEqual(dispatch(initialState, { type: 'event', deviceId: 'd1', message: { type: 'firebase-event', id: 'old', severity: 'fatal' } }).firebase.length, 0, 'removed crash events are ignored')
 let contextState = initialState
 for (const [deviceId, userId] of [['d1', 'alice'], ['d2', 'bob']]) contextState = dispatch(contextState, {
   type: 'event', deviceId, message: { type: 'http-request', id: 'shared', timestamp: 1, method: 'GET', url: '/', userId },
@@ -444,21 +442,12 @@ assertEqual(contextState.http[0].userId, 'alice', 'response keeps the identity c
 assertEqual(contextState.http[1].status, undefined, 'same request ID on another device is not updated')
 contextState = dispatch(contextState, { type: 'event', deviceId: 'd1', message: { type: 'http-request', id: 'legacy', timestamp: 2, method: 'GET', url: '/' } })
 assertEqual(contextState.http[2].userId, undefined, 'legacy API identity stays unknown rather than anonymous')
-let firebaseState = dispatch(initialState, { type: 'init', entries: [{ deviceId: 'd1', message: firebaseEvent }] })
-assertEqual(firebaseState.firebase[0].message, 'screen_view', 'snapshot restores Firebase')
-firebaseState = dispatch(firebaseState, { type: 'event', deviceId: 'd1', message: firebaseEvent })
-assertEqual(firebaseState.firebase.length, 1, 'Firebase replay is idempotent')
-for (let i = 0; i < 510; i++) firebaseState = dispatch(firebaseState, {
-  type: 'event', deviceId: 'd1', message: { ...firebaseEvent, id: `f${i}` },
-})
-assertEqual(firebaseState.firebase.length, 500, 'Firebase rows are bounded')
-assertEqual(dispatch(firebaseState, { type: 'http-entries-cleared' }).firebase.length, 500, 'HTTP clear preserves Firebase')
-assertEqual(dispatch(firebaseState, { type: 'firebase-entries-cleared' }).firebase.length, 0, 'Firebase clear')
-assertEqual(dispatch(firebaseState, { type: 'entries-cleared' }).firebase.length, 0, 'clearAll includes Firebase')
-assertEqual(dispatch(firebaseState, { type: 'device-deleted', deviceId: 'd1' }).firebase.length, 0, 'delete device includes Firebase')
-
 const truncatedState = dispatch(initialState, { type: 'event', deviceId: 'd1', message: {
   type: 'http-request', id: 'truncated-body', method: 'POST', url: 'https://host/messages',
   body: '{"limit":20}', bodySize: 2000000, bodyTruncated: true,
 } })
 assertEqual(truncatedState.http[0]?.reqTruncated, true, 'request truncation flag survives for mock prefill')
+
+for (const type of ['firebase-event', 'firebase-analytics-event']) {
+  assertEqual(dispatch(initialState, { type: 'event', deviceId: 'd1', message: { type, id: 'legacy' } }), initialState, 'removed Firebase events leave UI state unchanged')
+}

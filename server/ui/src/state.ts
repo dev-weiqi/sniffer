@@ -131,17 +131,6 @@ export interface SocketRow {
   ackMocked?: boolean
 }
 
-export interface FirebaseRow {
-  id: string
-  deviceId: string
-  ts: number
-  params?: Record<string, unknown>
-  firebaseSdkCalled?: boolean
-  message: string
-  userId: string
-  truncated: boolean
-}
-
 export interface State {
   wsConnected: boolean
   /** true when the daemon runs from repo source (not the published npm package) */
@@ -152,7 +141,6 @@ export interface State {
   /** connectionId → url, never pruned: historical events must resolve after their conn is gone */
   connUrls: Record<string, string>
   socketEvents: SocketRow[]
-  firebase: FirebaseRow[]
   mocksByDevice: Record<string, Mocks>
   breakpointsByDevice: Record<string, BreakpointRule[]>
   pausedHits: PausedHit[]
@@ -187,7 +175,6 @@ export const initialState: State = {
   socketConns: [],
   connUrls: {},
   socketEvents: [],
-  firebase: [],
   mocksByDevice: {},
   breakpointsByDevice: {},
   pausedHits: [],
@@ -202,15 +189,6 @@ function appendCapped<T>(rows: T[], row: T): T[] {
 
 function applyDeviceMessage(state: State, deviceId: string, m: Msg): State {
   switch (m.type) {
-    case 'firebase-analytics-event': {
-      if (state.firebase.some(r => r.deviceId === deviceId && r.id === m.id)) return state
-      const row: FirebaseRow = {
-        id: m.id, deviceId, ts: m.timestamp,
-        message: m.name, params: m.params ?? {}, firebaseSdkCalled: m.firebaseSdkCalled === true,
-        userId: m.userId ?? '', truncated: m.truncated ?? false,
-      }
-      return { ...state, firebase: appendCapped(state.firebase, row) }
-    }
     case 'http-request': {
       const row: HttpRow = {
         id: m.id, deviceId, ts: m.timestamp, method: m.method, url: m.url,
@@ -319,9 +297,7 @@ export function reducer(state: State, action: Action): State {
     case 'breakpoints-released': // device disconnected: the SDK auto-resumed its paused calls
       return { ...state, pausedHits: state.pausedHits.filter(h => h.deviceId !== m.deviceId) }
     case 'entries-cleared':
-      return { ...state, http: [], socketEvents: [], socketConns: [], firebase: [] }
-    case 'firebase-entries-cleared':
-      return { ...state, firebase: [] }
+      return { ...state, http: [], socketEvents: [], socketConns: [] }
     case 'http-entries-cleared':
       return { ...state, http: [] }
     case 'socket-entries-cleared':
@@ -332,7 +308,6 @@ export function reducer(state: State, action: Action): State {
       return {
         ...state,
         devices: state.devices.filter(d => d.deviceId !== m.deviceId),
-        firebase: state.firebase.filter(r => r.deviceId !== m.deviceId),
         http: state.http.filter(r => r.deviceId !== m.deviceId),
         socketConns: state.socketConns.filter(c => c.deviceId !== m.deviceId),
         socketEvents: state.socketEvents.filter(e => e.deviceId !== m.deviceId),
@@ -392,7 +367,6 @@ export const api = {
     fetch('/api/breakpoints/resolve', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ deviceId, id, action, ...edits }) }),
   clearEntries: () => fetch('/api/entries', { method: 'DELETE' }),
   clearHttpEntries: () => fetch('/api/entries/http', { method: 'DELETE' }),
-  clearFirebaseEntries: () => fetch('/api/entries/firebase', { method: 'DELETE' }),
   clearSocketEntries: () => fetch('/api/entries/socket', { method: 'DELETE' }),
   deleteOfflineDevices: () => fetch('/api/devices/offline', { method: 'DELETE' }),
   deleteDevice: (deviceId: string) => fetch(`/api/devices/${encodeURIComponent(deviceId)}`, { method: 'DELETE' }),

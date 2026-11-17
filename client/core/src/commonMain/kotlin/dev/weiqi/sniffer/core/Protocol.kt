@@ -3,7 +3,6 @@ package dev.weiqi.sniffer.core
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 
 /** Wire protocol with the daemon; fields mirror PROTOCOL.md. */
 val SnifferJson = Json {
@@ -38,7 +37,7 @@ data class HttpRequestMsg(
     val bodyTruncated: Boolean,
     val library: String,
     val timestamp: Long,
-    /** Firebase user at request capture time; null means an older/unannotated capture. */
+    /** Legacy user identity at request capture time; null means an older/unannotated capture. */
     val userId: String? = null,
 ) : DeviceMessage
 
@@ -115,18 +114,6 @@ data class BreakpointHitMsg(
 
 @Serializable
 sealed interface DaemonMessage
-
-@Serializable
-@SerialName("firebase-analytics-event")
-data class FirebaseAnalyticsEventMsg(
-    val id: String,
-    val name: String,
-    val params: JsonObject,
-    val timestamp: Long,
-    val userId: String = "",
-    val truncated: Boolean = false,
-    val firebaseSdkCalled: Boolean = false,
-) : DeviceMessage
 
 @Serializable
 @SerialName("mock-rules-applied")

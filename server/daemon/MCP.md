@@ -2,8 +2,7 @@ English | [繁體中文](MCP.zh-TW.md)
 
 # Sniffer MCP
 
-The stdio MCP server lets AI clients inspect captured HTTP, Socket and Firebase
-Analytics traffic, edit mock rules, inject events and control response breakpoints.
+The stdio MCP server lets AI clients inspect captured HTTP and Socket traffic, edit mock rules, inject events and control response breakpoints.
 It talks to the running daemon over REST. The existing app SDK does not need an
 update for MCP itself; newer mock conditions still require their SDK capabilities.
 
@@ -58,7 +57,7 @@ port, so choose a different free port if running both on a shared host.
 | `PORT` | daemon | `9091` | Listening port. |
 | `SNIFFER_BIND` | daemon | `127.0.0.1` | Listening interface. Use `0.0.0.0` only when LAN access is needed. |
 | `SNIFFER_REDACT_HEADERS` | daemon | built-in names | Additional comma-separated header names to mask. |
-| `SNIFFER_REDACT_BODY_FIELDS` | daemon | built-in names | Additional comma-separated field names to mask, including Socket payloads and Analytics params. |
+| `SNIFFER_REDACT_BODY_FIELDS` | daemon | built-in names | Additional comma-separated field names to mask, including Socket payloads. |
 
 For example, configure redaction on the **daemon**:
 
@@ -76,26 +75,24 @@ and breakpoints. `clear_traffic` always affects **all devices**, regardless of a
 | Tool | Purpose | Arguments |
 | --- | --- | --- |
 | `get_state` | Devices, entry count, mocks, armed breakpoints and paused responses. | none |
-| `list_traffic` | Read captured messages, with secrets masked. | `deviceId?`, `type?` (`http`, `socket`, `firebase`), `method?`, `status?`, `urlContains?`, `bodyContains?`, `userId?`, `event?`, `connectionId?`, `limit?` |
-| `get_entry` | All messages for one ID: request/response, event/ack or Analytics event. | `id`, `deviceId?` |
+| `list_traffic` | Read captured messages, with secrets masked. | `deviceId?`, `type?` (`http`, `socket`), `method?`, `status?`, `urlContains?`, `bodyContains?`, `userId?`, `event?`, `connectionId?`, `limit?` |
+| `get_entry` | All messages for one ID: request/response, event/ack. | `id`, `deviceId?` |
 | `create_mock` | Create an HTTP rule (default) or socket rule. Returns `{deviceId, created: {id}}`. | `deviceId?`, `type?` (`http`, `socket`), fields below |
 | `copy_mock_with_fields` | Copy an HTTP JSON mock with field replacements; the copy is disabled and device-local. | `id`, `replacements: [{path, value}]`, `deviceId?`, `name?` |
 | `update_mock` | Patch a rule, retaining unspecified fields. Returns `{deviceId, updated: {id}}`. | `id`, `deviceId?`, fields below |
 | `delete_mock` | Remove a rule by ID. | `id`, `deviceId?` |
 | `push_event` | Inject an inbound socket event into the app. Omit/null `connectionId` broadcasts within the device. | `event`, `payload`, `deviceId?`, `connectionId?` |
-| `clear_traffic` | Clear all devices' traffic; HTTP/all also releases paused responses unchanged. | `type?` (`http`, `socket`, `firebase`), omitted means all |
+| `clear_traffic` | Clear all devices' traffic; HTTP/all also releases paused responses unchanged. | `type?` (`http`, `socket`), omitted means all |
 | `set_breakpoints` | Replace a device's response breakpoint rules. Empty array disarms all. | `rules`, `deviceId?` |
 | `resolve_breakpoint` | Resume with optional edits, or abort a paused response. | `id`, `action` (`resume`, `abort`), `deviceId?`, `status?`, `headers?`, `body?` |
 
 HTTP request and response are separate messages with the same ID. HTTP method,
 status, URL and user ID filters correlate them within a device. `limit` returns
 the last N **messages**, not N complete flows; use `get_entry` for a full flow.
-`bodyContains` searches each message's body, socket payload or Analytics params.
-`event` matches a socket event name or Analytics name exactly; `userId` matches the
+`bodyContains` searches each message's body, socket payload.
+`event` matches a socket event name exactly; `userId` matches the
 captured identity exactly (empty string means explicitly unset). The response
-preserves image `bodyBase64`, truncation, delay and error fields, socket labels,
-and Analytics `firebaseSdkCalled`. A local Analytics capture is not proof of
-Firebase cloud delivery. Very large image bodies can exceed an MCP client's
+preserves image `bodyBase64`, truncation, delay and error fields, socket labels. Very large image bodies can exceed an MCP client's
 message size limit.
 
 ### Mock fields
@@ -137,7 +134,7 @@ SSE streams or image/upgrade responses. Disconnecting releases paused calls.
 ## Example prompts
 
 1. “Show the last 10 HTTP messages for `/orders` with status 503, then fetch the full failing flow.”
-2. “Find `screen_view` Analytics events for `user-7` and show their params.”
+2. “Find failed HTTP requests and show their response bodies.”
 3. “Mock `/orders` only when query `page=2` and JSON body `limit=20`.”
 4. “For Socket.IO `items:get` with payload `page=2`, reply with `items:result`.”
 5. “Pause the `/checkout` response; show the pending hit and resume it with status 200.”
@@ -146,7 +143,7 @@ SSE streams or image/upgrade responses. Disconnecting releases paused calls.
 
 The daemon masks known sensitive headers and JSON keys, token-shaped strings
 (JWT, Bearer/Basic and PEM), and sensitive URL query parameters. This covers
-HTTP bodies, Socket payloads/acks, Analytics params, and MCP state reads. Stored
+HTTP bodies, Socket payloads/acks, and MCP state reads. Stored
 traffic and the UI WebSocket remain unchanged. MCP offers no raw-read option;
 REST `/api/entries?redact=0` is an explicit local debugging bypass.
 

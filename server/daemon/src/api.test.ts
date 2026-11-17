@@ -107,7 +107,6 @@ function makeDeps() {
       clearAll: () => entryCalls.push('all'),
       clearHttp: () => entryCalls.push('http'),
       clearSocket: () => entryCalls.push('socket'),
-      clearFirebase: () => entryCalls.push('firebase'),
       snapshot: () => entrySnapshot,
     },
     broadcastToUi: (msg: unknown) => broadcasts.push(msg),
@@ -224,7 +223,6 @@ for (const [path, call, event, releases] of [
   ['/api/entries', 'all', 'entries-cleared', 1],
   ['/api/entries/http', 'http', 'http-entries-cleared', 1],
   ['/api/entries/socket', 'socket', 'socket-entries-cleared', 0],
-  ['/api/entries/firebase', 'firebase', 'firebase-entries-cleared', 0],
 ] as const) {
   ctx = makeDeps()
   res = fakeRes()
@@ -292,7 +290,6 @@ ctx.entrySnapshot.push(
   { deviceId: 'd2', message: { type: 'http-response', id: 'paired', status: 200 } },
   { deviceId: 'd1', message: { type: 'socket-event', id: 'event', connectionId: 'c1', event: 'echo', payload: '[{"access_token":"socket-secret","data":"needle"}]', label: 'test' } },
   { deviceId: 'd1', message: { type: 'socket-ack', id: 'event', payload: '{"password":"ack-secret"}' } },
-  { deviceId: 'd1', message: { type: 'firebase-analytics-event', id: 'analytics', name: 'screen_view', userId: 'user-7', params: { screen: 'home', secret: 'analytics-secret' }, truncated: false, firebaseSdkCalled: true } },
   { deviceId: 'd1', message: { type: 'http-response', id: 'image', bodyBase64: true, body: 'iVBORw0KGgo=', bodySize: 8, bodyTruncated: false } },
 )
 async function query(path: string) {
@@ -310,10 +307,6 @@ assert(!queried[0].message.payload.includes('socket-secret'), 'socket payload ma
 queried = bodyOf(await query('/api/entries?id=event')).entries
 assertEqual(queried.length, 2, 'get event and ack')
 assert(!queried[1].message.payload.includes('ack-secret'), 'ack payload masked')
-queried = bodyOf(await query('/api/entries?type=firebase&event=screen_view&userId=user-7&bodyContains=home')).entries
-assertEqual(queried.length, 1, 'Analytics filters inspect name, user and params')
-assertEqual(queried[0].message.params.secret, '‹redacted›', 'Analytics params masked')
-assertEqual(queried[0].message.firebaseSdkCalled, true, 'Analytics delivery metadata preserved')
 assertEqual(bodyOf(await query('/api/entries?id=image')).entries[0].message.body, 'iVBORw0KGgo=', 'image base64 preserved')
 assertEqual(bodyOf(await query('/api/entries?appId=unknown')).entries.length, 0, 'app filter excludes unrelated devices')
 assertEqual(bodyOf(await query('/api/entries?appId=app&id=paired')).entries.length, 2, 'app filter includes matching device')
@@ -324,7 +317,7 @@ const maskedState = bodyOf(await query('/api/state?redact=1'))
 assertEqual(maskedState.breakpointsByDevice.d1[0].id, 'b1', 'state includes armed rules')
 assert(!maskedState.pausedHits[0].hit.body.includes('secret'), 'paused response masked')
 assert(ctx.deps.getPendingHits()[0].hit.body.includes('secret'), 'masking leaves actual paused response intact')
-assert(bodyOf(await query('/api/entries?id=analytics&redact=0')).entries[0].message.params.secret === 'analytics-secret', 'explicit raw REST read preserved')
+assertEqual((await query('/api/entries?type=firebase')).status, 400, 'removed Firebase filter rejected')
 
 const previewStore = JSON.stringify(ctx.deps.getMockStore())
 async function previewFields(body: unknown, replacements: unknown) {

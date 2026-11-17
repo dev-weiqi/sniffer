@@ -117,7 +117,7 @@ adb shell setprop debug.sniffer.host 192.168.1.20
 
 ## MCP
 
-AI 工具可透過 `sniffer mcp` 的 stdio 介面操作同一個背景服務，包含 Analytics 查詢、HTTP query／body 條件、Socket payload 條件及回應斷點。設定、參數與範例請見 [MCP 指南](../server/daemon/MCP.zh-TW.md)。UI 與 MCP 共用模擬規則和流量，透過 MCP 清除流量會影響所有裝置。
+AI 工具可透過 `sniffer mcp` 的 stdio 介面操作同一個背景服務，包含 HTTP query／body 條件、Socket payload 條件及回應斷點。設定、參數與範例請見 [MCP 指南](../server/daemon/MCP.zh-TW.md)。UI 與 MCP 共用模擬規則和流量，透過 MCP 清除流量會影響所有裝置。
 
 ## 開發
 

@@ -136,7 +136,7 @@ they keep working offline.
 ## MCP
 
 AI clients can use the same daemon through `sniffer mcp` (stdio). The tools include
-Analytics queries, HTTP query/body conditions, Socket payload conditions and
+HTTP query/body conditions, Socket payload conditions and
 response breakpoints. See [the MCP guide](../server/daemon/MCP.md) for setup,
 arguments and examples. The UI and MCP share mock rules and traffic; clearing
 traffic through MCP clears it for all devices.

@@ -11,7 +11,6 @@ import { isStarred, normalizeMocks, type MockStore, type Mocks } from './mockSto
 
 const HTTP_ENTRY_TYPES = new Set(['http-request', 'http-response'])
 const SOCKET_ENTRY_TYPES = new Set(['socket-status', 'socket-event', 'socket-ack'])
-const FIREBASE_ENTRY_TYPES = new Set(['firebase-analytics-event'])
 interface ApiDevice {
   info: {
     deviceId: string
@@ -35,7 +34,6 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, url: 
     clearAll(): void
     clearHttp(): void
     clearSocket(): void
-    clearFirebase(): void
     snapshot(): Entry[]
   }
   broadcastToUi(msg: unknown): void
@@ -261,11 +259,6 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, url: 
     deps.broadcastToUi({ type: 'socket-entries-cleared' })
     return json(res, 200, { ok: true })
   }
-  if (req.method === 'DELETE' && url.pathname === '/api/entries/firebase') {
-    deps.entryStore.clearFirebase()
-    deps.broadcastToUi({ type: 'firebase-entries-cleared' })
-    return json(res, 200, { ok: true })
-  }
   if (req.method === 'DELETE' && url.pathname === '/api/devices/offline') {
     const offlineDeviceIds = [...deps.devices.values()]
       .filter(d => !d.connected)
@@ -299,8 +292,8 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, url: 
   }
   if (req.method === 'GET' && url.pathname === '/api/entries') {
     const params = url.searchParams
-    if (params.has('type') && !['http', 'socket', 'firebase'].includes(params.get('type')!))
-      return json(res, 400, { error: 'type must be http, socket or firebase' })
+    if (params.has('type') && !['http', 'socket'].includes(params.get('type')!))
+      return json(res, 400, { error: 'type must be http or socket' })
     for (const key of ['limit', 'status']) {
       if (params.has(key) && (!/^\d+$/.test(params.get(key)!) || Number(params.get(key)) < (key === 'limit' ? 1 : 0)))
         return json(res, 400, { error: `${key} must be a nonnegative integer (limit must be positive)` })
@@ -314,8 +307,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, url: 
 
 function queryEntries(entries: Entry[], params: URLSearchParams): Entry[] {
   const kind = params.get('type') === 'http' ? HTTP_ENTRY_TYPES
-    : params.get('type') === 'socket' ? SOCKET_ENTRY_TYPES
-      : params.get('type') === 'firebase' ? FIREBASE_ENTRY_TYPES : null
+    : params.get('type') === 'socket' ? SOCKET_ENTRY_TYPES : null
   const requests = new Map<string, Record<string, unknown>>()
   const responses = new Map<string, Record<string, unknown>>()
   const events = new Map<string, Record<string, unknown>>()

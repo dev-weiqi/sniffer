@@ -93,9 +93,9 @@ const definitions: Tool[] = [
   },
   {
     name: 'list_traffic',
-    description: 'Read HTTP, Socket and Firebase Analytics entries. HTTP method/status/URL filters correlate request and response. Results are masked; limit counts messages, not flows.',
+    description: 'Read HTTP and Socket entries. HTTP method/status/URL filters correlate request and response. Results are masked; limit counts messages, not flows.',
     inputSchema: { type: 'object', additionalProperties: false, properties: {
-      deviceId: identifier, type: { type: 'string', enum: ['http', 'socket', 'firebase'] },
+      deviceId: identifier, type: { type: 'string', enum: ['http', 'socket'] },
       method: text, status: { type: 'integer', minimum: 0, maximum: 599 },
       urlContains: text, bodyContains: text, userId: text, event: text, connectionId: identifier,
       limit: { type: 'integer', minimum: 1 },
@@ -145,7 +145,7 @@ const definitions: Tool[] = [
   {
     name: 'clear_traffic', description: 'Clear traffic across ALL devices. Omit type for all kinds. Clearing HTTP/all also resumes paused responses unchanged.',
     inputSchema: { type: 'object', additionalProperties: false,
-      properties: { type: { type: 'string', enum: ['http', 'socket', 'firebase'] } } },
+      properties: { type: { type: 'string', enum: ['http', 'socket'] } } },
   },
   {
     name: 'set_breakpoints', description: 'Replace all response breakpoints for one device; rules: [] disarms all. Does not pause SSE streams or mocked responses. Use get_state to inspect paused hits.',
@@ -390,7 +390,6 @@ export function createMcpRuntime(options: McpRuntimeOptions = {}) {
     if (name === 'clear_traffic') {
       const path = args.type === 'http' ? '/api/entries/http'
         : args.type === 'socket' ? '/api/entries/socket'
-          : args.type === 'firebase' ? '/api/entries/firebase'
           : '/api/entries'
       return daemon(path, { method: 'DELETE' })
     }

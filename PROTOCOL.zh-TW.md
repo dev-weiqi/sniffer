@@ -31,25 +31,13 @@
 { "type": "http-request", "id": "<uuid>", "method": "GET", "url": "https://host/path?q=1",
   "headers": { "Accept": "application/json" }, "body": null, "bodySize": 0,
   "bodyTruncated": false, "library": "okhttp", "timestamp": 0, "userId": "user-7" }
-// userId 是擷取請求當下的 Analytics 身分，最多 1024 個字元。
-// 空字串表示尚未設定使用者 ID；缺少欄位或 null 表示舊版 SDK 未擷取身分。
-// 即使請求途中 setUserId 有變更，回應仍保留請求原本的身分。
+// userId 是舊版選填資料，目前 SDK 不再擷取。
 
 { "type": "http-response", "id": "<uuid>", "status": 200, "headers": {},
   "body": "{...}", "bodySize": 18879, "bodyTruncated": false,
   "durationMs": 115, "mocked": false, "error": null, "timestamp": 0,
   "delayedMs": 0 }        // 選填：僅延遲規則加入的延遲時間，真實請求仍會執行
 // 傳輸失敗時：status=0，error=<錯誤訊息>
-
-// 明確呼叫 logEvent 時產生的本機 Analytics 紀錄，參數為不可變快照。
-{ "type": "firebase-analytics-event", "id": "<uuid>", "name": "select_content",
-  "params": { "item_id": "42", "quantity": 2, "value": 9.99 },
-  "timestamp": 0, "userId": "user-7", "truncated": false, "firebaseSdkCalled": true }
-// firebaseSdkCalled 表示原始 SDK 呼叫正常返回，絕不代表雲端已確認收到。
-// 參數保留字串、數字、布林值、null、Map，以及清單／陣列。
-// 限制：name 4096 個字元，userId 1024 個字元；參數擷取預算為 65536 個字元／節點，
-// 深度 8，每個物件 64 個鍵，每個陣列 200 個項目。超過限制時設定 truncated。
-// 事件使用一般的記憶體離線佇列，不代表已上傳至 Firebase。
 
 // socket 連線生命週期
 { "type": "socket-status", "connectionId": "<uuid>", "transport": "socketio",
@@ -163,7 +151,6 @@ WebSocket `/ui` 在連線時傳送快照，之後持續傳送即時串流：
 { "type": "device-status", "deviceId": "...", "connected": false }
 { "type": "mocks-changed", "deviceId": "...", "mocks": { "http": [], "socket": [] } }
 { "type": "entries-cleared" }
-{ "type": "firebase-entries-cleared" } // 僅清除 Firebase，涵蓋所有裝置
 { "type": "breakpoints-changed", "deviceId": "...", "rules": [ { "...": "breakpoint rule" } ] }
 { "type": "breakpoint-hit", "deviceId": "...", "hit": { "...": "breakpoint-hit message" } }
 { "type": "breakpoint-resolved", "deviceId": "...", "id": "<hit uuid>" }   // 使用者繼續或中止
@@ -182,14 +169,13 @@ POST   /api/breakpoints/resolve body: { "deviceId": "...", "id": "<hit uuid>", "
 DELETE /api/entries            清除所有流量，並原樣放行暫停中的回應
 DELETE /api/entries/http       清除 HTTP 紀錄，並原樣放行暫停中的回應
 DELETE /api/entries/socket     清除 Socket 事件與 ack
-DELETE /api/entries/firebase   清除所有裝置的 Firebase 紀錄，防止清除前的 Analytics 事件重送還原
 GET    /api/entries            唯讀快照：{ "entries": [{ "deviceId": "...", "message": {...} }] }
-                               選填篩選：deviceId、appId、id、type=http|socket|firebase、
+                               選填篩選：deviceId、appId、id、type=http|socket、
                                method、status、urlContains、bodyContains、userId、event、connectionId、limit
                                HTTP 的 method／status／URL／userId 篩選會在同一裝置內關聯請求與回應；
                                Socket 的事件／連線篩選會關聯事件與 ack。
                                bodyContains 搜尋各則訊息的 body／payload／params；event 比對 Socket
-                               事件或 Analytics 名稱。limit 取篩選後最後 N 則訊息。
+                               事件名稱。limit 取篩選後最後 N 則訊息。
                                預設遮罩 headers、body、payload、params、URL 中的已知敏感資料；
                                redact=0 明確要求原始資料。/ui WebSocket 不遮罩。
 GET    /api/state              devices、entryCount、mocksByDevice、breakpointsByDevice、pausedHits
@@ -201,7 +187,7 @@ DELETE /api/devices/<deviceId> 移除裝置；在線上時也中斷連線
 
 ## MCP
 
-`sniffer mcp` 透過 stdio 提供上述 REST 功能，不新增裝置訊息，也不需要為 MCP 修改 SDK。工具涵蓋流量（含 Analytics）、HTTP 與 Socket 模擬、事件注入及回應斷點。
+`sniffer mcp` 透過 stdio 提供上述 REST 功能，不新增裝置訊息，也不需要為 MCP 修改 SDK。工具涵蓋流量、HTTP 與 Socket 模擬、事件注入及回應斷點。
 
 設定與完整參數見 [MCP 說明](server/daemon/MCP.zh-TW.md)。MCP 不會要求未遮罩的流量，狀態查詢使用 `redact=1`。自訂敏感欄位必須設在背景服務，不是 MCP 程序。遮罩只能處理已知格式，無法保證移除所有機密或圖片內容。
 

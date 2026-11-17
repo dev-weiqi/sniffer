@@ -7,7 +7,6 @@ import { createEntryStore } from './entryStore.js'
 import { normalizeMocks, type MockStore } from './mockStore.js'
 
 const entryStore = createEntryStore(() => {})
-entryStore.pushEntry('d1', { type: 'firebase-analytics-event', id: 'a1', timestamp: Date.now(), name: 'screen_view', userId: 'user-7', params: { screen: 'home', token: 'private' }, firebaseSdkCalled: true })
 entryStore.pushEntry('d1', { type: 'http-request', id: 'h1', timestamp: Date.now(), method: 'GET', url: 'https://host/orders', headers: { Authorization: 'Bearer hidden' } })
 entryStore.pushEntry('d1', { type: 'http-response', id: 'h1', timestamp: Date.now(), status: 503, body: 'failed' })
 let store: MockStore = { devices: { d1: { http: [], socket: [] } }, shared: {} }
@@ -53,9 +52,6 @@ try {
   const listed = await client.listTools()
   assert.equal(listed.tools.length, 19)
   assert.equal(listed.tools.find(t => t.name === 'get_state')?.annotations?.readOnlyHint, true)
-  const analytics = await call('list_traffic', { type: 'firebase', event: 'screen_view', userId: 'user-7' })
-  assert.equal(analytics.entries[0].message.params.token, '‹redacted›')
-  assert.equal(analytics.entries[0].message.firebaseSdkCalled, true)
   const flow = await call('list_traffic', { type: 'http', method: 'GET', status: 503, urlContains: '/orders' })
   assert.equal(flow.entries.length, 2)
   assert.equal(flow.entries[0].message.headers.Authorization, '‹redacted›')
@@ -126,8 +122,8 @@ try {
   assert.equal(hits.size, 0)
   const bad = await client.callTool({ name: 'clear_traffic', arguments: { type: 'typo' } })
   assert.equal(bad.isError, true)
-  assert.equal(entryStore.snapshot().length, 3)
-  await call('clear_traffic', { type: 'firebase' })
+  assert.equal(entryStore.snapshot().length, 2)
+  await call('clear_traffic', { type: 'socket' })
   assert.equal(entryStore.snapshot().length, 2)
   assert.equal(stderr, '')
 } finally {

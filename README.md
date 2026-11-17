@@ -235,32 +235,6 @@ val session = ktor.webSocketSession("wss://api.example.com/realtime")
 session.send("ping")
 ```
 
-## Firebase panel (Beta)
-
-Enable **Firebase · Beta** in Settings to inspect Analytics events and parameters.
-Search or filter by event name and user ID; **Include API** shows nearby requests.
-Only calls through the wrapper are captured, not Firebase's automatic events.
-
-Add `firebase` for debug and `firebase-noop` for release, using the same Sniffer
-version as `core`. Keep your existing Firebase Analytics dependency and BoM.
-After Firebase initialization, wrap the instance in your app's event facade:
-
-```kotlin
-import com.google.firebase.Firebase
-import com.google.firebase.analytics.analytics
-import dev.weiqi.sniffer.firebase.SnifferFirebaseAnalytics
-
-val analytics = SnifferFirebaseAnalytics.wrap(Firebase.analytics)
-analytics.setUserId("user-7") // Pass null to clear the user ID.
-analytics.logEvent("select_item") {
-    param("item_id", "42")
-}
-```
-
-Firebase calls still run normally; the release wrapper disables only local capture.
-Captured events do not confirm cloud delivery; use Firebase DebugView for that.
-For KMP or local testing, use `SnifferAnalytics` with parameter maps; calls without
-a Firebase callback appear as **Local capture**.
 
 ## Use the UI
 
@@ -270,7 +244,6 @@ Open `http://localhost:9091`, launch your debug app and select the device.
   mocked entries.
 - **Socket**: Socket.IO and WebSocket connections, events, payloads, acks and pushed
   server-to-client messages.
-- **Firebase · Beta** (opt-in in Settings): Analytics events and inline parameters.
 - **Mocks**: per-device HTTP response rules, delay-only rules, Socket.IO ack rules,
   WebSocket reply rules and push events.
 
@@ -297,7 +270,7 @@ HTTP response editors also offer **Copy with field changes**: preview an existin
 ## AI tools through MCP
 
 The main checkout includes `sniffer mcp`, a stdio server for reading HTTP, Socket
-and Firebase Analytics traffic, editing mocks, injecting events and managing
+traffic, editing mocks, injecting events and managing
 response breakpoints. It connects to an already running daemon; no additional
 app SDK integration is needed. See [MCP setup](server/daemon/MCP.md) for local
 build instructions, client configuration, available tools and data masking.
@@ -311,7 +284,6 @@ build instructions, client configuration, available tools and data masking.
 | `io.github.dev-weiqi.sniffer:ktor` | Ktor client inspection for Android, iOS and JVM |
 | `io.github.dev-weiqi.sniffer:socketio` | Socket.IO inspection, ack mocks, push events |
 | `io.github.dev-weiqi.sniffer:ktor-ws` | Ktor WebSocket inspection and reply mocks |
-| `io.github.dev-weiqi.sniffer:firebase` | Firebase Analytics event and user ID tracking |
 
 Each artifact has a `-noop` twin with the same API.
 

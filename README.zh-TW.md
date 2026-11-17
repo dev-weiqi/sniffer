@@ -210,25 +210,6 @@ val session = ktor.webSocketSession("wss://api.example.com/realtime")
 session.send("ping")
 ```
 
-## Firebase 面板（Beta）
-
-在 Settings 啟用 **Firebase · Beta**，即可檢視 Analytics 事件與參數。可搜尋或依事件名稱、使用者 ID 篩選；**Include API** 會顯示相鄰的請求。只擷取透過包裝器呼叫的事件，不包含 Firebase 自動事件。
-
-偵錯版加入 `firebase`，正式版加入 `firebase-noop`，Sniffer 版本須與 `core` 相同。保留既有的 Firebase Analytics 相依套件與 BoM。初始化 Firebase 後，在 App 的事件封裝層中包裝實例：
-
-```kotlin
-import com.google.firebase.Firebase
-import com.google.firebase.analytics.analytics
-import dev.weiqi.sniffer.firebase.SnifferFirebaseAnalytics
-
-val analytics = SnifferFirebaseAnalytics.wrap(Firebase.analytics)
-analytics.setUserId("user-7") // Pass null to clear the user ID.
-analytics.logEvent("select_item") {
-    param("item_id", "42")
-}
-```
-
-Firebase 呼叫仍照常執行，正式版包裝器只停用本機擷取。擷取紀錄不代表雲端已收到，請使用 Firebase DebugView 確認。KMP 或本機測試可使用 `SnifferAnalytics` 傳入參數 Map；未提供 Firebase 回呼的事件會顯示為 **Local capture**。
 
 ## 使用介面
 
@@ -236,7 +217,6 @@ Firebase 呼叫仍照常執行，正式版包裝器只停用本機擷取。擷�
 
 * **API**：即時請求與回應、標頭、JSON、圖片、動態 WebP、複製 cURL，以及模擬紀錄。
 * **Socket**：Socket.IO 與 WebSocket 連線、事件、負載、ack，以及伺服器推送至用戶端的訊息。
-* **Firebase · Beta**（在 Settings 中啟用）：Analytics 事件與就地展開的參數。
 * **Mocks**：各裝置的 HTTP 回應規則、僅延遲規則、Socket.IO ack 規則、WebSocket 回覆規則與推送事件。
 
 規則在所選裝置的 SDK 內執行。HTTP 模擬在發出網路請求前回應，socket ack 規則則在本機回應。模擬內容支援 `${randomId}`、`${now}` 與 `${randomString(min~max)}`。
@@ -249,7 +229,7 @@ HTTP 與 Socket 編輯器預設收合 **Request conditions**。建立模擬時�
 
 HTTP 回應編輯器提供 **Copy with field changes**：預覽指定 JSON 欄位的修改後，建立停用且不共享的副本，原規則不變。MCP 對應工具為 `copy_mock_with_fields`，不需要更新 SDK。詳見 [欄位複製說明](server/daemon/MCP.zh-TW.md)。
 
-目前 main 的原始碼包含 `sniffer mcp`，提供 stdio 介面，讓 AI 工具讀取 HTTP、Socket 與 Firebase Analytics 紀錄、編輯模擬規則、注入事件及管理回應斷點。它連接已啟動的背景服務，不需要額外整合 App SDK。建置步驟、用戶端設定、工具與資料遮罩說明請見 [MCP 設定](server/daemon/MCP.zh-TW.md)。
+目前 main 的原始碼包含 `sniffer mcp`，提供 stdio 介面，讓 AI 工具讀取 HTTP 與 Socket 紀錄、編輯模擬規則、注入事件及管理回應斷點。它連接已啟動的背景服務，不需要額外整合 App SDK。建置步驟、用戶端設定、工具與資料遮罩說明請見 [MCP 設定](server/daemon/MCP.zh-TW.md)。
 
 ## 模組
 
@@ -260,7 +240,6 @@ HTTP 回應編輯器提供 **Copy with field changes**：預覽指定 JSON 欄�
 | `io.github.dev-weiqi.sniffer:ktor` | Android、iOS 與 JVM 的 Ktor 用戶端檢視 |
 | `io.github.dev-weiqi.sniffer:socketio` | Socket.IO 檢視、ack 模擬、推送事件 |
 | `io.github.dev-weiqi.sniffer:ktor-ws` | Ktor WebSocket 檢視與回覆模擬 |
-| `io.github.dev-weiqi.sniffer:firebase` | Firebase Analytics 事件與使用者 ID 追蹤 |
 
 每個套件都有 API 相同的 `-noop` 對應版本。
 

@@ -106,12 +106,8 @@ object Sniffer {
                 if (msg.status == "connected") liveConnections + (msg.connectionId to msg)
                 else liveConnections - msg.connectionId
         }
-        // Snapshot at request capture, before buffering: account changes must not relabel an in-flight call.
-        val captured = if (msg is HttpRequestMsg && msg.userId == null) {
-            msg.copy(userId = SnifferAnalytics.userIdSnapshot().orEmpty())
-        } else msg
-        reportSinkForTests?.invoke(captured)
-        queue.trySend(captured)
+        reportSinkForTests?.invoke(msg)
+        queue.trySend(msg)
     }
 
     /**
