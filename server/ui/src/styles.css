@@ -1277,15 +1277,6 @@ button.modal-primary:hover {
 .condition-tabs button { font-weight: 600; }
 
 /* Field-copy preview stays within the existing HTTP response editor. */
-.copy-fields { border-top: 1px solid var(--border); padding-top: 10px; font-size: 12px; }
-.copy-fields summary { cursor: pointer; color: var(--text-dim); width: fit-content; }
-.copy-fields .hint { margin: 8px 0; }
-.copy-fields-inputs { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
-.copy-fields-inputs label { flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 5px; }
-.copy-fields-inputs input { width: 100%; }
-.copy-fields-diff { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0; }
-.copy-fields-diff pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 160px; overflow: auto; padding: 8px; background: var(--bg-alt); }
-.copy-fields-error { color: var(--err); }
 
 .sequence-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
 .sequence-editor { display: grid; grid-template-columns: 145px minmax(0, 1fr); gap: 18px; margin-top: 16px; }

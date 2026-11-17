@@ -134,9 +134,9 @@ Socket 必須指定 `type: "socket"` 與 `event`。選填欄位為 `transport`�
 
 不呼叫真實後端，不需要更新 SDK。僅延遲規則、Socket 規則、非 JSON 及不能解析成 JSON 的 placeholder 底稿不支援。
 
-UI 在 Response body 下方提供 **Copy with field changes**。輸入路徑和值，按 **Preview change** 比較前後，再按 **Create disabled copy**。預覽不儲存；修改輸入或底稿後需要重新預覽。原有 Copy 按鈕行為不變。
+指定欄位修改透過 MCP 使用。UI 保留原有 Copy 按鈕與回應編輯器。
 
-UI 預覽使用 `POST /api/mock-body/replace-fields`，傳入 `{body, replacements}`，成功回傳 `{body, changes: [{path, before, after}]}`，錯誤回傳 HTTP 400。此本機預覽端點不儲存規則，前後值不遮罩，僅供本機編輯器使用。
+本機預覽 API 保留 `POST /api/mock-body/replace-fields`，傳入 `{body, replacements}`，成功回傳 `{body, changes: [{path, before, after}]}`，錯誤回傳 HTTP 400。此端點不儲存規則，前後值不遮罩。
 
 ## 情境套組
 

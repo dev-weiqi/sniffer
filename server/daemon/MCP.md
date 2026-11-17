@@ -183,14 +183,11 @@ a local copy does not guarantee it overrides a shared source.
 No backend request or SDK update is needed. Delay-only rules, Socket rules, non-JSON bodies
 and placeholder templates that cannot be parsed as JSON are unsupported.
 
-In the UI, expand **Copy with field changes** below Response body, enter a path and JSON
-value, select **Preview change**, review Before/After, then **Create disabled copy**.
-Preview never saves; changing the input or source requires another preview. The existing
-Copy button is unchanged.
+Field replacement is available through MCP. The UI keeps the existing Copy button and response editor.
 
-The UI preview endpoint is `POST /api/mock-body/replace-fields` with `{body, replacements}`.
-It returns `{body, changes: [{path, before, after}]}` or HTTP 400 on invalid input. It does not
-persist rules. Preview values are unmasked for the local editor.
+The local preview API remains `POST /api/mock-body/replace-fields` with `{body, replacements}`.
+It returns `{body, changes: [{path, before, after}]}` or HTTP 400 on invalid input.
+It does not persist rules; preview values are unmasked.
 
 ## Scenario templates
 

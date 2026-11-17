@@ -1,6 +1,5 @@
 import { SseEditor } from './SseEditor'
 import { SequenceEditor } from './SequenceEditor'
-import { CopyWithFields } from './CopyWithFields'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { HttpMockRule, Mocks, SocketConn, SocketMockRule } from './state'
 import { api } from './state'
@@ -485,9 +484,8 @@ export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supports
                 <HttpRuleEditor deviceId={deviceId} key={`${deviceId}:${draft.http[httpAt].id}`} rule={draft.http[httpAt]} number={httpAt + 1} conflicts={httpConflicts.get(draft.http[httpAt].id) ?? []} onSelectConflict={setSelHttp}
                   prefilled={prefilledRules.current.has(draft.http[httpAt].id)}
                   supportsQueryMocks={supportsQueryMocks} supportsBodyMocks={supportsBodyMocks} supportsSseMocks={supportsSseMocks}
-                  onDuplicate={body => {
-                    const copy = { ...draft.http[httpAt], id: newRuleId(), createdAt: Date.now(),
-                      ...(body !== undefined ? { body, enabled: false, starred: undefined } : {}) }
+                  onDuplicate={() => {
+                    const copy = { ...draft.http[httpAt], id: newRuleId(), createdAt: Date.now() }
                     update({ ...draft, http: [...draft.http.slice(0, httpAt + 1), copy, ...draft.http.slice(httpAt + 1)] })
                     setSelHttp(copy.id)
                   }}
@@ -1106,7 +1104,7 @@ function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, p
   supportsBodyMocks: boolean
   onChange: (r: HttpMockRule) => void
   onDelete: () => void
-  onDuplicate: (body?: string) => void
+  onDuplicate: () => void
 }) {
   const [conditionView, setConditionView] = useConditionView(
     `sniffer-mock-conditions:${JSON.stringify([deviceId, 'http', rule.id])}`, rule.bodyMatch ? 'body' : 'query',
@@ -1258,7 +1256,6 @@ function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, p
             <>
               <textarea ref={bodyRef} className="mono rule-response-editor" rows={14} aria-label="Response body" placeholder="response body"
                 value={bodyView.text} onChange={e => bodyView.onText(e.target.value)} />
-              <CopyWithFields body={rule.body} onCopy={onDuplicate} />
               <div className="rule-body-tools">
                 <JsonTool label="Pretty JSON" body={bodyView.text} transform={v => JSON.stringify(v, null, 2)}
                   onResult={bodyView.onText} />
