@@ -2,15 +2,24 @@ English | [繁體中文](README.zh-TW.md)
 
 # iOS sample
 
-This sample uses native iOS networking and the local `SnifferKit` Swift package against the existing Sniffer daemon.
+Use this sample to test traffic capture and mocks for native HTTP, Socket.IO, and WebSocket. It uses the Swift package in this repository.
 
-See [`../ios/README.md`](../ios/README.md) for the native iOS integration steps used by a real app.
+From the repository root, start the built daemon:
 
 ```sh
-cd server/daemon
-npm start
+npm --prefix server/daemon start
 ```
 
-Open `SnifferIOSSample.xcodeproj`, select an iOS simulator, and run. The Control deck matches the Android samples: compact four-column action groups, an independently scrolling action area, a fixed Activity log, and system light/dark colors. Requests run only when you press an action, so opening the sample does not consume sequence steps. HTTP includes GET, POST, errors, images, external API, and SSE streaming through URLSession.AsyncBytes. Socket.IO and native WebSocket provide connect, send, ACK, and disconnect controls; Socket.IO also provides Req/Res. The Clear button clears only the sample log.
+Open `client/ios-sample/SnifferIOSSample.xcodeproj`, select an iOS simulator, and run. Press an action to send a request. Opening the app does not consume mock sequence steps.
 
-For a physical device, set the `SNIFFER_HOST` scheme environment variable to the Mac's LAN IP.
+The Control deck uses the Android samples' four-column controls, a separately scrolling action area, a fixed Activity log, and system light/dark colors. Clear removes only the sample log.
+
+| Group | Actions |
+| --- | --- |
+| HTTP | GET, POST, errors, images, external API, and SSE through `URLSession.AsyncBytes` |
+| Socket.IO | Connect, Send, ACK, Req/Res, Disconnect |
+| Native WebSocket | Connect, Send, ACK, Disconnect |
+
+For a physical device, start the daemon with `SNIFFER_BIND=0.0.0.0` and set the scheme's `SNIFFER_HOST` variable to the Mac's LAN IP.
+
+To integrate your own app, follow the [native iOS guide](../ios/README.md), including its Debug-only linking configuration.
