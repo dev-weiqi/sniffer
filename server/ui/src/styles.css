@@ -875,7 +875,7 @@ button.add { margin-top: 2px; }
 .rule-body-tools .tools-sep {
   width: 1px; align-self: stretch; margin: 1px 4px; background: var(--border);
 }
-.placeholder-guide { display: flex; flex-direction: column; flex: none; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--bg-alt); }
+.placeholder-guide { display: flex; flex-direction: column; flex: none; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--bg-panel); }
 .placeholder-list { display: flex; flex-direction: column; gap: 6px; }
 .placeholder-item { display: flex; align-items: center; gap: 10px; }
 .placeholder-token {
