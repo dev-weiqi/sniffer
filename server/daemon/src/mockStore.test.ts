@@ -139,3 +139,9 @@ assertEqual((bodyWire.http[3] as { bodyMatch: string }).bodyMatch, '{"limit":20}
 assert(!('starred' in (bodyWire.http[3] as object)), 'HTTP body shared rule strips UI marker')
 const bodyStore = parseMockStoreJson(JSON.stringify({ devices: { d1: bodyMocks }, shared: {} }))
 assertEqual((bodyStore.devices.d1.http[3] as { bodyMatch: string }).bodyMatch, '{"limit":20}', 'HTTP body survives persistence')
+
+const scenarioState = parseMockStoreJson(JSON.stringify({ devices: {}, shared: {}, scenarios: [{ id: 'scenario', name: 'Comments', appId: 'app', rules: [], parameters: [] }] }))
+assertEqual(scenarioState.scenarios?.[0].id, 'scenario', 'scenarios survive persistence')
+const withScenario = migrateStarredToSharedStore({ ...migration.store, scenarios: scenarioState.scenarios,
+  devices: { d1: { http: [{ id: 'new-shared', starred: true }], socket: [] } } }, 'd1', 'app')
+assertEqual(withScenario.store.scenarios?.[0].id, 'scenario', 'star migration preserves scenarios')

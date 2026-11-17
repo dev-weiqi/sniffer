@@ -137,3 +137,16 @@ Socket 必須指定 `type: "socket"` 與 `event`。選填欄位為 `transport`�
 UI 在 Response body 下方提供 **Copy with field changes**。輸入路徑和值，按 **Preview change** 比較前後，再按 **Create disabled copy**。預覽不儲存；修改輸入或底稿後需要重新預覽。原有 Copy 按鈕行為不變。
 
 UI 預覽使用 `POST /api/mock-body/replace-fields`，傳入 `{body, replacements}`，成功回傳 `{body, changes: [{path, before, after}]}`，錯誤回傳 HTTP 400。此本機預覽端點不儲存規則，前後值不遮罩，僅供本機編輯器使用。
+
+## 情境套組
+
+`save_scenario({name, appId, rules, id?})` 將套組保存在 daemon 的規則儲存檔，帶 id 可更新既有套組。rules 使用 `create_mock` 的欄位，不帶 deviceId。
+`list_scenarios({appId?})` 回傳名稱、規則數與所需參數，不回傳回覆內容。
+`delete_scenario({id})` 只刪套組，不刪先前產生的規則。
+`apply_scenario({id, deviceId?, parameters})` 驗證整組後一次加入新的裝置專屬規則，回傳 `{deviceId, scenarioId, ruleIds, status: "sent"}`；sent 不代表 SDK 已就緒。
+裝置需在線且 appId 相符，原有規則及共享優先順序不變。
+
+範例套組的 urlPattern 為 `/characters/{{characterId}}/comments`，body 為 `{"commentCount":"{{count}}","comments":[]}`。執行時傳入 `parameters: {"characterId":"194","count":0}`，產生精確路徑及數值 0。
+
+所有參數都必須提供，不接受多餘參數。JSON 中完整的 `{{parameter}}` 字串會轉成傳入的 JSON 純量，字串內嵌替換則保留字串且正確跳脫。URL 參數限單一路徑片段，只接受英數字、底線、點、波浪號與連字號。SDK 原有 `${randomId}` 等 placeholder 不變。
+重複執行會產生新規則，清理時使用回傳的 ruleIds。現有 UI 會顯示產生的規則，不需改 SDK。

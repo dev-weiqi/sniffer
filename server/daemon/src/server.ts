@@ -1,5 +1,5 @@
 import { createServer } from 'node:http'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync, renameSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { existsSync } from 'node:fs'
 import { execFile, execSync } from 'node:child_process'
@@ -68,13 +68,12 @@ const devices = new Map<string, { info: DeviceInfo; ws: WebSocket; connected: bo
 // mock rules survive daemon restarts and are scoped by deviceId; traffic stays in-memory by design
 const MOCKS_FILE = join(homedir(), '.sniffer', 'mocks.json')
 function persistMocks() {
-  try {
-    mkdirSync(join(homedir(), '.sniffer'), { recursive: true })
-    writeFileSync(MOCKS_FILE, JSON.stringify(mockStore, null, 2))
-  } catch (e) {
-    console.error('failed to persist mocks:', e)
-  }
+  mkdirSync(join(homedir(), '.sniffer'), { recursive: true })
+  const temporary = MOCKS_FILE + '.tmp'
+  writeFileSync(temporary, JSON.stringify(mockStore, null, 2), { mode: 0o600 })
+  renameSync(temporary, MOCKS_FILE)
 }
+
 let mockStore: MockStore = loadMockStore(MOCKS_FILE)
 const uiClients = new Set<WebSocket>()
 

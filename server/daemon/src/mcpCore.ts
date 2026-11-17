@@ -55,7 +55,24 @@ const breakpointRule = {
   required: ['id', 'urlPattern'],
 }
 
+const scenarioRule = { type: 'object', additionalProperties: false, properties: {
+  type: { type: 'string', enum: ['http', 'socket'] }, ...commonFields, ...httpFields, ...socketFields,
+} }
+
 const definitions: Tool[] = [
+  { name: 'save_scenario', description: 'Save a reusable app-scoped set of HTTP/socket mock templates. Use {{parameter}} in string values; no device mutation.',
+    inputSchema: { type: 'object', additionalProperties: false, required: ['name', 'appId', 'rules'], properties: {
+      id: identifier, name: identifier, appId: identifier, rules: { type: 'array', minItems: 1, maxItems: 100, items: scenarioRule },
+    } } },
+  { name: 'list_scenarios', description: 'List saved scenario metadata and required parameters, without response bodies.',
+    inputSchema: { type: 'object', additionalProperties: false, properties: { appId: identifier } } },
+  { name: 'delete_scenario', description: 'Delete a saved template. Previously applied rules are untouched.',
+    inputSchema: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: identifier } } },
+  { name: 'apply_scenario', description: 'Atomically add a saved scenario to one device with fresh local rule IDs. Existing rules remain. This sends rules but does not confirm SDK readiness.',
+    inputSchema: { type: 'object', additionalProperties: false, required: ['id', 'parameters'], properties: {
+      id: identifier, deviceId: identifier, parameters: { type: 'object', additionalProperties: { type: ['string', 'number', 'boolean', 'null'] } },
+    } } },
+
   {
     name: 'get_state',
     description: 'Daemon devices, mock rules, armed breakpoints and paused responses. Known secrets are masked.',
@@ -132,8 +149,8 @@ const definitions: Tool[] = [
 ]
 
 export const TOOLS: Tool[] = definitions.map(tool => ({ ...tool, annotations: {
-  readOnlyHint: ['get_state', 'list_traffic', 'get_entry'].includes(tool.name),
-  destructiveHint: !['get_state', 'list_traffic', 'get_entry'].includes(tool.name),
+  readOnlyHint: ['get_state', 'list_traffic', 'get_entry', 'list_scenarios'].includes(tool.name),
+  destructiveHint: !['get_state', 'list_traffic', 'get_entry', 'list_scenarios'].includes(tool.name),
 } }))
 
 const validator = new AjvJsonSchemaValidator()
@@ -156,6 +173,16 @@ function validateMockFields(args: Record<string, unknown>, socket: boolean) {
     if (key in args) throw new Error(`${key} is not a ${socket ? 'socket' : 'HTTP'} mock field`)
   }
   validateConditions(args)
+}
+
+export function buildMock(fields: Record<string, unknown>): Record<string, unknown> {
+  const checked = validators.get('create_mock')!(fields)
+  if (!checked.valid) throw new Error(`Invalid mock: ${checked.errorMessage}`)
+  const socket = fields.type === 'socket'
+  validateMockFields(fields, socket)
+  const { type: _, deviceId: __, ...rest } = fields
+  return socket ? { enabled: true, transport: 'socketio', ackPayload: '[]', pushPayload: '[]', delayMs: 0, ...rest }
+    : { enabled: true, method: null, status: 200, headers: {}, body: '', delayMs: 0, delayOnly: false, ...rest }
 }
 
 async function defaultDaemon(base: string, path: string, init?: RequestInit): Promise<unknown> {
@@ -206,6 +233,14 @@ export function createMcpRuntime(options: McpRuntimeOptions = {}) {
     if (!checked.valid) throw new Error(`Invalid ${name} arguments: ${checked.errorMessage}`)
     const args = checked.data
     if (name === 'get_state') return daemon('/api/state?redact=1')
+    if (name === 'save_scenario') return post('/api/scenarios', args)
+    if (name === 'list_scenarios') {
+      const scope = args.appId ?? appId
+      return daemon('/api/scenarios' + (scope ? '?appId=' + encodeURIComponent(String(scope)) : ''))
+    }
+    if (name === 'delete_scenario') return daemon('/api/scenarios/' + encodeURIComponent(String(args.id)), { method: 'DELETE' })
+    if (name === 'apply_scenario') return post('/api/scenarios/apply', { ...args, deviceId: await resolveDevice(args.deviceId, true) })
+
 
     if (name === 'list_traffic') {
       const query = new URLSearchParams()

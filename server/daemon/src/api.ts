@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto'
+import { buildMock } from './mcpCore.js'
+import { scenarioParameters, instantiateScenario, withScenarioMocks } from './scenarios.js'
 import { replaceJsonFields } from './replaceJsonFields.js'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { redact } from './redact.js'
@@ -44,6 +47,56 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, url: 
   resolvePendingHit(id: string): void
   releasePendingHits(): void
 }) {
+  const commit = (next: MockStore) => {
+    const previous = deps.getMockStore()
+    deps.setMockStore(next)
+    try { deps.persistMocks() } catch (error) { deps.setMockStore(previous); throw error }
+  }
+  const sync = (deviceId: string) => {
+    deps.sendMocksToDevice(deviceId)
+    deps.broadcastToUi({ type: 'mocks-changed', deviceId, mocks: deps.mocksFor(deviceId) })
+  }
+  if (url.pathname === '/api/scenarios' && req.method === 'GET') {
+    const scenarios = deps.getMockStore().scenarios ?? []
+    return json(res, 200, { scenarios: scenarios.filter(s => !url.searchParams.has('appId') || s.appId === url.searchParams.get('appId'))
+      .map(({ rules, ...metadata }) => ({ ...metadata, ruleCount: rules.length })) })
+  }
+  if (url.pathname === '/api/scenarios' && req.method === 'POST') {
+    try {
+      const body = JSON.parse(await readBody(req))
+      if (!body || typeof body.name !== 'string' || !body.name.trim() || typeof body.appId !== 'string' || !body.appId.trim() ||
+        !Array.isArray(body.rules) || body.rules.length < 1 || body.rules.length > 100) throw new Error('name, appId and 1 to 100 rules required')
+      body.rules.forEach((rule: Record<string, unknown>) => buildMock(rule))
+      const store = deps.getMockStore()
+      const scenarios = store.scenarios ?? []
+      if (body.id !== undefined && (typeof body.id !== 'string' || !scenarios.some(s => s.id === body.id && s.appId === body.appId)))
+        throw new Error('Scenario to update not found for this app')
+      const scenario = { id: body.id ?? randomUUID(), name: body.name, appId: body.appId,
+        rules: body.rules, parameters: scenarioParameters(body.rules) }
+      commit({ ...store, scenarios: [...scenarios.filter(s => s.id !== scenario.id), scenario] })
+      return json(res, 200, { id: scenario.id, parameters: scenario.parameters })
+    } catch (error) { return json(res, 400, { error: String(error) }) }
+  }
+  if (url.pathname.startsWith('/api/scenarios/') && req.method === 'DELETE') {
+    const id = decodeURIComponent(url.pathname.slice('/api/scenarios/'.length))
+    const store = deps.getMockStore()
+    if (!store.scenarios?.some(s => s.id === id)) return json(res, 404, { error: 'Scenario not found' })
+    commit({ ...store, scenarios: store.scenarios.filter(s => s.id !== id) })
+    return json(res, 200, { deleted: id })
+  }
+  if (url.pathname === '/api/scenarios/apply' && req.method === 'POST') {
+    try {
+      const body = JSON.parse(await readBody(req))
+      const device = deps.devices.get(body.deviceId)
+      const scenario = deps.getMockStore().scenarios?.find(s => s.id === body.id)
+      if (!device?.connected || !scenario || device.info.appId !== scenario.appId) throw new Error('Connected device must match the scenario appId')
+      const mocks = instantiateScenario(scenario, body.parameters, buildMock)
+      commit(withScenarioMocks(deps.getMockStore(), body.deviceId, mocks))
+      sync(body.deviceId)
+      return json(res, 200, { deviceId: body.deviceId, scenarioId: scenario.id,
+        ruleIds: [...mocks.http, ...mocks.socket].map(r => (r as { id: string }).id), status: 'sent' })
+    } catch (error) { return json(res, 400, { error: String(error) }) }
+  }
   if (req.method === 'POST' && url.pathname === '/api/mock-body/replace-fields') {
     try {
       const body = JSON.parse(await readBody(req))
@@ -63,6 +116,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, url: 
       const shared = { http: mocks.http.filter(isStarred), socket: mocks.socket.filter(isStarred) }
       const mockStore = deps.getMockStore()
       deps.setMockStore({
+        ...mockStore,
         devices: { ...mockStore.devices, [deviceId]: own },
         shared: { ...mockStore.shared, [appId]: shared },
       })

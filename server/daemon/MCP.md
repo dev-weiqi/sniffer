@@ -194,3 +194,29 @@ Copy button is unchanged.
 The UI preview endpoint is `POST /api/mock-body/replace-fields` with `{body, replacements}`.
 It returns `{body, changes: [{path, before, after}]}` or HTTP 400 on invalid input. It does not
 persist rules. Preview values are unmasked for the local editor.
+
+## Scenario templates
+
+`save_scenario({name, appId, rules, id?})` persists a template in the daemon mock store.
+Rules use the `create_mock` fields without deviceId. An existing id updates that template.
+`list_scenarios({appId?})` returns metadata and required parameter names, not bodies.
+`delete_scenario({id})` removes a template without removing its previously applied rules.
+`apply_scenario({id, deviceId?, parameters})` atomically adds fresh device-local rules and returns
+`{deviceId, scenarioId, ruleIds, status: "sent"}`. This is not SDK readiness confirmation.
+The connected device must have the template's appId. All required parameters, and no extras,
+must be provided. Existing rules and shared-rule precedence remain unchanged.
+
+```json
+{
+  "name": "Empty comments", "appId": "com.example.app",
+  "rules": [{ "method": "GET", "urlPattern": "/characters/{{characterId}}/comments",
+    "body": "{\"commentCount\":\"{{count}}\",\"comments\":[]}" }]
+}
+```
+
+Apply with `{"id":"scenario-id","parameters":{"characterId":"194","count":0}}`.
+Inside JSON bodies, a complete `{{parameter}}` string becomes the supplied JSON scalar;
+embedded replacements remain strings and are escaped by JSON serialization. Path parameters
+must be nonempty single segments using letters, digits, `_`, `.`, `~` or `-`.
+SDK placeholders such as `${randomId}` remain unchanged. Repeated application creates new
+rules; use returned IDs for cleanup. No UI redesign or SDK change is required.

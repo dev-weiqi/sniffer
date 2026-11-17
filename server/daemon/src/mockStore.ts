@@ -1,3 +1,4 @@
+import type { Scenario } from './scenarios.js'
 import { readFileSync } from 'node:fs'
 
 export interface Mocks {
@@ -6,6 +7,7 @@ export interface Mocks {
 }
 
 export interface MockStore {
+  scenarios?: Scenario[]
   devices: Record<string, Mocks>
   shared: Record<string, Mocks>
 }
@@ -72,6 +74,7 @@ export function migrateStarredToSharedStore(
   return {
     changed: true,
     store: {
+      ...store,
       devices: {
         ...store.devices,
         [deviceId]: { http: own.http.filter(r => !isStarred(r)), socket: own.socket.filter(r => !isStarred(r)) },
@@ -97,7 +100,7 @@ export function parseMockStoreJson(text: string): MockStore {
         shared[appId] = normalizeMocks(mocks)
       }
     }
-    return { devices: scoped, shared }
+    return { devices: scoped, shared, ...(Array.isArray(m.scenarios) ? { scenarios: m.scenarios } : {}) }
   }
   const legacy = normalizeMocks(m)
   return legacy.http.length || legacy.socket.length

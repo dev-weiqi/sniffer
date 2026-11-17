@@ -51,7 +51,7 @@ async function call(name: string, args: Record<string, unknown>) {
 try {
   await client.connect(transport)
   const listed = await client.listTools()
-  assert.equal(listed.tools.length, 11)
+  assert.equal(listed.tools.length, 15)
   assert.equal(listed.tools.find(t => t.name === 'get_state')?.annotations?.readOnlyHint, true)
   const analytics = await call('list_traffic', { type: 'firebase', event: 'screen_view', userId: 'user-7' })
   assert.equal(analytics.entries[0].message.params.token, '‹redacted›')
@@ -77,6 +77,31 @@ try {
   const invalidCopy = await client.callTool({ name: 'copy_mock_with_fields', arguments: { id: source.created.id, replacements: [{ path: '/data/missing', value: 1 }] } })
   assert.equal(invalidCopy.isError, true)
   assert.equal(JSON.stringify(store), beforeInvalid)
+  const scenario = await call('save_scenario', { name: 'Comments', appId: 'test', rules: [
+    { urlPattern: '/characters/{{characterId}}/comments', body: '{"count":"{{count}}","label":"{{label}}"}' },
+    { type: 'socket', event: 'comments', ackPayload: '[{"count":"{{count}}"}]' },
+  ] })
+  assert.deepEqual(scenario.parameters, ['characterId', 'count', 'label'])
+  assert.equal((await call('list_scenarios', {})).scenarios[0].ruleCount, 2)
+  assert.equal((await call('list_scenarios', { appId: 'other' })).scenarios.length, 0)
+  const existingIds = store.devices.d1.http.map(r => (r as { id: string }).id)
+  const applied = await call('apply_scenario', { id: scenario.id, parameters: { characterId: '194', count: 36, label: 'a"b' } })
+  assert.equal(applied.ruleIds.length, 2)
+  const scenarioHttp = store.devices.d1.http[0] as Record<string, unknown>
+  assert.equal(scenarioHttp.urlPattern, '/characters/194/comments')
+  assert.deepEqual(JSON.parse(String(scenarioHttp.body)), { count: 36, label: 'a"b' })
+  assert.equal(scenarioHttp.starred, false)
+  assert(existingIds.every(id => store.devices.d1.http.some(r => (r as { id: string }).id === id)))
+  const beforeBadScenario = JSON.stringify(store)
+  for (const parameters of [{ characterId: '../other', count: 1, label: 'x' }, { characterId: '194' }]) {
+    assert.equal((await client.callTool({ name: 'apply_scenario', arguments: { id: scenario.id, parameters } })).isError, true)
+    assert.equal(JSON.stringify(store), beforeBadScenario)
+  }
+  await call('update_mock', { id: copied.created.id, name: 'Retained metadata' })
+  assert.equal((await call('list_scenarios', {})).scenarios.length, 1)
+  await call('delete_scenario', { id: scenario.id })
+  assert.equal((await call('list_scenarios', {})).scenarios.length, 0)
+  assert(store.devices.d1.http.some(r => (r as { id: string }).id === applied.ruleIds[0]))
   await call('set_breakpoints', { rules: [{ id: 'b1', urlPattern: '/orders' }] })
   assert.equal((await call('get_state', {})).breakpointsByDevice.d1.length, 1)
   await call('resolve_breakpoint', { id: 'h1', action: 'resume', status: 200, body: 'edited' })
