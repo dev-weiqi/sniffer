@@ -127,3 +127,16 @@ func headers(from response: HTTPURLResponse) -> [String: String] {
 func nowMillis() -> Int64 {
     Int64(Date().timeIntervalSince1970 * 1_000)
 }
+
+struct MockRulesAppliedMessage: SnifferDeviceMessage {
+    let type = "mock-rules-applied"
+    let revision: String
+}
+
+struct MockHitMessage: SnifferDeviceMessage {
+    let type = "mock-hit"
+    let ruleId: String
+    let revision: String
+    let timestamp: Int64
+    let stepIndex: Int?
+}

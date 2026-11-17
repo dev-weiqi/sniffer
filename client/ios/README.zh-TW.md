@@ -127,3 +127,22 @@ Task {
 ## 失敗時的行為
 
 Sniffer 在失敗時會放行流量。遇到不支援的流量、格式錯誤的背景服務訊息、SDK 失敗或背景服務斷線時，會清除啟用中的規則，並繼續執行宿主原本的行為。只有明確命中的模擬、延遲或已啟用中斷點，才會刻意改變流量。
+
+## iOS 分支的驗證流程
+
+使用 server 0.9.0 與此分支的原生 SDK，可使用參數化情境、獨立驗證 run、同步確認、
+HTTP／Socket 精確命中回報、`wait_for_hits` 與 `export_run_summary`。
+既有 `ios/0.7.2` 標籤不含這些新增功能。能力協商依據 `mock-observability`、
+`http-sequences`、`http-sse-mocks`，不要只根據版本字串判斷支援程度。
+
+HTTP 序列會為每次匹配的請求原子保留一個步驟，支援重複最後一步、循環與停止。
+停止會在本機回報錯誤，不會將請求送到真實後端。相同規則重送與暫時斷線保留進度；
+修改序列或 reset token、刪除規則、App 重啟會重設。符合條件的背景請求也會消耗步驟。
+
+SSE 透過 URLProtocol 依各事件延遲傳送 UTF-8 frame，支援 event／id／retry 與 data placeholder。
+結尾可正常關閉、保持連線直到呼叫端取消或逾時，或回報斷線錯誤。
+會移除 Content-Length 與 Transfer-Encoding。每次請求獨立從第一段開始，取消後停止後續排程。
+串流 Mock 的遙測不包含回應 body。命中只代表選到規則，不代表回應完成或 UI 正確。
+
+未匹配的 HTTP 維持原有轉送路徑。Socket 保留既有回覆與 ACK 行為，額外回報規則 ID。
+不需新增 iOS 專屬 MCP 工具，詳見 [MCP 流程](../../server/daemon/MCP.zh-TW.md)。

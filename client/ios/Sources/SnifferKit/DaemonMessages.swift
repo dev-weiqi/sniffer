@@ -3,15 +3,17 @@ import Foundation
 struct MockRulesMessage: Decodable {
     let http: [HTTPMockRule]
     let socket: [SocketMockRule]
+    let revision: String?
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        revision = try container.decodeIfPresent(String.self, forKey: .revision)
         http = try container.decodeIfPresent([HTTPMockRule].self, forKey: .http) ?? []
         socket = try container.decodeIfPresent([SocketMockRule].self, forKey: .socket) ?? []
     }
 
     private enum CodingKeys: String, CodingKey {
-        case http, socket
+        case http, socket, revision
     }
 }
 
@@ -20,13 +22,17 @@ struct HTTPMockRule: Decodable, Equatable {
     let enabled: Bool
     let method: String?
     let urlPattern: String
-    let status: Int
-    let headers: [String: String]
-    let body: String
-    let delayMs: Int
+    var status: Int
+    var headers: [String: String]
+    var body: String
+    var delayMs: Int
     let delayOnly: Bool
     let queryParams: [String: String]
     let bodyMatch: String?
+    let sequence: HTTPSequence?
+    let sse: HTTPEventStream?
+    var sequenceExhausted = false
+    var stepIndex: Int? = nil
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -41,10 +47,12 @@ struct HTTPMockRule: Decodable, Equatable {
         delayOnly = try container.decodeIfPresent(Bool.self, forKey: .delayOnly) ?? false
         queryParams = try container.decodeIfPresent([String: String].self, forKey: .queryParams) ?? [:]
         bodyMatch = try container.decodeIfPresent(String.self, forKey: .bodyMatch)
+        sequence = try container.decodeIfPresent(HTTPSequence.self, forKey: .sequence)
+        sse = try container.decodeIfPresent(HTTPEventStream.self, forKey: .sse)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, enabled, method, urlPattern, status, headers, body, delayMs, delayOnly, queryParams, bodyMatch
+        case id, enabled, method, urlPattern, status, headers, body, delayMs, delayOnly, queryParams, bodyMatch, sequence, sse
     }
 }
 

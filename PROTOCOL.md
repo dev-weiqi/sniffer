@@ -233,3 +233,11 @@ Each matching request owns a fresh stream. Rule delayMs delays headers; event de
 `close` ends normally, `open` waits for caller cancellation/timeout after the final event, `disconnect` fails reading after emitting the final frame; client buffers may discard unread bytes. SDKs force text/event-stream UTF-8 and remove Content-Length/Transfer-Encoding. Mock responses report headers and null body; matching evidence does not claim all events were consumed. Native caller cancellation closes the mock stream. Client retry/reconnect policies still apply and may open another fresh stream.
 
 Ktor uses its existing SSE response adapter for SSEClientContent and a ByteReadChannel for raw readers. Unknown engine response adapters remain untouched. OkHttp emits from a cancellable, timeout-aware response source. Existing real streams are unchanged.
+
+### Native Swift verification support
+
+The native Swift SDK on the `ios` branch implements the same `revision`,
+`mock-rules-applied`, `mock-hit` (including optional zero-based `stepIndex`),
+HTTP `sequence`, and HTTP `sse` fields described above. Capability negotiation
+and unsupported-rule omission are shared with the Kotlin SDK. No iOS-specific
+wire messages are introduced.

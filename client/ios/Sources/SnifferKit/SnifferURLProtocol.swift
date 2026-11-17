@@ -11,7 +11,8 @@ class SnifferURLProtocol: URLProtocol, URLSessionDataDelegate, @unchecked Sendab
         SnifferURLProtocol4.self, SnifferURLProtocol5.self, SnifferURLProtocol6.self, SnifferURLProtocol7.self,
     ]
 
-    private let stateLock = NSLock()
+    private let stateLock = NSRecursiveLock()
+    private let mockQueue = DispatchQueue(label: "dev.weiqi.sniffer.mock")
     private var stopped = false
     private var dataTask: URLSessionDataTask?
     private var session: URLSession?
@@ -91,6 +92,11 @@ class SnifferURLProtocol: URLProtocol, URLSessionDataDelegate, @unchecked Sendab
             method: method, url: request.url,
             body: requestBody.truncated || requestBody.base64 ? nil : requestBody.text
         )
+        if let rule, rule.sequenceExhausted {
+            failSafely(NSError(domain: "dev.weiqi.sniffer.sequence", code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Sniffer mock sequence exhausted"]))
+            return
+        }
         if let rule, !rule.delayOnly {
             schedule(after: rule.delayMs) { [weak self] in self?.serveMock(rule) }
             return
@@ -100,8 +106,11 @@ class SnifferURLProtocol: URLProtocol, URLSessionDataDelegate, @unchecked Sendab
     }
 
     override func stopLoading() {
-        stateLock.withLock { stopped = true }
-        delayedWork?.cancel()
+        stateLock.withLock {
+            stopped = true
+            delayedWork?.cancel()
+            delayedWork = nil
+        }
         dataTask?.cancel()
         session?.invalidateAndCancel()
     }
@@ -123,23 +132,25 @@ class SnifferURLProtocol: URLProtocol, URLSessionDataDelegate, @unchecked Sendab
     }
 
     private func schedule(after milliseconds: Int, action: @escaping () -> Void) {
-        let safeAction = { [weak self] in
-            guard let self, !self.isStopped else { return }
-            action()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.stateLock.withLock {
+                guard !self.stopped else { return }
+                action()
+            }
         }
-        guard milliseconds > 0 else {
-            safeAction()
-            return
+        stateLock.withLock {
+            guard !stopped else { return }
+            delayedWork = work
+            mockQueue.asyncAfter(deadline: .now() + .milliseconds(milliseconds), execute: work)
         }
-        let work = DispatchWorkItem(block: safeAction)
-        delayedWork = work
-        DispatchQueue.global().asyncAfter(
-            deadline: .now() + .milliseconds(milliseconds),
-            execute: work
-        )
     }
 
     private func serveMock(_ rule: HTTPMockRule) {
+        if let stream = rule.sse {
+            serveStream(rule, stream: stream)
+            return
+        }
         guard (100...599).contains(rule.status),
               let url = request.url,
               let response = HTTPURLResponse(
@@ -157,6 +168,38 @@ class SnifferURLProtocol: URLProtocol, URLSessionDataDelegate, @unchecked Sendab
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: data)
         client?.urlProtocolDidFinishLoading(self)
+    }
+
+    private func serveStream(_ rule: HTTPMockRule, stream: HTTPEventStream) {
+        var headers = rule.headers.filter { !["content-type", "content-length", "transfer-encoding"].contains($0.key.lowercased()) }
+        headers["content-type"] = "text/event-stream; charset=utf-8"
+        guard let url = request.url, let response = HTTPURLResponse(url: url, statusCode: 200,
+            httpVersion: "HTTP/1.1", headerFields: headers) else { return }
+        self.response = response
+        report(response: response, data: Data(), mocked: true, omitBody: true)
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        emit(stream, at: 0)
+    }
+
+    private func emit(_ stream: HTTPEventStream, at index: Int) {
+        guard !isStopped else { return }
+        guard index < stream.events.count else {
+            switch stream.ending {
+            case "close": client?.urlProtocolDidFinishLoading(self)
+            case "disconnect":
+                let error = URLError(.networkConnectionLost)
+                report(response: response, data: Data(), mocked: true, error: error, omitBody: true)
+                client?.urlProtocol(self, didFailWithError: error)
+            default: break
+            }
+            return
+        }
+        let event = stream.events[index]
+        schedule(after: event.delayMs) { [weak self] in
+            guard let self else { return }
+            self.client?.urlProtocol(self, didLoad: event.frame())
+            self.emit(stream, at: index + 1)
+        }
     }
 
     private func startRealRequest() {
@@ -296,7 +339,8 @@ class SnifferURLProtocol: URLProtocol, URLSessionDataDelegate, @unchecked Sendab
         data: Data,
         bodySize: Int? = nil,
         mocked: Bool = false,
-        error: Error? = nil
+        error: Error? = nil,
+        omitBody: Bool = false
     ) {
         let body = CapturedBody(
             data: data,
@@ -307,7 +351,7 @@ class SnifferURLProtocol: URLProtocol, URLSessionDataDelegate, @unchecked Sendab
             id: id,
             status: response?.statusCode ?? 0,
             headers: response.map(headers(from:)) ?? [:],
-            body: body.text,
+            body: omitBody ? nil : body.text,
             bodySize: body.size,
             bodyTruncated: body.truncated,
             durationMs: Int64(Date().timeIntervalSince(startedAt) * 1_000),
