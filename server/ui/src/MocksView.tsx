@@ -676,12 +676,11 @@ function MockList({ rows, selectedId, onSelect, onToggle, onToggleAll, onAdd, ad
               </label>
             )}
             <button className="mocks-list-name" aria-pressed={row.id === selectedId}>
-              <span className="mocks-list-meta"><span className="rule-number">#{index + 1}</span><span className="mocks-list-badge">{row.badge}</span></span>
+              <span className="mocks-list-meta"><span className="rule-number">#{index + 1}</span><span className="mocks-list-badge">{row.badge}</span>{row.starred && <span className="mocks-list-star"><StarIcon filled /></span>}</span>
               <span className="mocks-list-label" title={row.label}>{row.label}</span>
               {row.sub && <span className="mocks-list-sub" title={row.sub}>{row.sub}</span>}
               {!!row.conflicts?.length && <span className="mocks-list-conflicts">Conflicts with {row.conflicts.map(peer => `#${peer.number}`).join(', ')}</span>}
             </button>
-            {row.starred && <span className="mocks-list-star"><StarIcon filled /></span>}
           </div>
         ))}
         {rows.length === 0 && <div className="dim hint mocks-list-empty">Nothing here yet</div>}
@@ -1580,7 +1579,7 @@ function SocketRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict,
 
 function PlaceholderGuide() {
   return (
-    <div className="rule-card placeholder-guide">
+    <div className="placeholder-guide">
       <div className="hint">Placeholders are expanded on the device every time a mock matches.</div>
       <div className="placeholder-list">
         {PlaceholderTokens.map(item => (
