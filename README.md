@@ -9,16 +9,48 @@ English | [繁體中文](README.zh-TW.md)
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
 </p>
 
-Sniffer is a Kotlin Multiplatform SDK and local monitor for inspecting and mocking
-mobile network traffic during development. It supports **OkHttp**, **Ktor Client**,
-**Socket.IO** and **Ktor WebSocket**.
+Sniffer captures HTTP and Socket traffic from your debug app and lets you mock responses from a local UI or MCP client. The Kotlin Multiplatform SDK supports OkHttp, Ktor Client, Socket.IO, and Ktor WebSocket.
 
 ![Sniffer API traffic panel](docs/assets/sniffer-api-preview.png)
 
-It keeps the [Flipper](https://github.com/facebook/flipper) workflow (connect a debug
-app, watch traffic live, change behavior from a desktop UI) after Flipper was archived
-and our setup hit the
-[Android 16 KB page-size migration](https://developer.android.com/guide/practices/page-sizes).
+We built Sniffer after [Flipper](https://github.com/facebook/flipper) was archived and our setup needed to support [Android 16 KB memory pages](https://developer.android.com/guide/practices/page-sizes).
+
+## Use the UI
+
+With the daemon running and the SDK installed, open `http://localhost:9091`, launch your debug app, and select its device.
+
+- **API**: live requests and responses, headers, JSON, images, animated WebP, cURL copy,
+  mocked entries.
+- **Socket**: Socket.IO and WebSocket connections, events, payloads, acks and pushed
+  server-to-client messages.
+- **Mocks**: per-device HTTP response rules, delay-only rules, Socket.IO ack rules,
+  WebSocket reply rules and push events.
+
+Rules run inside the SDK on the selected device. HTTP mocks answer before the network;
+socket ack rules answer locally. Mock bodies support `${randomId}`, `${now}` and
+`${randomString(min~max)}`.
+
+HTTP rules can combine **Query parameters** and JSON **Body conditions**. Every specified
+condition must match; other object fields are ignored. **Mock this request** defaults to
+**Path only**. Its menu can include the captured query, complete JSON object body, or both.
+**Mock this ack** defaults to **Event only**; its menu can include JSON object fields from
+the first outgoing argument. Response data stays separate from these conditions. The device
+SDK must support the selected conditions; update older SDKs before using them.
+
+HTTP and Socket editors keep **Request conditions** collapsed by default. Creating a mock
+with captured conditions expands them automatically and selects the matching tab (Body when
+both query and body are included). Each device's
+rules remember their expanded state and the selected Query/Body tab in this browser,
+including after closing the panel or reloading. Delay settings remain beside the response.
+**Break on path** matches the HTTP method and path only, ignoring query and body conditions.
+
+Use MCP `copy_mock_with_fields` to replace specified JSON fields in a disabled, device-local copy. The original rule stays unchanged; no SDK update is needed. In the UI, use Copy and edit the response body. See [field-copy details](server/daemon/MCP.md#copy-with-json-field-changes).
+
+## AI tools through MCP
+
+`sniffer mcp` lets an AI client inspect HTTP and Socket traffic, edit mocks, inject events, and control response breakpoints. It connects to a running daemon. MCP itself requires no additional app SDK integration.
+
+See [example prompts and setup](server/daemon/MCP.md) for client configuration, tools, and data masking.
 
 ## Install the monitor
 
@@ -127,8 +159,7 @@ change the app's own `HttpClient()` selection. Android apps need the usual
 
 ## Start Sniffer
 
-Start the SDK once at app launch. It reconnects on its own and never throws into your
-app when the daemon is down.
+Start the SDK once at app launch. It retries daemon connections in the background without passing connection errors to the app.
 
 ```kotlin
 import dev.weiqi.sniffer.core.Sniffer
@@ -236,45 +267,6 @@ session.send("ping")
 ```
 
 
-## Use the UI
-
-Open `http://localhost:9091`, launch your debug app and select the device.
-
-- **API**: live requests and responses, headers, JSON, images, animated WebP, cURL copy,
-  mocked entries.
-- **Socket**: Socket.IO and WebSocket connections, events, payloads, acks and pushed
-  server-to-client messages.
-- **Mocks**: per-device HTTP response rules, delay-only rules, Socket.IO ack rules,
-  WebSocket reply rules and push events.
-
-Rules run inside the SDK on the selected device. HTTP mocks answer before the network;
-socket ack rules answer locally. Mock bodies support `${randomId}`, `${now}` and
-`${randomString(min~max)}`.
-
-HTTP rules can combine **Query parameters** and JSON **Body conditions**. Every specified
-condition must match; other object fields are ignored. **Mock this request** defaults to
-**Path only**. Its menu can include the captured query, complete JSON object body, or both.
-**Mock this ack** defaults to **Event only**; its menu can include JSON object fields from
-the first outgoing argument. Response data stays separate from these conditions. The device
-SDK must support the selected conditions; update older SDKs before using them.
-
-HTTP and Socket editors keep **Request conditions** collapsed by default. Creating a mock
-with captured conditions expands them automatically and selects the matching tab (Body when
-both query and body are included). Each device's
-rules remember their expanded state and the selected Query/Body tab in this browser,
-including after closing the panel or reloading. Delay settings remain beside the response.
-**Break on path** matches the HTTP method and path only, ignoring query and body conditions.
-
-Use MCP `copy_mock_with_fields` to replace specified JSON fields in a disabled, device-local copy. The original rule stays unchanged; no SDK update is needed. In the UI, use Copy and edit the response body. See [field-copy details](server/daemon/MCP.md#copy-with-json-field-changes).
-
-## AI tools through MCP
-
-The main checkout includes `sniffer mcp`, a stdio server for reading HTTP, Socket
-traffic, editing mocks, injecting events and managing
-response breakpoints. It connects to an already running daemon; no additional
-app SDK integration is needed. See [MCP setup](server/daemon/MCP.md) for local
-build instructions, client configuration, available tools and data masking.
-
 ## Modules
 
 | Artifact | Use it for |
@@ -314,7 +306,7 @@ npm --prefix server/ui run build
 (cd client && ./gradlew :sample:compileDebugKotlin :sample-cmp:compileDebugKotlinAndroid)
 ```
 
-More: [docs/GUIDE.md](docs/GUIDE.md) and [PROTOCOL.md](PROTOCOL.md).
+See the [user guide](docs/GUIDE.md) for daily use and the [protocol](PROTOCOL.md) for message formats.
 
 ## Security
 

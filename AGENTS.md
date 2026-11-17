@@ -1,6 +1,16 @@
-# Sniffer: Working Agreement
+# Sniffer 開發規範
 
-Self-hosted Flipper alternative for monitoring and mocking an app's HTTP and Socket traffic.
+使用者指示優先於本文件。
+
+## 規則索引
+
+| 文件 | 何時閱讀 |
+| --- | --- |
+| [writing.md](writing.md) | 撰寫或修改文件、提案、規則、原始碼與範例註解前 |
+| [PROTOCOL.md](PROTOCOL.md) | 修改訊息格式、規則欄位或同步流程前 |
+| [MCP.md](server/daemon/MCP.md) | 修改 MCP 工具、參數、回傳值或遮罩行為前 |
+
+Sniffer captures and mocks an app's HTTP and Socket traffic through its SDK and local daemon.
 `client/` is a Kotlin Multiplatform SDK; `server/` is a Node daemon plus a React UI.
 
 ## Layout
@@ -12,16 +22,16 @@ Self-hosted Flipper alternative for monitoring and mocking an app's HTTP and Soc
 | `server/ui` | React/TS. API / Socket / Mocks tabs. |
 | `PROTOCOL.md` | Wire protocol; source of truth for both sides. |
 
-## Golden rules
+## Change requirements
 
-1. **A protocol change updates `PROTOCOL.md` in the same change.** A new message field lands in `PROTOCOL.md`, `client/core/.../Protocol.kt` and `server/ui/src/state.ts` together. The daemon passes rules and messages through (`normalizeMocks`) without validating new fields.
+1. **A protocol change updates `PROTOCOL.md` in the same change.** A new message field lands in `PROTOCOL.md`, `client/core/.../Protocol.kt` and `server/ui/src/state.ts` together. Review `normalizeMocks` when adding fields. A field passing through the daemon does not establish SDK support.
    A new mock-rule field must also be checked in: the daemon store (`normalizeMocks`, starred split, `~/.sniffer/mocks.json`), device sync (stripped like `starred`, or seen by the SDK?), the UI editors, duplicate detection (`httpSig` / `socketSig`) and `orderForSync`, export/import (fields re-enter through the PUT path), and MCP schemas, handlers, tests and both language guides.
 2. **Non-trivial logic ships with a test.** Pure logic (mock matching, placeholder expansion, protocol serialization) goes in `client/core/src/commonTest`, in the style of `MockRegistryTest` / `MockPlaceholdersTest`.
 3. **The SDK must never affect the host app.** Swallow errors, reconnect silently, cap buffers (1000 messages offline).
 4. **Keep `sample` and `sample-cmp` in parity:** same layout, headers and action labels. Only difference: CMP is ktor only.
-5. **Commits:** split by feature, end with the `Co-Authored-By` trailer. **Never push without explicit approval for that push.** Local commits are fine.
+5. **Commits:** split by feature. Describe only the change, without authorship or generation trailers. Push only when the user authorizes it. Local commits are allowed.
 
-## Before you say "done"
+## Verification and delivery
 
 Report changes split by side:
 
@@ -41,9 +51,9 @@ cd ../ui && npm run build
 
 Cover logic with unit tests in `client/core` / `client/okhttp`, not device runs. For SDK behaviour that cannot be unit tested, add a throwaway `JavaExec` harness in `client/ktor-ws` jvmTest (see `wsDebug` / `sseDebug`), assert against the real daemon, then delete it. Start an emulator or simulator only when nothing else can verify the change (on-device UI, adb reverse, platform glue).
 
-**Traffic transformation is the compatibility risk.** try/catch only stops crashes; code that rewrites traffic (ktor tee and mock rebuild, okhttp tee and mock response, the ws and socketio wrappers) can still be wrong for unknown consumers. Transform only recognized cases and pass anything with an unknown marker (such as an engine-level response adapter) through untouched. Before an SDK release, run every sample button, including both SSE styles; add a button when a real app uses a new consumption style.
+**Traffic transformations require compatibility checks.** try/catch prevents exceptions from escaping; code that rewrites traffic (ktor tee and mock rebuild, okhttp tee and mock response, the ws and socketio wrappers) can still be wrong for unknown consumers. Transform only recognized cases and pass anything with an unknown marker (such as an engine-level response adapter) through untouched. Before an SDK release, run every sample button, including both SSE styles; add a button when a real app uses a new consumption style.
 
-## Gotchas
+## Implementation constraints
 
 - **adb reverse** lets devices reach `localhost:9091`. The daemon reruns it every 5 s; a fresh emulator needs about 6 s to connect.
 - **iOS over USB is reversed:** usbmuxd can only dial into a device port, so the SDK listens on `127.0.0.1:9092` (`USB_PORT`, real devices only) and the daemon connects through `/var/run/usbmuxd` as the WebSocket client (`src/usbmux.ts`, polled every 5 s). After the handshake the `/device` handler is shared. A Mutex in `Sniffer` keeps one live session; a USB dial-in during a wifi or simulator session is closed unanswered.
@@ -61,7 +71,7 @@ Cover logic with unit tests in `client/core` / `client/okhttp`, not device runs.
 
 ## Releasing
 
-**Never publish (Maven / npm) or bump a version on your own.** Maven Central is immutable and version numbers belong to the maintainer. If a task seems to need a release, stop, explain why, and wait for a go-ahead naming the version.
+Publish to Maven or npm and change versions only when the user requests a release and names the version. Maven Central versions are immutable.
 
 Credentials never live in the repo.
 
@@ -88,10 +98,10 @@ Credentials in `~/.gradle/gradle.properties`: `mavenCentralUsername` / `mavenCen
 2. `cd server/daemon && npm publish --access public`. `prepack` compiles to `dist/` and bundles the UI into `ui-dist/`.
 3. Verify with `npm view @dev-weiqi/sniffer version`, then install the tarball in a temp dir and smoke test `sniffer start` plus `curl /api/state`.
 
-npm credentials are in `~/.npmrc`: a granular token scoped to `@dev-weiqi/sniffer` with bypass 2FA. Rotate it at npmjs.com when it expires.
+npm credentials are in `~/.npmrc`: a token scoped to `@dev-weiqi/sniffer`. Rotate it at npmjs.com when it expires. If publishing requires two-factor authentication, ask the user to complete it.
 
 The daemon loads the UI from `../ui/dist` first, then `ui-dist/`, so a stale `ui-dist/` never shadows a fresh build. `postpack` removes the staging dir; keep both layouts working if files move.
 
 ## Style
 
-Match the surrounding code; comment only non-obvious constraints. Code and docs in English.
+Follow [writing.md](writing.md) for documentation and comments. Preserve the existing English and Traditional Chinese document pairs. Release notes, code comments, and example comments use English. Comment on constraints the code does not explain.

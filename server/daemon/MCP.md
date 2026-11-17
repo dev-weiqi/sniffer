@@ -2,11 +2,11 @@ English | [繁體中文](MCP.zh-TW.md)
 
 # Sniffer MCP
 
-The stdio MCP server lets AI clients inspect captured HTTP and Socket traffic, edit mock rules, inject events and control response breakpoints.
-It talks to the running daemon over REST. The existing app SDK does not need an
-update for MCP itself; newer mock conditions still require their SDK capabilities.
+Connect an AI client to `sniffer mcp` to inspect HTTP and Socket traffic, edit mocks, inject events, and control response breakpoints. MCP talks to the running daemon over REST. MCP itself needs no SDK update, but each mock feature requires its advertised SDK capability.
 
 ## Example prompts
+
+After connecting your MCP client, ask it to inspect or change the selected app:
 
 1. “Show the last 10 HTTP messages for `/orders` with status 503, then fetch the full failing flow.”
 2. “Find failed HTTP requests and show their response bodies.”
@@ -14,7 +14,7 @@ update for MCP itself; newer mock conditions still require their SDK capabilitie
 4. “For Socket.IO `items:get` with payload `page=2`, reply with `items:result`.”
 5. “Pause the `/checkout` response; show the pending hit and resume it with status 200.”
 
-## Run from this checkout
+## Setup from source
 
 Build the daemon and UI once:
 
@@ -45,8 +45,7 @@ Keep the daemon running. Configure your MCP client to launch a separate process:
 
 Replace the absolute path and app ID. `env` is optional. The JSON shape above is
 for clients that use `mcpServers`; in other clients set the same executable, args
-and environment through their MCP settings. For an installed package containing
-this feature, use `"command": "sniffer", "args": ["mcp"]`, or
+and environment through their MCP settings. For an installed package, use `"command": "sniffer", "args": ["mcp"]`, or
 `"command": "npx", "args": ["-y", "@dev-weiqi/sniffer", "mcp"]`.
 MCP is included starting with version 0.8.0. `sniffer mcp` does not start
 the daemon and reserves stdout for MCP messages.
@@ -100,8 +99,7 @@ the last N **messages**, not N complete flows; use `get_entry` for a full flow.
 `bodyContains` searches each message's body, socket payload.
 `event` matches a socket event name exactly; `userId` matches the
 captured identity exactly (empty string means explicitly unset). The response
-preserves image `bodyBase64`, truncation, delay and error fields, socket labels. Very large image bodies can exceed an MCP client's
-message size limit.
+preserves image `bodyBase64`, truncation, delay and error fields, socket labels. Large image bodies may exceed the MCP client's message size limit.
 
 ### Mock fields
 
@@ -198,7 +196,7 @@ Inside JSON bodies, a complete `{{parameter}}` string becomes the supplied JSON 
 embedded replacements remain strings and are escaped by JSON serialization. Path parameters
 must be nonempty single segments using letters, digits, `_`, `.`, `~` or `-`.
 SDK placeholders such as `${randomId}` remain unchanged. Repeated application creates new
-rules; use returned IDs for cleanup. No UI redesign or SDK change is required.
+rules; use returned IDs for cleanup. Scenario templates use the existing UI and SDK rule format.
 
 ## Verification runs
 
@@ -228,12 +226,25 @@ precedence even when a local run is ready. No network request is blocked by wait
 
 ### Sequential responses
 
-Use `create_mock` or `update_mock` with `sequence: {steps:[{status:503,body:"retry"},{status:200,body:"ok"}],onExhausted:"last",resetToken:""}`. Each step accepts status, headers, body and delayMs. Use `last`, `loop` or `stop` for exhaustion; stop fails matching requests and never falls through to the server. Reset by updating the sequence with a new resetToken. Set sequence to null to return to static responses. Requires SDK capability `http-sequences`; inspect `get_run_status` for readiness and zero-based `hits[].stepIndex`. A hit means selection, not completion. Only matched requests count, including background calls. JSON field copies only support static responses.
+Use `create_mock` or `update_mock` with `sequence: {steps:[{status:503,body:"retry"},{status:200,body:"ok"}],onExhausted:"last",resetToken:""}`. Each step accepts status, headers, body and delayMs.
+
+Use `last`, `loop` or `stop` for exhaustion; stop fails matching requests and never falls through to the server. Reset by updating the sequence with a new resetToken. Set sequence to null to return to static responses.
+
+Requires SDK capability `http-sequences`; inspect `get_run_status` for readiness and zero-based `hits[].stepIndex`. A hit means selection, not completion.
+
+Only matched requests count, including background calls. JSON field copies only support static responses.
 
 ### Timed SSE streams
 
-Use `create_mock` / `update_mock` with `sse: {events:[{data:"first",delayMs:100},{event:"done",data:"second",delayMs:500}],ending:"close"}`. Each event supports data, event, id, retry and delayMs. Requires status 200 and SDK capability `http-sse-mocks`. Cannot combine with sequence or delayOnly; clear old modes with null when switching. SSE data is plain text or serialized JSON, without wire prefixes. JSON data and sequence step bodies support escaped scenario parameters.
-Endings: close normally, open until caller cancellation/timeout, or disconnect with a read error after emitting the last event (unread buffered bytes may be lost). Each matching request starts from event 1. Client auto-reconnect can create another stream; this feature does not disable it. `get_run_status` confirms synchronization and rule matching, not consumption or UI rendering. Responses deliberately report null body for timed streams. Use the app's stream consumer to verify event timing.
+Use `create_mock` / `update_mock` with `sse: {events:[{data:"first",delayMs:100},{event:"done",data:"second",delayMs:500}],ending:"close"}`. Each event supports data, event, id, retry and delayMs.
+
+Requires status 200 and SDK capability `http-sse-mocks`. Cannot combine with sequence or delayOnly; clear old modes with null when switching. SSE data is plain text or serialized JSON, without wire prefixes. JSON data and sequence step bodies support escaped scenario parameters.
+
+Endings: close normally, open until caller cancellation/timeout, or disconnect with a read error after emitting the last event (unread buffered bytes may be lost).
+
+Each matching request starts from event 1. Client auto-reconnect can create another stream; this feature does not disable it.
+
+`get_run_status` confirms synchronization and rule matching, not consumption or UI rendering. Responses deliberately report null body for timed streams. Use the app's stream consumer to verify event timing.
 
 ## Wait for hits and export evidence
 
@@ -270,8 +281,7 @@ HTTP bodies, Socket payloads/acks, and MCP state reads. Stored
 traffic and the UI WebSocket remain unchanged. MCP offers no raw-read option;
 REST `/api/entries?redact=0` is an explicit local debugging bypass.
 
-Redaction is best effort: arbitrary plaintext secrets, image contents and unknown
-field names may remain. Add project-specific names on the daemon. The daemon has
+Arbitrary plaintext secrets, image contents, and unknown field names may remain. Configure `SNIFFER_REDACT_HEADERS` and `SNIFFER_REDACT_BODY_FIELDS` on the daemon for project-specific names. The daemon has
 no authentication; keep the default loopback binding or use a trusted network.
 
 See [the protocol](../../PROTOCOL.md) and [the user guide](../../docs/GUIDE.md).

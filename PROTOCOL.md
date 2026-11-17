@@ -2,8 +2,7 @@ English | [繁體中文](PROTOCOL.zh-TW.md)
 
 # Sniffer Wire Protocol v1
 
-Every message is a WebSocket text frame carrying flat JSON with a `type` field.
-A single daemon port (default **9091**) hosts everything:
+Each WebSocket text frame contains one JSON object with a `type` field. The daemon serves these routes on port 9091 by default:
 
 | Path        | Purpose |
 |-------------|---------|
@@ -196,12 +195,11 @@ DELETE /api/devices/<deviceId> remove a device, disconnect it if online
 ## MCP
 
 `sniffer mcp` exposes the daemon through stdio. It uses the REST routes above;
-there are no additional device messages or SDK changes for MCP. Tools cover traffic
-HTTP and socket mocks, push events, and response breakpoints.
+there are no additional device messages or SDK changes for MCP. Tools cover traffic reads,
+HTTP and Socket mocks, push events, and response breakpoints.
 See [MCP setup and tool schemas](server/daemon/MCP.md). MCP never requests raw
 traffic; state reads use `redact=1`. Custom redaction fields are configured on the
-daemon, not the MCP process. Redaction is best effort, not a guarantee that every
-secret or image content is removed.
+daemon, not the MCP process. Redaction covers known fields and formats. Arbitrary secrets and image content may remain.
 
 ## Mock synchronization evidence
 
@@ -218,14 +216,20 @@ restarts. Old SDKs ignore revision and are explicitly reported as unsupported.
 
 `HttpMockRule.sequence` is optional: `{steps:[{status:503,headers:{},body:"retry",delayMs:0},{status:200,body:"ok"}],onExhausted:"last",resetToken:""}`.
 Steps default to status 200, empty headers/body and delay 0. Require 1 to 100 steps; delay is 0 to 300000 ms. Mutually exclusive with `delayOnly`.
+
 Only devices advertising `http-sequences` receive these rules. Matching reserves one step atomically before delay. Unmatched requests consume nothing. `last` repeats the final step, `loop` starts again, `stop` fails further matching calls without contacting the real server.
+
 Rule sync/reconnect preserves in-process progress. Changing sequence contents or `resetToken`, deleting the rule, or restarting the app resets it. Concurrent requests consume steps in match order, not completion order.
+
 `mock-hit.stepIndex` is an optional zero-based reserved step index, not completion evidence. `GET /api/mock-progress?deviceId=...&ruleId=...` returns support, connectivity, synchronization status and recent hits.
 
 ### Timed SSE mock responses
 
 `HttpMockRule.sse` is optional: `{events:[{data:"first",event:"message",id:"1",retry:1000,delayMs:0},{data:"done",delayMs:1000}],ending:"close"}`.
 Requires `http-sse-mocks`, status 200, and no sequence or delayOnly. Unsupported devices omit the entire rule. `events` contains 1 to 1000 events; data defaults to empty text, delayMs to 0, other event fields are optional. Data is at most 524288 characters per event. Event names and IDs cannot contain CR, LF or NUL and are at most 1024 characters. Delay/retry must be integers from 0 to 300000 ms.
+
 Each matching request owns a fresh stream. Rule delayMs delays headers; event delayMs is a minimum wait after the preceding frame (first event: after headers). Backpressure and scheduling may extend intervals. Data newlines become separate `data:` lines; a blank line ends each frame. Retry is a client reconnect hint, not an event delay. Placeholders expand when emitting each event.
+
 `close` ends normally, `open` waits for caller cancellation/timeout after the final event, `disconnect` fails reading after emitting the final frame; client buffers may discard unread bytes. SDKs force text/event-stream UTF-8 and remove Content-Length/Transfer-Encoding. Mock responses report headers and null body; matching evidence does not claim all events were consumed. Native caller cancellation closes the mock stream. Client retry/reconnect policies still apply and may open another fresh stream.
+
 Ktor uses its existing SSE response adapter for SSEClientContent and a ByteReadChannel for raw readers. Unknown engine response adapters remain untouched. OkHttp emits from a cancellable, timeout-aware response source. Existing real streams are unchanged.

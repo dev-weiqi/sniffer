@@ -9,12 +9,33 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="授權條款"></a>
 </p>
 
-
-Sniffer 是 Kotlin Multiplatform SDK 與本機監控工具，用來在開發期間檢視與模擬行動應用程式的網路流量。支援 **OkHttp**、**Ktor Client**、**Socket.IO** 與 **Ktor WebSocket**。
+Sniffer 擷取偵錯版 App 的 HTTP 與 Socket 流量，讓你透過本機 UI 或 MCP 模擬回應。Kotlin Multiplatform SDK 支援 OkHttp、Ktor Client、Socket.IO 與 Ktor WebSocket。
 
 ![Sniffer API 流量面板](docs/assets/sniffer-api-preview.png)
 
-[Flipper](https://github.com/facebook/flipper) 封存後，我們的開發環境又遇上 [Android 16 KB 記憶體分頁大小遷移](https://developer.android.com/guide/practices/page-sizes)。Sniffer 延續了 Flipper 的工作流程：連接偵錯版 App、即時查看流量，並從桌面介面調整行為。
+[Flipper](https://github.com/facebook/flipper) 封存後，我們的開發環境需要支援 [Android 16 KB 記憶體分頁](https://developer.android.com/guide/practices/page-sizes)，因此建立 Sniffer。
+
+## 使用介面
+
+啟動背景服務並整合 SDK 後，開啟 `http://localhost:9091`，啟動偵錯版 App，再選擇裝置。
+
+* **API**：即時請求與回應、標頭、JSON、圖片、動態 WebP、複製 cURL，以及模擬紀錄。
+* **Socket**：Socket.IO 與 WebSocket 連線、事件、負載、ack，以及伺服器推送至用戶端的訊息。
+* **Mocks**：各裝置的 HTTP 回應規則、僅延遲規則、Socket.IO ack 規則、WebSocket 回覆規則與推送事件。
+
+規則在所選裝置的 SDK 內執行。HTTP 模擬在發出網路請求前回應，socket ack 規則則在本機回應。模擬內容支援 `${randomId}`、`${now}` 與 `${randomString(min~max)}`。
+
+HTTP 規則可同時使用 **Query parameters** 與 JSON **Body conditions**，所有指定條件都必須符合，其他物件欄位則忽略。**Mock this request** 預設為 **Path only**，可從選單加入已擷取的查詢參數、完整 JSON 物件內容，或兩者。**Mock this ack** 預設為 **Event only**，可從選單加入第一個送出參數中的 JSON 物件欄位。回應資料與這些條件分開設定。裝置 SDK 必須支援所選條件，舊版 SDK 請先更新。
+
+HTTP 與 Socket 編輯器預設收合 **Request conditions**。建立模擬時若帶入擷取條件，會自動展開並選取對應分頁，同時包含 Query 與 Body 時選取 Body。每個裝置的規則都會在此瀏覽器記住展開狀態及 Query／Body 分頁，關閉面板或重新載入後也會保留。延遲設定仍放在回應旁邊。**Break on path** 只比對 HTTP 方法與路徑，忽略 Query 與 Body 條件。
+
+## 透過 MCP 使用 AI 工具
+
+透過 MCP `copy_mock_with_fields` 修改指定 JSON 欄位，建立停用且不共享的副本，原規則不變，不需要更新 SDK。UI 沿用 Copy 與回應編輯器。詳見 [欄位複製說明](server/daemon/MCP.zh-TW.md)。
+
+`sniffer mcp` 讓 AI 工具讀取 HTTP 與 Socket 紀錄、編輯模擬規則、注入事件及操作回應斷點。它連接執行中的背景服務，MCP 本身不需要額外整合 App SDK。
+
+使用範例、用戶端設定、工具與遮罩說明見 [MCP 指南](server/daemon/MCP.zh-TW.md)。
 
 ## 安裝監控工具
 
@@ -110,7 +131,7 @@ SDK 自行管理連到 `localhost:9091` 的一般 WebSocket 連線，使用與 U
 
 ## 啟動 Sniffer
 
-App 啟動時啟動一次 SDK。SDK 會自行重新連線，背景服務未執行時也不會向 App 拋出例外。
+在 App 啟動時呼叫一次 SDK。SDK 會在背景重試連線，不將背景服務的連線錯誤拋給 App。
 
 ```kotlin
 import dev.weiqi.sniffer.core.Sniffer
@@ -132,7 +153,7 @@ class App : Application() {
 | 透過 USB 連接的 iPhone | 背景服務透過 usbmuxd 連入 App | 無 |
 | 透過 Wi-Fi 連接的任何裝置 | App 連到 Mac 的區域網路 IP | `SNIFFER_BIND=0.0.0.0` ＋ `host` |
 
-**iPhone USB 連線。** SDK 在裝置的 `127.0.0.1:9092` 監聽，背景服務透過 macOS 內建的 usbmuxd 連入。手機必須與這台 Mac 配對，且 App 必須位於前景；約 5 秒內就會出現。如果 9092 已被占用，請在兩端設定 `SNIFFER_USB_PORT`。只有 Sniffer 流量會走 USB，因此 App 自身請求中的 `localhost` 仍指向手機。
+**iPhone USB 連線。** SDK 在裝置的 `127.0.0.1:9092` 監聽，背景服務透過 macOS 內建的 usbmuxd 連入。手機必須與這台 Mac 配對，且 App 必須位於前景，約 5 秒內就會出現。如果 9092 已被占用，請在兩端設定 `SNIFFER_USB_PORT`。只有 Sniffer 流量會走 USB，因此 App 自身請求中的 `localhost` 仍指向手機。
 
 使用 Wi-Fi 時，傳入 Mac 的區域網路位址：
 
@@ -185,7 +206,7 @@ socket.connect()
 socket.emit("cart:update", mapOf("sku" to "pro"))
 ```
 
-如果 App 將所有訊息共用同一個事件傳送，可在 `on` 傳入 `label`。它回傳的簡短標籤會在介面中顯示為 `event(tag)`；監聽器、實際傳輸與模擬比對仍使用原始事件名稱。不需要標籤時回傳 null：
+如果 App 將所有訊息共用同一個事件傳送，可在 `on` 傳入 `label`。它回傳的簡短標籤會在介面中顯示為 `event(tag)`，監聽器、實際傳輸與模擬比對仍使用原始事件名稱。不需要標籤時回傳 null：
 
 ```kotlin
 socket.on("message", label = { args ->
@@ -209,27 +230,6 @@ val ktor = HttpClient(CIO) {
 val session = ktor.webSocketSession("wss://api.example.com/realtime")
 session.send("ping")
 ```
-
-
-## 使用介面
-
-開啟 `http://localhost:9091`，啟動偵錯版 App，並選擇裝置。
-
-* **API**：即時請求與回應、標頭、JSON、圖片、動態 WebP、複製 cURL，以及模擬紀錄。
-* **Socket**：Socket.IO 與 WebSocket 連線、事件、負載、ack，以及伺服器推送至用戶端的訊息。
-* **Mocks**：各裝置的 HTTP 回應規則、僅延遲規則、Socket.IO ack 規則、WebSocket 回覆規則與推送事件。
-
-規則在所選裝置的 SDK 內執行。HTTP 模擬在發出網路請求前回應，socket ack 規則則在本機回應。模擬內容支援 `${randomId}`、`${now}` 與 `${randomString(min~max)}`。
-
-HTTP 規則可同時使用 **Query parameters** 與 JSON **Body conditions**，所有指定條件都必須符合，其他物件欄位則忽略。**Mock this request** 預設為 **Path only**，可從選單加入已擷取的查詢參數、完整 JSON 物件內容，或兩者。**Mock this ack** 預設為 **Event only**，可從選單加入第一個送出參數中的 JSON 物件欄位。回應資料與這些條件分開設定。裝置 SDK 必須支援所選條件，舊版 SDK 請先更新。
-
-HTTP 與 Socket 編輯器預設收合 **Request conditions**。建立模擬時若帶入擷取條件，會自動展開並選取對應分頁；同時包含 Query 與 Body 時選取 Body。每個裝置的規則都會在此瀏覽器記住展開狀態及 Query／Body 分頁，關閉面板或重新載入後也會保留。延遲設定仍放在回應旁邊。**Break on path** 只比對 HTTP 方法與路徑，忽略 Query 與 Body 條件。
-
-## 透過 MCP 使用 AI 工具
-
-透過 MCP `copy_mock_with_fields` 修改指定 JSON 欄位，建立停用且不共享的副本，原規則不變，不需要更新 SDK。UI 沿用 Copy 與回應編輯器。詳見 [欄位複製說明](server/daemon/MCP.zh-TW.md)。
-
-目前 main 的原始碼包含 `sniffer mcp`，提供 stdio 介面，讓 AI 工具讀取 HTTP 與 Socket 紀錄、編輯模擬規則、注入事件及管理回應斷點。它連接已啟動的背景服務，不需要額外整合 App SDK。建置步驟、用戶端設定、工具與資料遮罩說明請見 [MCP 設定](server/daemon/MCP.zh-TW.md)。
 
 ## 模組
 
@@ -270,7 +270,7 @@ npm --prefix server/ui run build
 (cd client && ./gradlew :sample:compileDebugKotlin :sample-cmp:compileDebugKotlinAndroid)
 ```
 
-更多說明：[使用指南](docs/GUIDE.zh-TW.md)與[傳輸協定](PROTOCOL.zh-TW.md)。
+日常操作見[使用指南](docs/GUIDE.zh-TW.md)，訊息格式見[傳輸協定](PROTOCOL.zh-TW.md)。
 
 ## 安全性
 

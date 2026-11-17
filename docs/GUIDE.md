@@ -2,7 +2,7 @@ English | [繁體中文](GUIDE.zh-TW.md)
 
 # Sniffer
 
-A self-hosted Flipper replacement for monitoring and mocking an app's HTTP and Socket traffic.
+Use Sniffer to inspect HTTP and Socket traffic from a debug app, create mock responses, and verify which rules the SDK matched.
 
 ```
 ┌─────────────────────┐         ws://host:9091/device        ┌──────────────────────┐
@@ -46,13 +46,12 @@ cd client && ./gradlew :sample-cmp:installDebug
 # Compose Multiplatform sample, iOS simulator (no Xcode project needed)
 cd client/sample-cmp/ios && ./build-sim.sh
 xcrun simctl boot "iPhone 17" && xcrun simctl install booted build/SnifferCmpSample.app
-xcrun simctl launch booted dev.weiqi.sniffer.samplecmp.ios   # runs the whole demo
+xcrun simctl launch booted dev.weiqi.sniffer.samplecmp.ios   # open the sample, then choose an action
 ```
 
 ## Integrating the SDK
 
-Dependencies, the Android cleartext setting, `Sniffer.start` and client plugins are in the
-[README](../README.md#add-the-sdk). Details not covered there:
+Start with the [SDK integration steps](../README.md#add-the-sdk). Connection behavior and runtime overrides are listed below.
 
 - The SDK reconnects every 3 s, retries silently while the daemon is down and buffers up
   to 1000 messages offline.
@@ -81,7 +80,7 @@ event, payload), a light / dark toggle and a clear button.
   duration. `okhttp` / `ktor` badges show the library; a purple **MOCK** badge marks mocks.
 - Row details: URL, query, headers and bodies (JSON pretty printed, collapsible, copyable).
 - In JSON Tree, zoned ISO timestamps have a dashed underline. Hover or focus to see local time and its UTC offset; Escape dismisses the tooltip. Text selection, Copy, and Raw retain the original timestamp. Dates without a time zone and numeric values are not converted.
-- **Copy cURL** reproduces the request.
+- **Copy cURL** copies a command based on the captured request. Run it separately to send a request.
 - **Mock this request** prefills a rule from the method, path and real response body.
 
 ### Socket tab
@@ -92,10 +91,9 @@ event, payload), a light / dark toggle and a clear button.
 - **Push Server → Client event** fires the app's listener as if the server sent it, to one
   connection or all of a device's connections (ktor-ws receives a text frame).
 
-### Mocks tab
+### Mock editors
 
-Rules are stored per device on the daemon, pushed immediately and run on the device, so
-they keep working offline.
+Edit HTTP rules from API and Socket rules from Socket. The daemon stores rules by device and sends changes to the SDK, which runs them locally. Already synchronized rules keep working while the daemon is offline.
 
 - **HTTP rules**: method (ANY = any) plus exact request path, answered with the given
   status, headers and body, optional delay. Matched requests never reach the network.
@@ -105,7 +103,7 @@ they keep working offline.
   the ack locally with your payload (JSON array = multiple args). *ws reply* matches
   outgoing ktor-ws text frames by substring, drops them and injects your reply as an
   incoming frame. Both take an optional delay.
-- The checkbox disables a rule without deleting it. Press **Save** to apply.
+- The checkbox disables a rule without deleting it. Edits save automatically after a short pause. Check the editor footer for save status.
 
 ## Test endpoints (daemon, used by the samples)
 
