@@ -315,3 +315,7 @@ npm --prefix server/ui run build
 ```
 
 More: [docs/GUIDE.md](docs/GUIDE.md) and [PROTOCOL.md](PROTOCOL.md).
+
+## Security
+
+For data masking, its limitations, and daemon access precautions, see [Security in the MCP guide](server/daemon/MCP.md#security).

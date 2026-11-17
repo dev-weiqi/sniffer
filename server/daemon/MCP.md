@@ -6,6 +6,14 @@ The stdio MCP server lets AI clients inspect captured HTTP and Socket traffic, e
 It talks to the running daemon over REST. The existing app SDK does not need an
 update for MCP itself; newer mock conditions still require their SDK capabilities.
 
+## Example prompts
+
+1. “Show the last 10 HTTP messages for `/orders` with status 503, then fetch the full failing flow.”
+2. “Find failed HTTP requests and show their response bodies.”
+3. “Mock `/orders` only when query `page=2` and JSON body `limit=20`.”
+4. “For Socket.IO `items:get` with payload `page=2`, reply with `items:result`.”
+5. “Pause the `/checkout` response; show the pending hit and resume it with status 200.”
+
 ## Run from this checkout
 
 Build the daemon and UI once:
@@ -131,29 +139,6 @@ Each rule has `id`, `urlPattern`, optional `method`, `enabled`, and
 Breakpoints apply to supported real HTTP text responses, not mocked responses,
 SSE streams or image/upgrade responses. Disconnecting releases paused calls.
 
-## Example prompts
-
-1. “Show the last 10 HTTP messages for `/orders` with status 503, then fetch the full failing flow.”
-2. “Find failed HTTP requests and show their response bodies.”
-3. “Mock `/orders` only when query `page=2` and JSON body `limit=20`.”
-4. “For Socket.IO `items:get` with payload `page=2`, reply with `items:result`.”
-5. “Pause the `/checkout` response; show the pending hit and resume it with status 200.”
-
-## Data handling
-
-The daemon masks known sensitive headers and JSON keys, token-shaped strings
-(JWT, Bearer/Basic and PEM), and sensitive URL query parameters. This covers
-HTTP bodies, Socket payloads/acks, and MCP state reads. Stored
-traffic and the UI WebSocket remain unchanged. MCP offers no raw-read option;
-REST `/api/entries?redact=0` is an explicit local debugging bypass.
-
-Redaction is best effort: arbitrary plaintext secrets, image contents and unknown
-field names may remain. Add project-specific names on the daemon. The daemon has
-no authentication; keep the default loopback binding or use a trusted network.
-
-See [the protocol](../../PROTOCOL.md) and [the user guide](../../docs/GUIDE.md).
-
-
 ### Copy with JSON field changes
 
 Use an existing HTTP rule ID from `get_state` with `copy_mock_with_fields`:
@@ -276,3 +261,17 @@ reset on daemon restart. `historyTruncated` flags any eviction in this daemon se
 a zero does not prove a rule never matched. A hit does not prove response completion,
 SSE consumption, or UI correctness. These tools need no additional SDK changes beyond
 existing `mock-observability` support.
+
+## Security
+
+The daemon masks known sensitive headers and JSON keys, token-shaped strings
+(JWT, Bearer/Basic and PEM), and sensitive URL query parameters. This covers
+HTTP bodies, Socket payloads/acks, and MCP state reads. Stored
+traffic and the UI WebSocket remain unchanged. MCP offers no raw-read option;
+REST `/api/entries?redact=0` is an explicit local debugging bypass.
+
+Redaction is best effort: arbitrary plaintext secrets, image contents and unknown
+field names may remain. Add project-specific names on the daemon. The daemon has
+no authentication; keep the default loopback binding or use a trusted network.
+
+See [the protocol](../../PROTOCOL.md) and [the user guide](../../docs/GUIDE.md).

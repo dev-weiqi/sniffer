@@ -271,3 +271,7 @@ npm --prefix server/ui run build
 ```
 
 更多說明：[使用指南](docs/GUIDE.zh-TW.md)與[傳輸協定](PROTOCOL.zh-TW.md)。
+
+## 安全性
+
+資料遮罩範圍、限制與背景服務存取注意事項，請見 [MCP 使用指南的安全性說明](server/daemon/MCP.zh-TW.md#安全性)。

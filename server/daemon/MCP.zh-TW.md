@@ -4,6 +4,14 @@
 
 stdio MCP 伺服器讓 AI 工具讀取 HTTP 與 Socket 紀錄、編輯模擬規則、注入事件，以及操作回應斷點。它透過 REST 連接正在執行的背景服務。MCP 本身不需要更新 App SDK；較新的模擬條件仍需要 SDK 支援對應能力。
 
+## 使用範例
+
+1. 「找出 `/orders` 最近 10 則狀態為 503 的 HTTP 訊息，再查看完整失敗流程。」
+2. 「列出失敗的 HTTP 請求與回應內容。」
+3. 「只有 query `page=2` 且 JSON body `limit=20` 時，才模擬 `/orders`。」
+4. 「Socket.IO 的 `items:get` payload 為 `page=2` 時，回覆 `items:result`。」
+5. 「暫停 `/checkout` 回應，查看命中的斷點，再以 status 200 放行。」
+
 ## 從目前的原始碼執行
 
 先建置背景服務與介面，再啟動背景服務：
@@ -99,23 +107,6 @@ Socket 必須指定 `type: "socket"` 與 `event`。選填欄位為 `transport`�
 
 斷點只適用於 SDK 支援的真實 HTTP 文字回應，不暫停模擬回應、SSE 串流、圖片或升級連線的回應。連線中斷時會放行暫停中的請求。
 
-## 使用範例
-
-1. 「找出 `/orders` 最近 10 則狀態為 503 的 HTTP 訊息，再查看完整失敗流程。」
-2. 「列出失敗的 HTTP 請求與回應內容。」
-3. 「只有 query `page=2` 且 JSON body `limit=20` 時，才模擬 `/orders`。」
-4. 「Socket.IO 的 `items:get` payload 為 `page=2` 時，回覆 `items:result`。」
-5. 「暫停 `/checkout` 回應，查看命中的斷點，再以 status 200 放行。」
-
-## 資料處理
-
-背景服務遮罩已知敏感標頭與 JSON 欄位、符合 JWT、Bearer／Basic、PEM 格式的字串，以及 URL query 中的敏感參數。範圍包含 HTTP body、Socket payload／ack，以及 MCP 讀取的狀態。儲存中的流量與 UI WebSocket 不受影響。MCP 不提供未遮罩讀取選項；REST `/api/entries?redact=0` 是明確指定的本機除錯例外。
-
-遮罩無法保證涵蓋所有內容，任意純文字密碼、圖片內容與未知欄位仍可能保留。請在背景服務設定專案特有的敏感欄位名稱。背景服務沒有驗證機制，請維持預設的本機監聽，或只在可信任網路使用。
-
-參考[傳輸協定](../../PROTOCOL.zh-TW.md)與[使用指南](../../docs/GUIDE.zh-TW.md)。
-
-
 ### 複製並修改 JSON 欄位
 
 先從 `get_state` 取得既有 HTTP 規則 ID，再呼叫 `copy_mock_with_fields`：
@@ -195,3 +186,11 @@ Socket 必須指定 `type: "socket"` 與 `event`。選填欄位為 `transport`�
 `historyTruncated` 表示本次 daemon 曾淘汰舊紀錄；`runPredatesEvidence` 表示 run 早於本次啟動。
 次數可能不完整，0 次不能證明從未命中。命中不代表回應完成、SSE 已被讀取或 UI 正確。
 沿用現有 `mock-observability` 能力，不需額外修改 SDK。
+
+## 安全性
+
+背景服務遮罩已知敏感標頭與 JSON 欄位、符合 JWT、Bearer／Basic、PEM 格式的字串，以及 URL query 中的敏感參數。範圍包含 HTTP body、Socket payload／ack，以及 MCP 讀取的狀態。儲存中的流量與 UI WebSocket 不受影響。MCP 不提供未遮罩讀取選項；REST `/api/entries?redact=0` 是明確指定的本機除錯例外。
+
+遮罩無法保證涵蓋所有內容，任意純文字密碼、圖片內容與未知欄位仍可能保留。請在背景服務設定專案特有的敏感欄位名稱。背景服務沒有驗證機制，請維持預設的本機監聽，或只在可信任網路使用。
+
+參考[傳輸協定](../../PROTOCOL.zh-TW.md)與[使用指南](../../docs/GUIDE.zh-TW.md)。
