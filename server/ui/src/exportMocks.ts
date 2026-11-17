@@ -50,7 +50,20 @@ export function parseImportedRules(text: string): ExportRulesSource | null {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
   const source = parsed as Partial<ExportRulesSource>
   const list = <T>(value: T[] | undefined): T[] => Array.isArray(value) ? value : []
-  return { http: list(source.http), socket: list(source.socket), push: list(source.push) }
+  const http = list(source.http)
+  // Imported modes must be safe to render before the daemon validates and saves them.
+  for (const rule of http) {
+    if (!rule || typeof rule !== 'object') return null
+    if (rule.sequence && rule.sse) return null
+    for (const [mode, field, limit] of [[rule.sequence, 'steps', 100], [rule.sse, 'events', 1000]] as const) {
+      if (mode == null) continue
+      if (rule.delayOnly || typeof mode !== 'object' || Array.isArray(mode)) return null
+      const items = (mode as unknown as Record<string, unknown>)[field]
+      if (!Array.isArray(items) || items.length < 1 || items.length > limit ||
+        items.some(item => !item || typeof item !== 'object' || Array.isArray(item))) return null
+    }
+  }
+  return { http, socket: list(source.socket), push: list(source.push) }
 }
 
 export function countImportedRules(source: ExportRulesSource): number {

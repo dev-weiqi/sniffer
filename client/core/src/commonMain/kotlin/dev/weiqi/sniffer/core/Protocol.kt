@@ -159,6 +159,18 @@ data class BreakpointResolveMsg(
 ) : DaemonMessage
 
 @Serializable
+data class MockSseEvent(
+    val data: String = "",
+    val event: String? = null,
+    val id: String? = null,
+    val retry: Long? = null,
+    val delayMs: Long = 0,
+)
+
+@Serializable
+data class MockSseStream(val events: List<MockSseEvent>, val ending: String = "close")
+
+@Serializable
 data class HttpResponseStep(
     val status: Int = 200,
     val headers: Map<String, String> = emptyMap(),
@@ -191,6 +203,7 @@ data class HttpMockRule(
     // JSON object of required request body fields; blank means no body constraint.
     val bodyMatch: String? = null,
     val sequence: HttpSequence? = null,
+    val sse: MockSseStream? = null,
     @kotlinx.serialization.Transient val stepIndex: Int? = null,
     @kotlinx.serialization.Transient val syncRevision: String? = null,
 )

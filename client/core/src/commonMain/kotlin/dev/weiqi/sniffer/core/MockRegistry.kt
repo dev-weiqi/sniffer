@@ -33,6 +33,7 @@ object MockRegistry {
 
     fun matchHttp(method: String, url: String, body: String?): HttpMockRule? = mockLocked {
         val rule = findHttp(method, url, body) ?: return@mockLocked null
+        if (rule.sse != null && (rule.delayOnly || rule.sequence != null || !rule.sse.valid() || rule.status != 200)) return@mockLocked null
         val sequence = rule.sequence ?: return@mockLocked rule.also { reportHit(it.id, it.syncRevision) }
         // Invalid imported rules must never turn into an unrestricted static mock.
         if (rule.delayOnly || sequence.steps.isEmpty() || sequence.steps.size > 100 ||

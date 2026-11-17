@@ -9,6 +9,7 @@ import dev.weiqi.sniffer.core.MAX_BODY_CHARS
 import dev.weiqi.sniffer.core.MAX_IMAGE_BYTES
 import dev.weiqi.sniffer.core.MockSequenceExhausted
 import dev.weiqi.sniffer.core.MockRegistry
+import dev.weiqi.sniffer.core.sseHeaders
 import dev.weiqi.sniffer.core.Sniffer
 import dev.weiqi.sniffer.core.capBody
 import dev.weiqi.sniffer.core.expandMockPlaceholders
@@ -65,6 +66,7 @@ internal class SnifferInterceptor(
     init {
         Sniffer.registerCapability("http")
         Sniffer.registerCapability("http-sequences")
+        Sniffer.registerCapability("http-sse-mocks")
         Sniffer.registerCapability("breakpoint")
     }
 
@@ -84,7 +86,7 @@ internal class SnifferInterceptor(
             if (rule != null) {
                 if (rule.delayMs > 0) Thread.sleep(rule.delayMs)
                 if (rule.delayOnly) injectedDelayMs = rule.delayMs
-                else return mockResponse(id, request, rule)
+                else return mockResponse(id, request, rule, chain)
             }
         } catch (t: Throwable) {
             if (t is MockSequenceExhausted) throw IOException(t.message, t)
@@ -197,25 +199,26 @@ internal class SnifferInterceptor(
         return reqBodyRaw.takeUnless { reqBody.truncated }
     }
 
-    private fun mockResponse(id: String, request: Request, rule: dev.weiqi.sniffer.core.HttpMockRule): Response {
+    private fun mockResponse(id: String, request: Request, rule: dev.weiqi.sniffer.core.HttpMockRule, chain: Interceptor.Chain): Response {
         val body = expandMockPlaceholders(rule.body)
-        val contentType = rule.headers.entries
+        val headers = if (rule.sse != null) rule.sseHeaders() else rule.headers
+        val contentType = headers.entries
             .firstOrNull { it.key.equals("content-type", true) }?.value ?: "application/json"
         val response = Response.Builder()
             .request(request)
             .protocol(Protocol.HTTP_1_1)
             .code(rule.status)
             .message("Sniffer Mock")
-            .apply { rule.headers.forEach { (k, v) -> addHeader(k, v) } }
-            .body(body.toResponseBody(contentType.toMediaTypeOrNull()))
+            .apply { headers.forEach { (k, v) -> addHeader(k, v) } }
+            .body(rule.sse?.let { MockSseBody(it, chain.call(), chain.readTimeoutMillis()) } ?: body.toResponseBody(contentType.toMediaTypeOrNull()))
             .build()
-        Sniffer.report(
+        runCatching { Sniffer.report(
             HttpResponseMsg(
-                id = id, status = rule.status, headers = rule.headers,
-                body = body, bodySize = body.length.toLong(), bodyTruncated = false,
+                id = id, status = rule.status, headers = headers,
+                body = if (rule.sse != null) null else body, bodySize = if (rule.sse != null) 0 else body.length.toLong(), bodyTruncated = false,
                 durationMs = rule.delayMs, mocked = true, error = null, timestamp = now(),
             )
-        )
+        ) }
         return response
     }
 

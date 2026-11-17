@@ -1,3 +1,4 @@
+import { SseEditor } from './SseEditor'
 import { SequenceEditor } from './SequenceEditor'
 import { CopyWithFields } from './CopyWithFields'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
@@ -201,12 +202,13 @@ function saveSelection(sel: MockSelection) {
   try { localStorage.setItem(selectionKey, JSON.stringify(sel)) } catch { /* private mode */ }
 }
 
-export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supportsBodyMocks, supportsSocketPayloadMocks, mocks, conns, pendingRule, pendingSocketRule, pushPrefill, onPendingConsumed, onClose }: {
+export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supportsBodyMocks, supportsSseMocks, supportsSocketPayloadMocks, mocks, conns, pendingRule, pendingSocketRule, pushPrefill, onPendingConsumed, onClose }: {
   /** which panel opened it: the API panel manages HTTP rules, the Socket panel the socket ones */
   scope: 'http' | 'socket'
   deviceId: string | null
   appId: string | null
   supportsQueryMocks: boolean
+  supportsSseMocks: boolean
   supportsBodyMocks: boolean
   supportsSocketPayloadMocks: boolean
   mocks: Mocks
@@ -482,7 +484,7 @@ export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supports
               {httpAt < 0 ? <div className="empty">No HTTP rules yet — add one to start mocking</div> : (
                 <HttpRuleEditor deviceId={deviceId} key={`${deviceId}:${draft.http[httpAt].id}`} rule={draft.http[httpAt]} number={httpAt + 1} conflicts={httpConflicts.get(draft.http[httpAt].id) ?? []} onSelectConflict={setSelHttp}
                   prefilled={prefilledRules.current.has(draft.http[httpAt].id)}
-                  supportsQueryMocks={supportsQueryMocks} supportsBodyMocks={supportsBodyMocks}
+                  supportsQueryMocks={supportsQueryMocks} supportsBodyMocks={supportsBodyMocks} supportsSseMocks={supportsSseMocks}
                   onDuplicate={body => {
                     const copy = { ...draft.http[httpAt], id: newRuleId(), createdAt: Date.now(),
                       ...(body !== undefined ? { body, enabled: false, starred: undefined } : {}) }
@@ -1093,7 +1095,7 @@ function RequestConditions({ open, onToggle, count, summary, children }: {
   )
 }
 
-function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, prefilled, supportsQueryMocks, supportsBodyMocks, onChange, onDelete, onDuplicate }: {
+function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, prefilled, supportsQueryMocks, supportsBodyMocks, supportsSseMocks, onChange, onDelete, onDuplicate }: {
   prefilled: boolean
   deviceId: string
   rule: HttpMockRule
@@ -1101,6 +1103,7 @@ function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, p
   conflicts: RuleReference[]
   onSelectConflict: (id: string) => void
   supportsQueryMocks: boolean
+  supportsSseMocks: boolean
   supportsBodyMocks: boolean
   onChange: (r: HttpMockRule) => void
   onDelete: () => void
@@ -1211,14 +1214,17 @@ function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, p
       {!supportsBodyMocks && bodyCount > 0 && (
         <p className="hint warn">Update the device SDK to use body conditions. This rule is not sent to this device.</p>
       )}
+      {rule.sse && !supportsSseMocks && <p className="hint warn">Update the device SDK to use SSE streams. This rule is not sent to this device.</p>}
       <div className="mock-response">
       <div className="sequence-controls">
-        <label className="field">Response mode <select aria-label="Response mode" value={rule.sequence ? 'sequence' : 'static'} onChange={e => onChange({ ...rule, delayOnly: false,
+        <label className="field">Response mode <select aria-label="Response mode" value={rule.sse ? 'sse' : rule.sequence ? 'sequence' : 'static'} onChange={e => onChange({ ...rule, delayOnly: false,
+          ...(e.target.value === 'sse' ? { status: 200, delayMs: 0 } : {}),
+          sse: e.target.value === 'sse' ? { events: [{ data: '{}', delayMs: 0 }], ending: 'close' } : null,
           sequence: e.target.value === 'sequence' ? { steps: [{ status: rule.status, headers: rule.headers, body: rule.body, delayMs: rule.delayMs }], onExhausted: 'last', resetToken: '' } : null })}>
-          <option value="static">Static response</option><option value="sequence">Sequence</option>
+          <option value="static">Static response</option><option value="sequence">Sequence</option><option value="sse">SSE stream</option>
         </select></label>
       </div>
-      {rule.sequence ? <SequenceEditor deviceId={deviceId} ruleId={rule.id} value={rule.sequence} onChange={sequence => onChange({ ...rule, sequence })} /> : <>
+      {rule.sse ? <SseEditor value={rule.sse} onChange={sse => onChange({ ...rule, sse })} /> : rule.sequence ? <SequenceEditor deviceId={deviceId} ruleId={rule.id} value={rule.sequence} onChange={sequence => onChange({ ...rule, sequence })} /> : <>
       <div className="rule-tabs">
         {!rule.delayOnly && (
           <>

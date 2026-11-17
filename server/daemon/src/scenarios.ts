@@ -41,16 +41,19 @@ export function instantiateScenario(scenario: Scenario, parameters: unknown,
     if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, v]) => [key, render(v)]))
     return value
   }
+  const renderField = (key: string, value: unknown): unknown => {
+    if (['body', 'bodyMatch', 'payloadMatch', 'ackPayload', 'pushPayload', 'data'].includes(key) && typeof value === 'string') {
+      let parsed: unknown
+      try { parsed = JSON.parse(value) } catch { return render(value) }
+      return JSON.stringify(render(parsed))
+    }
+    if (Array.isArray(value)) return value.map(v => renderField('', v))
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, renderField(k, v)]))
+    return render(value, key === 'urlPattern')
+  }
   const mocks: Mocks = { http: [], socket: [] }
   for (const template of scenario.rules) {
-    const fields = { ...template }
-    for (const [key, value] of Object.entries(fields)) {
-      if (['body', 'bodyMatch', 'payloadMatch', 'ackPayload', 'pushPayload'].includes(key) && typeof value === 'string') {
-        let json: unknown
-        try { json = JSON.parse(value) } catch { fields[key] = render(value); continue }
-        fields[key] = JSON.stringify(render(json))
-      } else fields[key] = render(value, key === 'urlPattern')
-    }
+    const fields = renderField('', template) as Record<string, unknown>
     const rule = build(fields)
     mocks[fields.type === 'socket' ? 'socket' : 'http'].push({ ...rule, id: randomUUID(), starred: false })
   }

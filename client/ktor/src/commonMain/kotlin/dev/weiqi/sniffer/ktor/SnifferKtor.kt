@@ -3,6 +3,8 @@ package dev.weiqi.sniffer.ktor
 import dev.weiqi.sniffer.core.BreakpointHitMsg
 import dev.weiqi.sniffer.core.BreakpointRegistry
 import dev.weiqi.sniffer.core.BreakpointResolution
+import dev.weiqi.sniffer.core.frame
+import dev.weiqi.sniffer.core.sseHeaders
 import dev.weiqi.sniffer.core.HttpMockRule
 import dev.weiqi.sniffer.core.HttpRequestMsg
 import dev.weiqi.sniffer.core.HttpResponseMsg
@@ -123,9 +125,10 @@ private suspend fun mockHttpCall(
     rule: HttpMockRule,
     bodyText: String,
 ): HttpClientCall {
+    val mockHeaders = if (rule.sse != null) rule.sseHeaders() else rule.headers
     val headers = io.ktor.http.headers {
-        rule.headers.forEach { (k, v) -> append(k, v) }
-        if (rule.headers.keys.none { it.equals("content-type", true) }) {
+        mockHeaders.forEach { (k, v) -> append(k, v) }
+        if (mockHeaders.keys.none { it.equals("content-type", true) }) {
             append("content-type", "application/json")
         }
     }
@@ -139,14 +142,50 @@ private suspend fun mockHttpCall(
         attributes = request.attributes,
     )
     val status = HttpStatusCode.fromValue(rule.status)
-    val channel = ByteReadChannel(bodyText.encodeToByteArray())
-    val callContext = currentCoroutineContext() + Job()
+    val callJob = Job()
+    val callContext = currentCoroutineContext() + callJob
+    val channel = if (rule.sse == null) ByteReadChannel(bodyText.encodeToByteArray()) else {
+        val stream = rule.sse!!
+        val output = ByteChannel(autoFlush = true)
+        // Detached from Send: returning headers must not wait for the stream to finish.
+        val producer = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default + callJob).launch {
+            try {
+                for (event in stream.events) {
+                    var remaining = event.delayMs
+                    while (remaining > 0 && !output.isClosedForRead) {
+                        val interval = minOf(remaining, 25L); delay(interval); remaining -= interval
+                    }
+                    if (output.isClosedForRead) break
+                    output.writeFully(event.frame().encodeToByteArray())
+                }
+                if (stream.ending == "open") while (!output.isClosedForRead) delay(25)
+                output.close()
+            } catch (t: Throwable) { output.cancel(t) }
+        }
+        val cancellation = request.executionContext.invokeOnCompletion { cause -> if (cause != null) { output.cancel(cause); producer.cancel() } }
+        producer.invokeOnCompletion { cancellation.dispose() }
+        if (stream.ending == "disconnect") object : ByteReadChannel by output {
+            private val failure = kotlinx.io.IOException("Sniffer simulated SSE disconnect")
+            override val closedCause: Throwable? get() = output.closedCause ?: if (output.isClosedForRead) failure else null
+            override val readBuffer: kotlinx.io.Source get() {
+                if (output.isClosedForRead) throw failure
+                return output.readBuffer
+            }
+            override suspend fun awaitContent(min: Int): Boolean {
+                if (!output.awaitContent(min)) throw failure
+                return true
+            }
+        } else output
+    }
     // Reuse Ktor's SSE parser and session lifecycle instead of returning a raw channel.
-    val body = if (requestData.body is SSEClientContent) {
+    val body = try { if (requestData.body is SSEClientContent) {
         request.attributes.getOrNull(ResponseAdapterAttributeKey)?.adapt(
             requestData, status, headers, channel, requestData.body, callContext,
         ) ?: channel
     } else channel
+    } catch (t: Throwable) {
+        channel.cancel(t); callJob.cancel(); throw t
+    }
     val responseData = HttpResponseData(
         statusCode = status,
         requestTime = GMTDate(),
@@ -208,7 +247,8 @@ internal fun boundedTextBody(contentType: ContentType?, contentLength: Long?): B
 @OptIn(InternalAPI::class)
 val SnifferKtor = createClientPlugin("SnifferKtor") {
     Sniffer.registerCapability("http")
-        Sniffer.registerCapability("http-sequences")
+    Sniffer.registerCapability("http-sequences")
+    Sniffer.registerCapability("http-sse-mocks")
     Sniffer.registerCapability("breakpoint")
 
     // fires when a response is received, before any response validator can convert it to an exception
@@ -288,13 +328,13 @@ val SnifferKtor = createClientPlugin("SnifferKtor") {
                 if (rule.delayMs > 0) delay(rule.delayMs)
                 val body = expandMockPlaceholders(rule.body)
                 val mockCall = mockHttpCall(client, request, rule, body)
-                Sniffer.report(
+                runCatching { Sniffer.report(
                     HttpResponseMsg(
-                        id = id, status = rule.status, headers = rule.headers,
-                        body = body, bodySize = body.length.toLong(), bodyTruncated = false,
+                        id = id, status = rule.status, headers = if (rule.sse != null) rule.sseHeaders() else rule.headers,
+                        body = if (rule.sse != null) null else body, bodySize = if (rule.sse != null) 0 else body.length.toLong(), bodyTruncated = false,
                         durationMs = rule.delayMs, mocked = true, error = null, timestamp = now(),
                     )
-                )
+                ) }
                 return@on mockCall
             }
             if (rule != null && rule.delayOnly && rule.delayMs > 0) {

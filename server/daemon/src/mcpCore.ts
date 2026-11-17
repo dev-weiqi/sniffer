@@ -45,7 +45,17 @@ const sequenceSchema = { type: ['object', 'null'], additionalProperties: false, 
     properties: { status: { type: 'integer', minimum: 100, maximum: 599 }, headers: stringMap,
       body: text, delayMs: { type: 'integer', minimum: 0, maximum: 300000 } } } },
 } }
+const sseSchema = { type: ['object', 'null'], additionalProperties: false, required: ['events'], properties: {
+  ending: { type: 'string', enum: ['close', 'open', 'disconnect'] },
+  events: { type: 'array', minItems: 1, maxItems: 1000, items: { type: 'object', additionalProperties: false,
+    properties: { data: { type: 'string', maxLength: 524288 },
+      event: { type: 'string', maxLength: 1024, pattern: '^[^\\r\\n\\u0000]*$' },
+      id: { type: 'string', maxLength: 1024, pattern: '^[^\\r\\n\\u0000]*$' },
+      retry: { type: 'integer', minimum: 0, maximum: 300000 },
+      delayMs: { type: 'integer', minimum: 0, maximum: 300000 } } } },
+} }
 const httpFields = {
+  sse: sseSchema,
   sequence: sequenceSchema,
   method: nullableText, urlPattern: identifier, status: { type: 'integer', minimum: 100, maximum: 599 },
   headers: stringMap, body: text, delayOnly: { type: 'boolean' },
@@ -193,6 +203,7 @@ function validateMockFields(args: Record<string, unknown>, socket: boolean) {
     if (key in args) throw new Error(`${key} is not a ${socket ? 'socket' : 'HTTP'} mock field`)
   }
   if (args.sequence != null && args.delayOnly === true) throw new Error("Sequence cannot be delay-only")
+  if (args.sse != null && (args.sequence != null || args.delayOnly === true || (args.status != null && args.status !== 200))) throw new Error("SSE requires status 200 and cannot be combined with sequence or delay-only")
   validateConditions(args)
 }
 
@@ -201,7 +212,7 @@ export function buildMock(fields: Record<string, unknown>): Record<string, unkno
   if (!checked.valid) throw new Error(`Invalid mock: ${checked.errorMessage}`)
   const socket = fields.type === 'socket'
   validateMockFields(fields, socket)
-  const { type: _, deviceId: __, ...rest } = fields
+  const { type: _, deviceId: __, runId: ___, ...rest } = fields
   return socket ? { enabled: true, transport: 'socketio', ackPayload: '[]', pushPayload: '[]', delayMs: 0, ...rest }
     : { enabled: true, method: null, status: 200, headers: {}, body: '', delayMs: 0, delayOnly: false, ...rest }
 }
@@ -334,7 +345,7 @@ export function createMcpRuntime(options: McpRuntimeOptions = {}) {
       const mocks = await mocksFor(deviceId)
       const source = mocks.http.find(rule => rule.id === args.id)
       if (!source) throw new Error('HTTP source mock not found on this device')
-      if (source.sequence) throw new Error("Select a static response before copying JSON fields")
+      if (source.sequence || source.sse) throw new Error("Select a static response before copying JSON fields")
       if (source.delayOnly) throw new Error('Delay-only rules do not have a mock response')
       const result = replaceJsonFields(source.body, args.replacements)
       const copy = { ...source, id: randomId(), createdAt: Date.now(), enabled: false, starred: false,

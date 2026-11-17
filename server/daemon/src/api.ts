@@ -7,7 +7,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { redact } from './redact.js'
 import type { Entry } from './entryStore.js'
 import { json, readBody } from './http.js'
-import { validSequence, isStarred, normalizeMocks, type MockStore, type Mocks } from './mockStore.js'
+import { validSse, validSequence, isStarred, normalizeMocks, type MockStore, type Mocks } from './mockStore.js'
 
 const HTTP_ENTRY_TYPES = new Set(['http-request', 'http-response'])
 const SOCKET_ENTRY_TYPES = new Set(['socket-status', 'socket-event', 'socket-ack'])
@@ -187,7 +187,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse, url: 
     const deviceId = typeof body.deviceId === 'string' ? body.deviceId : ''
     if (!deviceId) return json(res, 400, { error: 'deviceId required' })
     const mocks = normalizeMocks(body)
-    if (mocks.http.some(r => !validSequence(r as Record<string, unknown>))) return json(res, 400, { error: "Invalid HTTP sequence" })
+    if (mocks.http.some(r => !validSequence(r as Record<string, unknown>) || !validSse(r as Record<string, unknown>))) return json(res, 400, { error: "Invalid HTTP sequence or SSE stream" })
     const appId = deps.devices.get(deviceId)?.info.appId
     if (appId) {
       const own = { http: mocks.http.filter(r => !isStarred(r)), socket: mocks.socket.filter(r => !isStarred(r)) }

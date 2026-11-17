@@ -203,3 +203,11 @@ daemon 只接受目前 WebSocket 連線及同步 revision；重連或再次同�
 僅向宣告 `http-sequences` 的裝置下發。命中時先原子保留一步，再執行延遲；未命中不消耗。`last` 重複最後一步，`loop` 從頭開始，`stop` 讓後續命中失敗，絕不送出真實請求。
 一般同步與重新連線保留程序內進度。修改序列或 `resetToken`、刪除規則、重啟 App 會重設。並行請求以命中順序分配，不以完成順序分配。
 `mock-hit.stepIndex` 是從 0 起算的保留步驟，不代表完成。`GET /api/mock-progress?deviceId=...&ruleId=...` 回傳支援狀態、連線、同步狀態及近期命中。
+
+### 定時 SSE 模擬回覆
+
+`HttpMockRule.sse` 為選填物件，例如 `{events:[{data:"first",event:"message",id:"1",retry:1000,delayMs:0},{data:"done",delayMs:1000}],ending:"close"}`。
+需要 `http-sse-mocks` 能力、status 200，且不可搭配 sequence 或 delayOnly。不支援的裝置不會收到整條規則。events 為 1 至 1000 筆，data 預設空字串，delayMs 預設 0，其餘事件欄位選填。每筆 data 最多 524288 字元，event 與 id 最多 1024 字元且不得含 CR、LF、NUL。delayMs 與 retry 為 0 至 300000 的整數。
+每個命中請求從第一筆開始，擁有獨立串流。規則 delayMs 延遲標頭；事件 delayMs 是前一筆送出後的最短等待，第一筆從回傳標頭起算。讀取速度與排程可能延長間隔。data 換行轉為多個 data 欄位，空行結束事件。retry 是用戶端重連提示，不是事件延遲。placeholder 在送出事件時展開。
+close 正常結束，open 在最後一筆後等候呼叫端取消或逾時，disconnect 在送出最後一筆後讓讀取失敗，尚未讀取的緩衝資料可能遺失。SDK 強制使用 text/event-stream UTF-8，移除 Content-Length 與 Transfer-Encoding。紀錄僅包含回應標頭與 null body，命中不代表事件已被全部讀取。呼叫端取消會關閉模擬串流，原有重試與重連策略仍適用，也可能開啟另一條全新串流。
+Ktor 沿用 SSEClientContent 的既有 SSE adapter，原始讀取則使用 ByteReadChannel；未知 adapter 不轉換。OkHttp 使用可取消且遵守讀取逾時的串流來源。真實串流維持原有行為。

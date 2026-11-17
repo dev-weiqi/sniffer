@@ -10,6 +10,14 @@ export interface Device {
   connected: boolean
 }
 
+export interface MockSseEvent {
+  data: string
+  event?: string
+  id?: string
+  retry?: number
+  delayMs: number
+}
+export interface MockSseStream { events: MockSseEvent[]; ending: 'close' | 'open' | 'disconnect' }
 export interface HttpResponseStep {
   status: number
   headers: Record<string, string>
@@ -40,6 +48,7 @@ export interface HttpMockRule {
   headers: Record<string, string>
   body: string
   delayMs: number
+  sse?: MockSseStream | null
   sequence?: HttpSequence | null
   delayOnly: boolean
 }

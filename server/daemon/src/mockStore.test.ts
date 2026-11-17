@@ -171,3 +171,9 @@ assertEqual(stripUiOnlyFields(sequenceRules).http.length, 0, 'old SDK never rece
 assertEqual(stripUiOnlyFields(sequenceRules, ['http-sequences']).http.length, 1, 'capable SDK receives sequence')
 assertEqual(stripUiOnlyFields({ http: [{ sequence: { steps: [] } }], socket: [] }, ['http-sequences']).http.length, 0, 'invalid imported sequence omitted')
 assertEqual(JSON.stringify(parseMockStoreJson(JSON.stringify({ devices: { d: sequenceRules }, shared: {} })).devices.d), JSON.stringify(sequenceRules), 'sequence survives persistence')
+
+const streamRules = { http: [{ id: 'stream', sse: { events: [{ data: 'first', delayMs: 100 }], ending: 'close' } }], socket: [] }
+assertEqual(stripUiOnlyFields(streamRules).http.length, 0, 'old SDK never receives SSE as static response')
+assertEqual(stripUiOnlyFields(streamRules, ['http-sse-mocks']).http.length, 1, 'SSE capable SDK receives stream')
+assertEqual(stripUiOnlyFields({ http: [{ sse: { events: [{ id: 'bad\nid' }] } }], socket: [] }, ['http-sse-mocks']).http.length, 0, 'SSE field injection rejected')
+assertEqual(JSON.stringify(parseMockStoreJson(JSON.stringify({ devices: { d: streamRules }, shared: {} })).devices.d), JSON.stringify(streamRules), 'SSE survives persistence')

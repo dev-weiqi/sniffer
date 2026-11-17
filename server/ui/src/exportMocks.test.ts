@@ -158,3 +158,14 @@ console.log('exportMocks.test: all assertions passed')
 
 assert(roundTrip!.http[0].bodyMatch === '{"limit":20}', 'HTTP body condition survives export/import')
 assert(importedCopies(roundTrip!.http, () => 'new')[0].bodyMatch === '{"limit":20}', 'HTTP body condition survives copying')
+
+const timed = { ...mocks, http: [
+  { ...mocks.http[0], sequence: { steps: [{ status: 503, headers: {}, body: 'retry', delayMs: 100 }], onExhausted: 'loop' as const, resetToken: 'reset' } },
+  { ...mocks.http[0], id: 'stream', sse: { events: [{ data: '{"progress":1}', delayMs: 100 }], ending: 'close' as const } },
+], push: [] }
+const timedExport = buildExportRules(timed, createFullExportSelection(timed))
+const timedImport = parseImportedRules(JSON.stringify(timedExport))!
+assert(JSON.stringify(timedImport.http) === JSON.stringify(timed.http), 'timed mode fields survive export/import')
+assert(importedCopies(timedImport.http, () => 'fresh')[0].sequence?.resetToken === 'reset', 'import copies preserve sequence configuration')
+assert(parseImportedRules(JSON.stringify({ http: [{ sequence: { steps: [] } }] })) === null, 'empty sequence rejected before rendering')
+assert(parseImportedRules(JSON.stringify({ http: [{ sse: { events: [null] } }] })) === null, 'invalid SSE step rejected before rendering')

@@ -55,6 +55,20 @@ export function validSequence(rule: Record<string, unknown>): boolean {
     (step.headers === undefined || (step.headers && typeof step.headers === 'object' && !Array.isArray(step.headers) && Object.values(step.headers).every(v => typeof v === 'string'))))
 }
 
+export function validSse(rule: Record<string, unknown>): boolean {
+  if (!rule || typeof rule !== 'object') return false
+  const stream = rule.sse as Record<string, unknown> | null | undefined
+  if (stream == null) return true
+  if (typeof stream !== 'object' || Array.isArray(stream) || rule.sequence != null || rule.delayOnly === true ||
+    (rule.status != null && rule.status !== 200) ||
+    (stream.ending !== undefined && !['close', 'open', 'disconnect'].includes(String(stream.ending))) ||
+    !Array.isArray(stream.events) || stream.events.length < 1 || stream.events.length > 1000) return false
+  return stream.events.every(e => e && typeof e === 'object' && !Array.isArray(e) &&
+    (e.data === undefined || (typeof e.data === 'string' && e.data.length <= 524288)) &&
+    [e.event, e.id].every(v => v === undefined || (typeof v === 'string' && v.length <= 1024 && !/[\r\n\u0000]/.test(v))) &&
+    [e.retry, e.delayMs].every(v => v === undefined || (Number.isInteger(v) && v >= 0 && v <= 300000)))
+}
+
 export function stripUiOnlyFields(mocks: Mocks, capabilities: string[] = []): Mocks {
   const strip = (rules: unknown[]) => rules.map(r => {
     const { starred: _, ...rest } = r as Record<string, unknown>
@@ -71,7 +85,8 @@ export function stripUiOnlyFields(mocks: Mocks, capabilities: string[] = []): Mo
     } catch { return false }
   }
   const http = mocks.http.filter(r => {
-    const rule = r as { queryParams?: unknown; bodyMatch?: unknown; sequence?: unknown; delayOnly?: unknown } | null
+    const rule = r as { queryParams?: unknown; bodyMatch?: unknown; sequence?: unknown; sse?: unknown; delayOnly?: unknown } | null
+    if (rule?.sse != null && (!capabilities.includes('http-sse-mocks') || !validSse(rule))) return false
     if (rule?.sequence != null && (!capabilities.includes('http-sequences') || !validSequence(rule))) return false
     if (!supportsCondition(rule?.bodyMatch, 'http-body-mocks')) return false
     const query = rule?.queryParams
