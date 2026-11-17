@@ -11,6 +11,6 @@ cd server/daemon
 npm start
 ```
 
-開啟 `SnifferIOSSample.xcodeproj`，選擇 iOS 模擬器並執行。App 會自動透過本機 SDK 執行 HTTP、原生 WebSocket 與 Socket.IO。各按鈕可再次執行對應傳輸，方便在 Sniffer 中檢查模擬、延遲、中斷點、ack、回覆與推送規則。
+開啟 `SnifferIOSSample.xcodeproj`，選擇 iOS 模擬器並執行。Control deck 與 Android samples 採用相同的四欄操作、獨立捲動操作區、固定底部 Activity 紀錄及系統淺色／深色模式。只在點擊操作時送出請求，開啟 App 不會消耗序列步驟。HTTP 提供 GET、POST、錯誤、圖片、外部 API 與 URLSession.AsyncBytes SSE 串流。Socket.IO 與原生 WebSocket 提供連線、傳送、ACK、斷線；Socket.IO 另有 Req/Res。Clear 只清除 sample 紀錄。
 
 使用實機時，請在 scheme 的環境變數中，將 `SNIFFER_HOST` 設為 Mac 的區域網路 IP。
