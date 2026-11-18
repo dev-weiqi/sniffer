@@ -70,7 +70,7 @@ SNIFFER_BIND=0.0.0.0 sniffer start
 
 ```bash
 npm install -g @dev-weiqi/sniffer@latest
-npm install -g @dev-weiqi/sniffer@0.9.2
+npm install -g @dev-weiqi/sniffer@0.9.3
 ```
 
 ## 桌面應用程式
