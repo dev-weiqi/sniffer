@@ -676,6 +676,7 @@ tr.bp-row td { background: color-mix(in srgb, var(--err) 10%, var(--bg-panel)); 
 .conn-endpoint { min-width: 0; overflow-wrap: anywhere; text-align: left; }
 .conn-transport { font-size: 10px; opacity: .85; flex: none; }
 .conn-count { font-size: 10px; padding: 0 5px; min-width: 21px; border-radius: 8px; background: var(--conn-count); color: var(--conn-ink); flex: none; }
+.conn-chip[data-active] .conn-count { background: var(--conn-active-ink); color: var(--conn-selected); font-weight: 600; }
 
 .push-form {
   margin-top: auto;
