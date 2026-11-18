@@ -91,17 +91,6 @@ export function SocketView({ active, followLatest, emptyState, mockCount, mockTo
           </button>
           <button className="clear-btn" disabled={events.length === 0} onClick={onClear}>Clear Socket</button>
         </div>
-        <div
-          className="list-scroll"
-          ref={listRef}
-          onScroll={e => {
-            if (!active) return
-            const el = e.currentTarget
-            const distance = el.scrollHeight - el.scrollTop - el.clientHeight
-            stickBottom.current = distance < 40
-            setShowScrollToBottom(distance > 1)
-          }}
-        >
         {liveConns.length > 0 && (
           <div className="conn-bar" role="group" aria-label="Socket connections">
             <button className="conn-chip all" data-active={connFilter === null || undefined}
@@ -124,6 +113,17 @@ export function SocketView({ active, followLatest, emptyState, mockCount, mockTo
             })}
           </div>
         )}
+        <div
+          className="list-scroll"
+          ref={listRef}
+          onScroll={e => {
+            if (!active) return
+            const el = e.currentTarget
+            const distance = el.scrollHeight - el.scrollTop - el.clientHeight
+            stickBottom.current = distance < 40
+            setShowScrollToBottom(distance > 1)
+          }}
+        >
         <table className="grid">
           <thead>
             <tr>

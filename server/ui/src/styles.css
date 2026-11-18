@@ -639,7 +639,7 @@ tr.bp-row td { background: color-mix(in srgb, var(--err) 10%, var(--bg-panel)); 
   --conn-count: #e0e8e4;
   display: flex; gap: 8px; flex-wrap: wrap;
   padding: 8px 10px; border-bottom: 1px solid var(--border);
-  background: var(--bg-panel); position: sticky; top: 0; z-index: 2;
+  background: var(--bg-panel); flex-shrink: 0;
 }
 :root[data-theme="dark"] .conn-bar {
   --conn-border: #50635c;
