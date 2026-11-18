@@ -558,7 +558,7 @@ button.filter-btn { width: 20px; height: 20px; padding: 0; align-items: center; 
 .bp-armed-rules { display: grid; gap: 8px; padding: 0 12px 12px; }
 .bp-armed-rule { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; font-size: 11px; }
 .bp-armed-method { font-weight: 800; }
-.bp-armed-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bp-armed-path { white-space: normal; overflow-wrap: anywhere; }
 .bp-blink { animation: bp-pulse 1.2s ease-in-out infinite; }
 @keyframes bp-pulse { 50% { opacity: .45; } }
 tr.bp-row td { background: color-mix(in srgb, var(--err) 10%, var(--bg-panel)); }
