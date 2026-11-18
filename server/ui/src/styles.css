@@ -749,15 +749,17 @@ tr.bp-row td { background: color-mix(in srgb, var(--err) 10%, var(--bg-panel)); 
 .mocks-list-scroll { overflow: auto; flex: 1; }
 .mocks-list-row {
   display: flex; align-items: flex-start; gap: 8px;
-  padding: 11px 10px; margin: 7px 9px; border: 1px solid transparent; border-radius: 10px; cursor: default;
+  padding: 10px 8px; margin: 0 4px; border-bottom: 1px solid var(--border); cursor: default;
 }
 .mocks-list-row:hover { background: var(--hover); }
 .mocks-list-row[data-selected] {
-  background: var(--bg-panel); border-color: color-mix(in srgb, var(--accent) 25%, var(--border));
-  box-shadow: 0 2px 8px rgb(0 0 0 / .05);
+  background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent);
 }
 .mocks-list-row[data-selected] .rule-number { color: var(--accent); }
-.mocks-list-row[data-selected] .mocks-list-badge { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+.mocks-list-row[data-selected] .mocks-list-badge {
+  color: var(--accent); background: var(--bg-panel);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
 .mocks-list-row > .toggle { margin-top: 3px; }
 .mocks-list-row[data-off] .mocks-list-name { opacity: .55; }
 .mocks-list-badge {
@@ -774,27 +776,27 @@ tr.bp-row td { background: color-mix(in srgb, var(--err) 10%, var(--bg-panel)); 
 .mocks-list-conflicts { font-size: 11px; color: var(--warn); }
 .mocks-list-star { color: var(--warn); margin-left: auto; display: flex; flex: none; }
 .mocks-list-empty { padding: 14px 12px; }
-.mocks-detail { overflow: auto; padding: 16px; min-width: 0; background: var(--bg); }
+.mocks-detail { overflow: auto; padding: 12px; min-width: 0; background: var(--bg); }
 .mocks-detail .rule-card { border: none; padding: 0; margin: 0; background: none; }
-.mocks-detail .mock-rule-editor { min-height: 100%; gap: 14px; }
+.mocks-detail .mock-rule-editor { min-height: 100%; gap: 8px; }
 .mock-rule-editor > * { flex-shrink: 0; }
 .mock-identity, .mocks-detail .rule-conditions, .mock-response {
-  padding: 14px 15px; border: 1px solid var(--border); border-radius: 11px;
-  background: var(--bg-panel); box-shadow: 0 2px 5px rgb(0 0 0 / .02);
+  padding: 12px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg-panel);
 }
 .mock-identity { display: flex; flex-direction: column; gap: 10px; }
 .mocks-detail .mock-rule-editor > .mock-response { flex: 1 0 310px; }
 .mock-response { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .mock-response > * { flex-shrink: 0; }
-.mock-response > .rule-response-editor { flex: 1 0 230px; min-height: 230px; background: color-mix(in srgb, var(--bg-alt) 30%, var(--bg-panel)); border-radius: 8px; padding: 14px; }
+.mock-response > .rule-response-editor { flex: 1 0 230px; min-height: 230px; background: color-mix(in srgb, var(--bg-alt) 30%, var(--bg-panel)); border-radius: 4px; padding: 12px; }
 .mock-response > .rule-tabs { margin-bottom: 0; }
-.mocks-detail .condition-panel { min-height: 186px; border: 0; border-radius: 7px; background: color-mix(in srgb, var(--bg-alt) 40%, var(--bg-panel)); }
+.mocks-detail .condition-panel { min-height: 186px; border: 0; border-radius: 4px; background: color-mix(in srgb, var(--bg-alt) 40%, var(--bg-panel)); }
 .mock-identity .rule-name-row { margin: 0; }
 .mock-identity button.star-btn { position: static; flex: none; }
 .mocks-detail .condition-tabs { align-self: flex-start; padding: 3px; border-radius: 8px; background: var(--bg-alt); margin-bottom: 4px; }
 .mocks-detail .condition-tabs button[data-active] { background: var(--bg-panel); color: var(--accent); box-shadow: 0 1px 4px rgb(0 0 0 / .08); }
 .mock-response .rule-tabs button[data-active] { background: var(--accent-soft); color: var(--accent); }
-.mock-conflicts.dup-warning { align-items: flex-start; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--warn) 25%, var(--border)); border-radius: 8px; background: color-mix(in srgb, var(--warn) 5%, var(--bg-panel)); }
+.mock-conflicts.dup-warning { align-items: flex-start; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--warn) 25%, var(--border)); border-radius: 4px; background: color-mix(in srgb, var(--warn) 5%, var(--bg-panel)); }
 .mock-conflict-link { color: var(--warn); text-decoration: underline; border: 0; background: none; padding: 0 3px; }
 .mock-conflict-link:hover { background: var(--bg-panel); }
 .mock-conflict-detail { display: block; margin-top: 3px; font-size: 12px; }
