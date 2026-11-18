@@ -1224,12 +1224,12 @@ function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, p
       {rule.sse ? <SseEditor value={rule.sse} onChange={sse => onChange({ ...rule, sse })} /> : rule.sequence ? <SequenceEditor deviceId={deviceId} ruleId={rule.id} value={rule.sequence} onChange={sequence => onChange({ ...rule, sequence })} /> : <>
       <div className="rule-tabs">
         {!rule.delayOnly && (
-          <>
+          <div className="rule-tabs condition-tabs">
             <button type="button" data-active={sub === 'body' || undefined} onClick={() => setSub('body')}>Response body</button>
             <button type="button" data-active={sub === 'headers' || undefined} onClick={() => setSub('headers')}>
               Headers{headerCount > 0 && <span className="count">{headerCount}</span>}
             </button>
-          </>
+          </div>
         )}
         <span className="spacer" />
         {!rule.delayOnly && (

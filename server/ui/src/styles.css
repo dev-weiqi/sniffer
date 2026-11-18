@@ -793,9 +793,17 @@ tr.bp-row td { background: color-mix(in srgb, var(--err) 10%, var(--bg-panel)); 
 .mocks-detail .condition-panel { min-height: 186px; border: 0; border-radius: 4px; background: color-mix(in srgb, var(--bg-alt) 40%, var(--bg-panel)); }
 .mock-identity .rule-name-row { margin: 0; }
 .mock-identity button.star-btn { position: static; flex: none; }
-.mocks-detail .condition-tabs { align-self: flex-start; padding: 3px; border-radius: 8px; background: var(--bg-alt); margin-bottom: 4px; }
-.mocks-detail .condition-tabs button[data-active] { background: var(--bg-panel); color: var(--accent); box-shadow: 0 1px 4px rgb(0 0 0 / .08); }
-.mock-response .rule-tabs button[data-active] { background: var(--accent-soft); color: var(--accent); }
+.mocks-detail .condition-tabs { align-self: flex-start; gap: 14px; padding: 0; margin-bottom: 4px; }
+.mocks-detail .condition-tabs button {
+  padding: 5px 0 7px; border-radius: 0; background: transparent;
+  border-bottom: 2px solid transparent;
+}
+.mocks-detail .condition-tabs button[data-active] { background: transparent; color: var(--accent); border-bottom-color: var(--accent); }
+.mock-response .condition-tabs { margin-bottom: 0; }
+.mocks-detail .rule-tabs button[data-active] .count {
+  background: color-mix(in srgb, var(--accent) 20%, var(--bg-panel)); color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent);
+}
 .mock-conflicts.dup-warning { align-items: flex-start; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--warn) 25%, var(--border)); border-radius: 4px; background: color-mix(in srgb, var(--warn) 5%, var(--bg-panel)); }
 .mock-conflict-link { color: var(--warn); text-decoration: underline; border: 0; background: none; padding: 0 3px; }
 .mock-conflict-link:hover { background: var(--bg-panel); }
