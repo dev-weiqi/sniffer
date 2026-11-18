@@ -11,6 +11,18 @@ export function filterActive(filter: TrafficFilter): boolean {
   return filter.items.some(i => i.enabled)
 }
 
+export function fileExtensionPattern(url: string): string | null {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
+    const name = decodeURIComponent(parsed.pathname.split('/').pop() ?? '')
+    const extension = /.+\.([a-z0-9]+)$/i.exec(name)?.[1]
+    return extension ? `*.${extension.toLowerCase()}` : null
+  } catch {
+    return null
+  }
+}
+
 /** Case-insensitive match; * matches any characters. URL patterns may omit the HTTP(S) scheme. */
 export function passesFilter(filter: TrafficFilter, text: string, match: 'exact' | 'contains' | 'url' = 'exact'): boolean {
   const enabled = filter.items.filter(i => i.enabled)
@@ -18,6 +30,8 @@ export function passesFilter(filter: TrafficFilter, text: string, match: 'exact'
   const normalized = text.toLowerCase()
   const matched = enabled.some(i => {
     const value = i.value.toLowerCase()
+    // Extension filters match the filename, independent of query parameters or fragments.
+    if (match === 'url' && /^\*\.[a-z0-9]+$/.test(value)) return fileExtensionPattern(text) === value
     const haystack = match === 'url' && !value.includes('://') ? normalized.replace(/^https?:\/\//, '') : normalized
     if (!value.includes('*')) return match === 'contains' ? haystack.includes(value) : haystack === value
     const parts = (match === 'contains' ? `*${value}*` : value).split('*')

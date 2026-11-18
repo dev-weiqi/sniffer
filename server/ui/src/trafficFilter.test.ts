@@ -3,6 +3,7 @@ import {
   addFilterValue,
   addOrEnableValue,
   filterActive,
+  fileExtensionPattern,
   loadFilter,
   passesFilter,
   saveFilter,
@@ -79,6 +80,27 @@ for (const [pattern, url, matched] of [
   assert(passesFilter({ ...exclude(pattern), mode: 'include' }, url, 'url') === matched, `include URL ${pattern}: ${url}`)
 }
 assert(passesFilter(exclude('example.com/*'), 'https://example.com/a'), 'other filters retain exact boundaries')
+
+// ---- file extension shortcuts ----
+for (const extension of ['zip', 'webp', 'png', 'jpg', 'mp4', 'pdf', 'woff2']) {
+  const url = `https://example.com/file.${extension.toUpperCase()}?token=123#download`
+  const pattern = fileExtensionPattern(url)
+  assert(pattern === `*.${extension}`, `extract ${extension} from the filename`)
+  const next = addOrEnableValue(EMPTY_FILTER, pattern!)
+  assert(!passesFilter(next, url, 'url'), `hide ${extension} including query and fragment`)
+  assert(passesFilter({ ...next, mode: 'include' }, url, 'url'), `include ${extension}`)
+  assert(passesFilter(next, `https://example.com/file.${extension}.bak`, 'url'), 'do not match other extensions')
+  assert(passesFilter(next, `https://example.com/api?file=a.${extension}`, 'url'), 'ignore filenames in query')
+  const existing = { ...next, items: [{ value: pattern!.toUpperCase(), enabled: false }] }
+  const enabled = addOrEnableValue(existing, pattern!)
+  assert(enabled.items.length === 1 && enabled.items[0].enabled, 're-enable existing extension without duplicates')
+}
+for (const url of ['invalid', 'https://example.com', 'https://example.com/.env', 'https://example.com/a.zip/', 'https://example.com/api', 'https://example.com/a.%ZZ', 'ftp://example.com/a.zip']) {
+  assert(fileExtensionPattern(url) === null, `no file shortcut for ${url}`)
+}
+assert(fileExtensionPattern('https://example.com/archive.tar.gz') === '*.gz', 'use the last extension')
+assert(fileExtensionPattern('https://example.com/file%2Epng') === '*.png', 'decode encoded filenames')
+assert(passesFilter(exclude('*.png'), 'message.png?x=1'), 'event filter semantics are unchanged')
 
 // ---- addFilterValue ----
 {

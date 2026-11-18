@@ -2,7 +2,7 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'rea
 import type { BreakpointRule, HttpMockRule, HttpRow, PausedHit } from './state'
 import { FilterMenu } from './FilterMenu'
 import { TrafficEmpty, type TrafficEmptyProps } from './TrafficEmpty'
-import type { TrafficFilter } from './trafficFilter'
+import { addOrEnableValue, fileExtensionPattern, type TrafficFilter } from './trafficFilter'
 import { copyText, fmtDuration, fmtSize, fmtTime, prettyJson, splitHighlight, splitLinks, statusClass, statusLabel, toCurl, urlParts } from './util'
 import { httpMockFromRequest, jsonObjectCondition } from './util'
 import { MockAction } from './MockAction'
@@ -113,6 +113,7 @@ export function HttpView({ active, followLatest, emptyState, mockCount, mockTota
   const sorted = useMemo(() => (sortDesc ? [...rows].reverse() : rows), [rows, sortDesc])
   const ids = useMemo(() => sorted.map(r => r.id), [sorted])
   useListKeys(ids, selectedId, setSelectedId, active)
+  const filePattern = menu ? fileExtensionPattern(menu.row.url) : null
   const [detailWidth, startDetailDrag] = useDetailWidth()
 
   useEffect(() => { localStorage.setItem('sniffer-sort-http', sortDesc ? 'desc' : 'asc') }, [sortDesc])
@@ -237,6 +238,8 @@ export function HttpView({ active, followLatest, emptyState, mockCount, mockTota
         { label: 'Copy cURL', text: toCurl(menu.row), icon: 'curl' },
         { label: 'Copy URL', text: menu.row.url, icon: 'url' },
         { label: 'Copy path', text: urlParts(menu.row.url).path, icon: 'path' },
+        ...(filePattern ? [{ label: `Filter ${filePattern}`, icon: 'filter' as const,
+          onSelect: () => onUrlFilterChange(addOrEnableValue(urlFilter, filePattern)) }] : []),
       ]} />}
 
       {(selected || selectedHit) && <div className="pane-resizer" onMouseDown={startDetailDrag} />}
@@ -309,10 +312,11 @@ const HttpRowItem = memo(function HttpRowItem({ row: r, query, paused, selected,
   )
 })
 
-/** Right-click menu on a traffic row — the copy actions live here, not in the detail pane. */
+/** Traffic row copy and filter actions. */
 export function RowMenu({ x, y, items, onClose }: {
   x: number; y: number; onClose: () => void
-  items: { label: string; text: string; icon: 'curl' | 'url' | 'path' | 'event'; disabled?: boolean }[]
+  items: ({ label: string; icon: 'curl' | 'url' | 'path' | 'event' | 'filter'; disabled?: boolean } &
+    ({ text: string; onSelect?: never } | { onSelect: () => void; text?: never }))[]
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState<string | null>(null)
@@ -347,7 +351,7 @@ export function RowMenu({ x, y, items, onClose }: {
   }, [x, y])
 
   return (
-    <div className="ctx-menu" role="menu" aria-label="Copy traffic" ref={ref}
+    <div className="ctx-menu" role="menu" aria-label="Traffic actions" ref={ref}
       style={{ top: y, left: x }} onKeyDown={e => {
         if (e.key === 'Escape') { e.stopPropagation(); onClose(); return }
         if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
@@ -359,7 +363,10 @@ export function RowMenu({ x, y, items, onClose }: {
       }}>
       {items.map(item => (
         <button className="ctx-item" role="menuitem" key={item.label} disabled={item.disabled}
-          onClick={() => copy(item.label, item.text)}>
+          onClick={() => {
+            if (item.onSelect) { item.onSelect(); onClose() }
+            else copy(item.label, item.text)
+          }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             {item.icon === 'curl' && <><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></>}
@@ -367,6 +374,7 @@ export function RowMenu({ x, y, items, onClose }: {
               <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
               <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
             </>}
+            {item.icon === 'filter' && <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />}
             {item.icon === 'path' && <path d="M9 19 15 5" />}
             {item.icon === 'event' && <path d="M10 3 8 21M16 3l-2 18M4 9h17M3 15h17" />}
           </svg>
