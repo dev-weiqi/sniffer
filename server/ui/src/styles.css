@@ -690,7 +690,7 @@ tr.bp-row td { background: color-mix(in srgb, var(--err) 10%, var(--bg-panel)); 
 
 /* Rules live in a modal each panel opens for its own kind; the tab bar has only traffic now. */
 .pill-btn.mocks-btn { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-panel); }
-.pill-btn.mocks-btn:hover { border-color: var(--text-dim); }
+.pill-btn.mocks-btn:hover { border-color: var(--accent); }
 .pill-btn.mocks-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .mocks-enabled-count {
   padding-left: 8px;
