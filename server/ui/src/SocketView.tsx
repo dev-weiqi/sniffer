@@ -17,7 +17,7 @@ const SYS_EVENTS = new Set([
   'ping', 'pong',
 ])
 
-export function SocketView({ active, followLatest, emptyState, mockCount, onOpenMocks, events, allRows, unreadScope, onUnreadChange, query, conns, connUrls, deviceId, eventFilter, onEventFilterChange, onMockAck, onPushPrefill, onClear }: {
+export function SocketView({ active, followLatest, emptyState, mockCount, mockTotal, onOpenMocks, events, allRows, unreadScope, onUnreadChange, query, conns, connUrls, deviceId, eventFilter, onEventFilterChange, onMockAck, onPushPrefill, onClear }: {
   active: boolean
   followLatest: boolean
   emptyState: TrafficEmptyProps
@@ -32,6 +32,7 @@ export function SocketView({ active, followLatest, emptyState, mockCount, onOpen
   connUrls: Record<string, string>
   deviceId: string
   mockCount: number
+  mockTotal: number
   onOpenMocks?: () => void
   onMockAck: (rule: SocketMockRule, deviceId: string) => void
   onPushPrefill: (prefill: { connectionId: string; event: string; payload: string }) => void
@@ -86,7 +87,7 @@ export function SocketView({ active, followLatest, emptyState, mockCount, onOpen
           <span className="spacer" />
           <button className="pill-btn mocks-btn" data-active={mockCount > 0 ? 'true' : 'false'}
             title="Socket Mocks (⌘M)" aria-keyshortcuts="Meta+M" disabled={!onOpenMocks} onClick={onOpenMocks}>
-            <SlidersIcon />Socket Mocks{mockCount > 0 && <span className="count accent">{mockCount}</span>}
+            <SlidersIcon />Socket Mocks<span className="mocks-enabled-count">{mockCount} / {mockTotal} enabled</span>
           </button>
           <button className="clear-btn" disabled={events.length === 0} onClick={onClear}>Clear Socket</button>
         </div>

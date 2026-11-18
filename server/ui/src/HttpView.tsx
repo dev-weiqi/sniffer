@@ -72,7 +72,7 @@ export function ScrollToBottomButton({ onClick }: { onClick: () => void }) {
   )
 }
 
-export function HttpView({ active, followLatest, emptyState, mockCount, onOpenMocks, rows, allRows, unreadScope, onUnreadChange, query, pausedHits, urlFilter, onUrlFilterChange, armedBreakpoints, onMock, onArm, onResolve, onDisarmAll, onClear }: {
+export function HttpView({ active, followLatest, emptyState, mockCount, mockTotal, onOpenMocks, rows, allRows, unreadScope, onUnreadChange, query, pausedHits, urlFilter, onUrlFilterChange, armedBreakpoints, onMock, onArm, onResolve, onDisarmAll, onClear }: {
   active: boolean
   followLatest: boolean
   emptyState: TrafficEmptyProps
@@ -83,6 +83,7 @@ export function HttpView({ active, followLatest, emptyState, mockCount, onOpenMo
   query: string
   pausedHits: PausedHit[]
   mockCount: number
+  mockTotal: number
   onOpenMocks?: () => void
   urlFilter: TrafficFilter
   onUrlFilterChange: (filter: TrafficFilter) => void
@@ -183,7 +184,7 @@ export function HttpView({ active, followLatest, emptyState, mockCount, onOpenMo
           <span className="spacer" />
           <button className="pill-btn mocks-btn" data-active={mockCount > 0 ? 'true' : 'false'}
             title="HTTP Mocks (⌘M)" aria-keyshortcuts="Meta+M" disabled={!onOpenMocks} onClick={onOpenMocks}>
-            <SlidersIcon />HTTP Mocks{mockCount > 0 && <span className="count accent">{mockCount}</span>}
+            <SlidersIcon />HTTP Mocks<span className="mocks-enabled-count">{mockCount} / {mockTotal} enabled</span>
           </button>
           <button className="clear-btn" disabled={rows.length === 0} onClick={onClear}>Clear API</button>
         </div>

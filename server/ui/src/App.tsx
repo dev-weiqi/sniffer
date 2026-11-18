@@ -643,7 +643,7 @@ export default function App() {
             allRows={state.http} unreadScope={unreadScope} onUnreadChange={setHttpUnread}
             emptyState={{ ...trafficContext, hasTraffic: state.http.some(r => r.deviceId === deviceId),
               onResetFilters: () => { setSearch(''); setHttpFilter(setAllEnabled(httpFilter, false)) } }}
-            mockCount={selectedMocks.http.filter(r => r.enabled).length}
+            mockCount={selectedMocks.http.filter(r => r.enabled).length} mockTotal={selectedMocks.http.length}
             onOpenMocks={selectedDevice ? () => setMocksOpen('http') : undefined}
             urlFilter={httpFilter} onUrlFilterChange={setHttpFilter}
             armedBreakpoints={deviceBreakpoints.filter(r => r.enabled)}
@@ -655,7 +655,7 @@ export default function App() {
             allRows={state.socketEvents} unreadScope={unreadScope} onUnreadChange={setSocketUnread}
             emptyState={{ ...trafficContext, hasTraffic: state.socketEvents.some(r => r.deviceId === deviceId),
               onResetFilters: () => { setSearch(''); setSocketFilter(setAllEnabled(socketFilter, false)) } }}
-            mockCount={selectedMocks.socket.filter(r => r.enabled).length}
+            mockCount={selectedMocks.socket.filter(r => r.enabled).length} mockTotal={selectedMocks.socket.length}
             onOpenMocks={selectedDevice ? () => setMocksOpen('socket') : undefined}
             eventFilter={socketFilter} onEventFilterChange={setSocketFilter}
             onMockAck={mockFromSocketEvent} onPushPrefill={pushFromEvent}
