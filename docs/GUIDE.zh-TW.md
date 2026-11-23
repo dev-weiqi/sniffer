@@ -77,7 +77,7 @@ adb shell setprop debug.sniffer.host 192.168.1.20
 * 每列詳情包含 URL、查詢參數、標頭與內容。JSON 會格式化顯示，可收合與複製。
 * JSON Tree 中明確帶時區的 ISO 時間會加上虛線底線，滑過或鍵盤聚焦可查看本機時間與 UTC 偏移，Escape 可關閉提示。文字選取、複製與 Raw 都保留原始時間，未帶時區的日期與數字不換算。
 * **Copy cURL** 依擷取內容產生指令，複製後另行執行才會送出請求。
-* **Mock this request** 會以請求方法、路徑與實際回應內容預填規則。
+* **Mock this path** 會以請求方法、路徑與實際回應內容預填規則。
 
 ### Socket 分頁
 

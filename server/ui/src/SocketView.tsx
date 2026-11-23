@@ -1,3 +1,4 @@
+import { Icon } from './Icon'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SocketConn, SocketMockRule, SocketRow } from './state'
 import { FilterMenu } from './FilterMenu'
@@ -151,7 +152,7 @@ export function SocketView({ active, followLatest, emptyState, mockCount, mockTo
                 }}>
                 <td className="mono dim">{fmtTime(e.ts)}</td>
                 <td className={e.direction === 'out' ? 'dir-out' : 'dir-in'}>
-                  {e.direction === 'out' ? '↑' : '↓'}
+                  <Icon name={e.direction === 'out' ? 'arrow-up' : 'arrow-down'} label={e.direction === 'out' ? 'Outgoing' : 'Incoming'} />
                 </td>
                 <td className={e.transport === 'socketio' && SYS_EVENTS.has(e.event) ? 'mono sys-event' : 'mono'}>
                   {e.mocked && <span className="badge mock">MOCK</span>}
@@ -159,7 +160,7 @@ export function SocketView({ active, followLatest, emptyState, mockCount, mockTo
                 </td>
                 <td className="mono dim ellipsis"><Highlight text={connUrls[e.connectionId] || e.connectionId.slice(0, 8)} query={query} /></td>
                 <td className="mono dim">
-                  {e.ackPayload !== undefined ? (e.ackMocked ? 'mock ✓' : '✓') : ''}
+                  {e.ackPayload !== undefined && <>{e.ackMocked && 'mock '}<Icon name="check" label="Acknowledged" /></>}
                 </td>
               </tr>
               )
@@ -232,7 +233,7 @@ export function SocketView({ active, followLatest, emptyState, mockCount, mockTo
                 )}>Mock this event</button>
               )}
               <span className="spacer" />
-              <button className="ghost" onClick={() => setSelectedId(null)}>✕</button>
+              <button className="ghost" aria-label="Close socket details" onClick={() => setSelectedId(null)}><Icon name="close" /></button>
             </div>
             <Section title="Event">
               <KV k="Event" v={selectedFrame ? (selectedFrame.eventName ?? frameLabel(selectedFrame)) : selected.event} query={query} />

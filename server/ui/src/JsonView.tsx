@@ -1,3 +1,4 @@
+import { Icon } from './Icon'
 import { useEffect, useId, useState, type CSSProperties, type FocusEvent, type MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { localTimestamp } from './util'
@@ -76,7 +77,7 @@ function Node({ name, value, depth, query, expandAll }: {
       <div className="jn-node">
         <div className="jn-head" onClick={() => setOpen(o => !o)}
           title={fromString ? 'String value containing JSON — parsed for display' : undefined}>
-          <span className="jn-chev" data-open={open || undefined}>▸</span>
+          <Icon name="chevron-right" size={14} className="jn-chev" data-open={open || undefined} />
           {key}{sep}
           {fromString && <span className="jn-str-mark">"</span>}
           <span className="jn-punc">{openB}</span>

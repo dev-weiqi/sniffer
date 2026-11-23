@@ -68,6 +68,12 @@ try {
     await route.fulfill({ json: { checks: [] } })
   })
   await page.goto(`http://127.0.0.1:${server.httpServer.address().port}`)
+  const socketIcon = page.locator('nav.tabs use[href="/icons.svg#websocket"]')
+  await socketIcon.waitFor({ state: 'attached' })
+  await page.waitForFunction(() => {
+    const glyph = document.querySelector('nav.tabs use[href="/icons.svg#websocket"]')
+    return glyph && glyph.getBBox().width > 0
+  })
   const pane = page.locator('.split:visible')
   const rows = pane.locator('tbody tr')
   const selected = () => pane.locator('tr[data-selected]').innerText()
@@ -247,7 +253,7 @@ try {
     push: [{ id: 'import-push', target: 'c1', event: 'imported:push', payload: '{}' }],
   }
   await httpMocks.locator('input[type=file]').setInputFiles({ name: 'all-rules.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(imported)) })
-  await httpMocks.getByText('Saved ✓', { exact: true }).waitFor()
+  await httpMocks.getByText('Saved', { exact: true }).waitFor()
   const importResult = page.getByRole('dialog', { name: 'Import complete', exact: true })
   await importResult.waitFor()
   assert.deepEqual(await importResult.locator('dd').allTextContents(), ['× 1', '× 1', '× 1'])

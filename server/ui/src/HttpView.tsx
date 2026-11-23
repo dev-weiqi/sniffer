@@ -1,3 +1,4 @@
+import { Icon } from './Icon'
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { BreakpointRule, HttpMockRule, HttpRow, PausedHit } from './state'
 import { FilterMenu } from './FilterMenu'
@@ -39,23 +40,13 @@ function sniffImageMime(base64: string): string {
 /** Leading icon of the Mocks entry buttons (both panels) — matches the modal's control theme. */
 export function SlidersIcon() {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M4 21v-7" /><path d="M4 10V3" />
-      <path d="M12 21v-9" /><path d="M12 8V3" />
-      <path d="M20 21v-5" /><path d="M20 12V3" />
-      <path d="M1 14h6" /><path d="M9 8h6" /><path d="M17 16h6" />
-    </svg>
+    <Icon name="sliders" size={15} />
   )
 }
 
 export function SortIcon({ descending }: { descending: boolean }) {
   return (
-    <svg className="sort-icon" data-descending={descending || undefined}
-      width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor"
-      strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M8 13V3M4.5 6.5 8 3l3.5 3.5" />
-    </svg>
+    <Icon name={descending ? 'sort-desc' : 'sort-asc'} className="sort-icon" size={14} />
   )
 }
 
@@ -63,16 +54,13 @@ export function ScrollToBottomButton({ onClick }: { onClick: () => void }) {
   return (
     <div className="scroll-bottom-shelf">
       <button className="scroll-bottom-button" title="Scroll to bottom" aria-label="Scroll to bottom" onClick={onClick}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d="M12 4v14" /><path d="m7 13 5 5 5-5" /><path d="M6 21h12" />
-        </svg>
+        <Icon name="arrow-down-to-line" size={24} />
       </button>
     </div>
   )
 }
 
-export function HttpView({ active, followLatest, emptyState, mockCount, mockTotal, onOpenMocks, rows, allRows, unreadScope, onUnreadChange, query, pausedHits, urlFilter, onUrlFilterChange, armedBreakpoints, onMock, onArm, onResolve, onDisarmAll, onClear }: {
+export function HttpView({ active, followLatest, emptyState, mockCount, mockTotal, onOpenMocks, rows, allRows, unreadScope, onUnreadChange, query, pausedHits, urlFilter, onUrlFilterChange, armedBreakpoints, onMock, onSetBreakpoint, onResolve, onDisarmAll, onClear }: {
   active: boolean
   followLatest: boolean
   emptyState: TrafficEmptyProps
@@ -89,7 +77,7 @@ export function HttpView({ active, followLatest, emptyState, mockCount, mockTota
   onUrlFilterChange: (filter: TrafficFilter) => void
   armedBreakpoints: BreakpointRule[]
   onMock: (rule: HttpMockRule, deviceId: string) => void
-  onArm: (row: HttpRow) => void
+  onSetBreakpoint: (row: HttpRow, path: string, enable: boolean) => void
   onResolve: (hit: PausedHit, action: 'resume' | 'abort', edits?: ResolveEdits) => void
   onDisarmAll: () => void
   onClear: () => void
@@ -153,12 +141,12 @@ export function HttpView({ active, followLatest, emptyState, mockCount, mockTota
       <div className="list-pane">
         <div className="panel-toolbar">
           <span className="dim">API traffic</span>
-          {pausedHits.length > 0 && <span className="badge bp-paused bp-blink">⏸ {pausedHits.length} paused</span>}
+          {pausedHits.length > 0 && <span className="badge bp-paused bp-blink"><Icon name="breakpoint" /> {pausedHits.length} paused</span>}
           {armedBreakpoints.length > 0 && (
             <div className="bp-armed-wrap">
               <button className="badge bp-armed" aria-label="Disarm all breakpoints"
                 aria-describedby="armed-breakpoints" onClick={onDisarmAll}>
-                ⏸ {armedBreakpoints.length} armed ✕
+                <Icon name="breakpoint" /> {armedBreakpoints.length} armed <Icon name="close" />
               </button>
               <div className="bp-armed-popover" id="armed-breakpoints" role="tooltip">
                 <div className="bp-armed-summary">
@@ -245,7 +233,7 @@ export function HttpView({ active, followLatest, emptyState, mockCount, mockTota
       {(selected || selectedHit) && <div className="pane-resizer" onMouseDown={startDetailDrag} />}
       {selectedHit
         ? <PausedDetail key={selectedHit.id} hit={selectedHit} onResolve={onResolve} onClose={() => setSelectedId(null)} />
-        : selected && <HttpDetail row={selected} query={query} onMock={onMock} onArm={onArm} onClose={() => setSelectedId(null)} />}
+        : selected && <HttpDetail row={selected} query={query} armedBreakpoints={armedBreakpoints} onMock={onMock} onSetBreakpoint={onSetBreakpoint} onClose={() => setSelectedId(null)} />}
     </div>
   )
 }
@@ -313,6 +301,8 @@ const HttpRowItem = memo(function HttpRowItem({ row: r, query, paused, selected,
 })
 
 /** Traffic row copy and filter actions. */
+const menuIcons = { curl: 'terminal', url: 'link', path: 'slash', event: 'hash', filter: 'filter' } as const
+
 export function RowMenu({ x, y, items, onClose }: {
   x: number; y: number; onClose: () => void
   items: ({ label: string; icon: 'curl' | 'url' | 'path' | 'event' | 'filter'; disabled?: boolean } &
@@ -367,29 +357,20 @@ export function RowMenu({ x, y, items, onClose }: {
             if (item.onSelect) { item.onSelect(); onClose() }
             else copy(item.label, item.text)
           }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            {item.icon === 'curl' && <><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></>}
-            {item.icon === 'url' && <>
-              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-            </>}
-            {item.icon === 'filter' && <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />}
-            {item.icon === 'path' && <path d="M9 19 15 5" />}
-            {item.icon === 'event' && <path d="M10 3 8 21M16 3l-2 18M4 9h17M3 15h17" />}
-          </svg>
-          {copied === item.label ? 'Copied ✓' : item.label}
+          <Icon name={menuIcons[item.icon]} size={14} />
+          {copied === item.label ? <>Copied <Icon name="check" /></> : item.label}
         </button>
       ))}
     </div>
   )
 }
 
-export function HttpDetail({ row, query, onMock, onArm, onClose }: {
+export function HttpDetail({ row, query, armedBreakpoints, onMock, onSetBreakpoint, onClose }: {
   row: HttpRow
   query: string
+  armedBreakpoints: BreakpointRule[]
   onMock: (rule: HttpMockRule, deviceId: string) => void
-  onArm: (row: HttpRow) => void
+  onSetBreakpoint: (row: HttpRow, path: string, enable: boolean) => void
   onClose: () => void
 }) {
   const [responseView, setResponseView] = useState<'raw' | 'tree'>('tree')
@@ -397,6 +378,8 @@ export function HttpDetail({ row, query, onMock, onArm, onClose }: {
   const { query: queryParams } = urlParts(row.url)
   const responseIsJson = Boolean(row.respBody && !row.respBase64 && !isSse(row) && isValidJson(row.respBody))
 
+  const breakpointPath = URL.canParse(row.url, 'http://x') ? new URL(row.url, 'http://x').pathname : ''
+  const armed = armedBreakpoints.some(rule => rule.method === row.method && rule.urlPattern === breakpointPath)
   const mockThis = () => onMock(httpMockFromRequest(row), row.deviceId)
   const hasQuery = queryParams.length > 0
   const hasBody = !row.reqTruncated && !!jsonObjectCondition(row.reqBody)
@@ -405,20 +388,20 @@ export function HttpDetail({ row, query, onMock, onArm, onClose }: {
     <aside className="detail-pane" aria-label="API request details">
       <div className="detail-toolbar">
         <MockAction key={`${row.deviceId}:${row.id}`} label="Mock this request" scope="Path only" onDefault={mockThis} options={[
-          { label: 'Path only', description: 'Any query or body', onSelect: mockThis },
-          { label: 'With query', description: hasQuery ? 'Include captured query parameters' : 'No query parameters captured', disabled: !hasQuery,
+          { label: 'Path only', actionLabel: 'Mock this path', description: 'Any query or body', onSelect: mockThis },
+          { label: 'With query', actionLabel: 'Mock with query', description: hasQuery ? 'Include captured query parameters' : 'No query parameters captured', disabled: !hasQuery,
             onSelect: () => onMock(httpMockFromRequest(row, 'query'), row.deviceId) },
-          { label: 'With body', description: hasBody ? 'Include captured JSON body fields' : 'No complete, nonempty JSON object captured', disabled: !hasBody,
+          { label: 'With body', actionLabel: 'Mock with body', description: hasBody ? 'Include captured JSON body fields' : 'No complete, nonempty JSON object captured', disabled: !hasBody,
             onSelect: () => onMock(httpMockFromRequest(row, 'body'), row.deviceId) },
-          { label: 'With query + body', description: 'Include both sets of conditions', disabled: !hasQuery || !hasBody,
+          { label: 'With query + body', actionLabel: 'Mock with query + body', description: 'Include both sets of conditions', disabled: !hasQuery || !hasBody,
             onSelect: () => onMock(httpMockFromRequest(row, 'both'), row.deviceId) },
         ]} />
         <div className="detail-break-action">
-          <button title="Pause future responses matching this method and path. Query and body are ignored."
-            onClick={() => onArm(row)}>Break on path</button>
+          <button disabled={!breakpointPath} title={armed ? 'Remove this method and path breakpoint' : 'Pause future responses matching this method and path. Query and body are ignored.'}
+            onClick={() => onSetBreakpoint(row, breakpointPath, !armed)}>{armed ? 'Remove breakpoint' : 'Break on this path'}</button>
         </div>
         <span className="spacer" />
-        <button className="ghost" aria-label="Close request details" onClick={onClose}>✕</button>
+        <button className="ghost" aria-label="Close request details" onClick={onClose}><Icon name="close" /></button>
       </div>
 
       <Section title="Request">
@@ -464,7 +447,7 @@ export function HttpDetail({ row, query, onMock, onArm, onClose }: {
             title={responseExpandAll === true ? 'Collapse all' : 'Expand all'}
             aria-label={responseExpandAll === true ? 'Collapse all' : 'Expand all'}
             onClick={() => setResponseExpandAll(open => open === true ? false : true)}>
-            <span aria-hidden>⇵</span>
+            <Icon name={responseExpandAll === true ? 'collapse-all' : 'expand-all'} />
             <span className="jn-expand-label">{responseExpandAll === true ? 'Collapse all' : 'Expand all'}</span>
           </button>}
         </span>}
@@ -507,10 +490,10 @@ function PausedDetail({ hit, onResolve, onClose }: {
   return (
     <aside className="detail-pane">
       <div className="detail-toolbar">
-        <span className="badge bp-paused bp-blink">⏸ PAUSED</span>
+        <span className="badge bp-paused bp-blink"><Icon name="breakpoint" /> PAUSED</span>
         <span className="dim">{hit.library}</span>
         <span className="spacer" />
-        <button className="ghost" onClick={onClose}>✕</button>
+        <button className="ghost" aria-label="Close paused request" onClick={onClose}><Icon name="close" /></button>
       </div>
       <div className="bp-editor">
         <div className="dim bp-hint">
@@ -678,7 +661,7 @@ export function Section({ title, action, className, children }: {
     <section className={`detail-section ${className ?? ''}`}>
       <h3>
         <button type="button" className="section-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
-          <span className="chev" aria-hidden="true" data-open={open || undefined}>▸</span> {title}
+          <Icon name="chevron-right" size={14} className="chev" aria-hidden="true" data-open={open || undefined} /> {title}
         </button>
         {action && <span className="section-action">{action}</span>}
       </h3>
@@ -703,7 +686,7 @@ export function CopyButton({ text }: { text: string }) {
         setTimeout(() => setCopied(false), 1200)
       }}
     >
-      {copied ? 'Copied ✓' : 'Copy'}
+      {copied ? <>Copied <Icon name="check" /></> : 'Copy'}
     </button>
   )
 }

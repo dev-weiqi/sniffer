@@ -1,3 +1,4 @@
+import { Icon } from './Icon'
 import { useEffect, useId, useRef, useState } from 'react'
 import { addFilterValue, addOrEnableValue, filterActive, setAllEnabled, type TrafficFilter } from './trafficFilter'
 
@@ -56,10 +57,7 @@ export function FilterMenu({ filter, onChange, placeholder, selectionValue }: {
     <span className="filter-anchor" ref={rootRef}>
       <button className="ghost icon-btn filter-btn" data-on={filterActive(filter) || undefined}
         title="Filter this column" onClick={toggleOpen}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
-        </svg>
+        <Icon name="filter" size={13} />
       </button>
       {open && pos && (
         <div className="filter-pop" ref={popRef} style={{ top: pos.top, left: pos.left }}>
@@ -68,11 +66,7 @@ export function FilterMenu({ filter, onChange, placeholder, selectionValue }: {
               onChange={e => setDraft(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') add() }} />
             <button className="filter-round" title="Add filter value" disabled={!draft.trim()} onClick={add}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                strokeWidth="1.8" strokeLinecap="round" aria-hidden>
-                <circle cx="12" cy="12" r="9" />
-                <path d="M12 8v8M8 12h8" />
-              </svg>
+              <Icon name="plus-circle" size={16} />
             </button>
             <p className="filter-hint" id={hintId}>
               <code>*</code> is a wildcard for zero or more characters.
@@ -91,11 +85,7 @@ export function FilterMenu({ filter, onChange, placeholder, selectionValue }: {
               <span className="mono filter-value">{item.value}</span>
               <button className="filter-round filter-remove" title="Remove"
                 onClick={() => onChange({ ...filter, items: filter.items.filter((_, i) => i !== index) })}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  strokeWidth="1.8" strokeLinecap="round" aria-hidden>
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M8 12h8" />
-                </svg>
+                <Icon name="minus-circle" size={16} />
               </button>
             </div>
           ))}

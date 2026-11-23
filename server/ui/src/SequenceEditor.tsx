@@ -1,3 +1,4 @@
+import { Icon } from './Icon'
 import { useEffect, useState } from 'react'
 import type { HttpSequence, HttpResponseStep } from './state'
 import { HeadersEditor } from './MocksView'
@@ -54,7 +55,7 @@ export function SequenceEditor({ deviceId, ruleId, value, onChange }: { deviceId
         </div>
         <label className="field">Response body</label>
         <textarea className="mono rule-response-editor" rows={14} aria-label="Step response body" value={step.body} onChange={e => update({ body: e.target.value })} />
-        <details><summary>Response headers</summary><HeadersEditor key={index} value={step.headers} onChange={headers => update({ headers })} /></details>
+        <details><summary><Icon name="chevron-right" className="summary-chevron" size={14} /> Response headers</summary><HeadersEditor key={index} value={step.headers} onChange={headers => update({ headers })} /></details>
       </div>
     </div>
   </>

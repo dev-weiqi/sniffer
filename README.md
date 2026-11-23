@@ -31,8 +31,8 @@ socket ack rules answer locally. Mock bodies support `${randomId}`, `${now}` and
 `${randomString(min~max)}`.
 
 HTTP rules can combine **Query parameters** and JSON **Body conditions**. Every specified
-condition must match; other object fields are ignored. **Mock this request** defaults to
-**Path only**. Its menu can include the captured query, complete JSON object body, or both.
+condition must match; other object fields are ignored. **Mock this path** defaults to
+**Path only**. Choose the captured query, complete JSON object body, or both from the menu, then press the main button to create the rule.
 **Mock this ack** defaults to **Event only**; its menu can include JSON object fields from
 the first outgoing argument. Response data stays separate from these conditions. The device
 SDK must support the selected conditions; update older SDKs before using them.
@@ -42,7 +42,7 @@ with captured conditions expands them automatically and selects the matching tab
 both query and body are included). Each device's
 rules remember their expanded state and the selected Query/Body tab in this browser,
 including after closing the panel or reloading. Delay settings remain beside the response.
-**Break on path** matches the HTTP method and path only, ignoring query and body conditions.
+**Break on this path** matches the HTTP method and path only, ignoring query and body conditions. Choose **Remove breakpoint** to remove that breakpoint.
 
 Use MCP `copy_mock_with_fields` to replace specified JSON fields in a disabled, device-local copy. The original rule stays unchanged; no SDK update is needed. In the UI, use Copy and edit the response body. See [field-copy details](server/daemon/MCP.md#copy-with-json-field-changes).
 

@@ -1,3 +1,4 @@
+import { Icon } from './Icon'
 import { useEffect, useRef, useState } from 'react'
 import type { Device } from './state'
 
@@ -66,9 +67,7 @@ export function DevicePicker({ devices, value, deleting, onChange, onDelete }: D
         <span className="device-picker-name">{device.deviceName}</span>
         <span className="device-picker-app">{device.appId}</span>
       </span>
-      <svg className="device-picker-check" viewBox="0 0 16 16" aria-hidden="true">
-        <path d="m3.5 8 3 3 6-6" />
-      </svg>
+      <Icon name="check" className="device-picker-check" />
     </button>
   )
 
@@ -87,9 +86,7 @@ export function DevicePicker({ devices, value, deleting, onChange, onDelete }: D
           <span className="device-picker-name">{selected?.deviceName ?? 'No devices'}</span>
           {selected && <span className="device-picker-app">{selected.appId}</span>}
         </span>
-        <svg className="device-picker-chevron" viewBox="0 0 16 16" aria-hidden="true">
-          <path d="m5 6 3 3 3-3" />
-        </svg>
+        <Icon name="chevron-down" className="device-picker-chevron" />
       </button>
 
       {open && (
@@ -115,9 +112,7 @@ export function DevicePicker({ devices, value, deleting, onChange, onDelete }: D
                 disabled={deleting || confirmingDelete}
                 onClick={() => void requestDelete()}
               >
-                <svg viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="M3 4.5h10M6 4.5v-2h4v2m-5.5 0 .6 9h5.8l.6-9M6.8 7v4m2.4-4v4" />
-                </svg>
+                <Icon name="trash" />
                 <span>
                   <span>{deleting ? 'Deleting…' : `Delete ${selected.connected ? 'connected' : 'offline'} device`}</span>
                   <small>{selected.deviceName} · {selected.appId}</small>

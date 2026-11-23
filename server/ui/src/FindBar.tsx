@@ -1,3 +1,4 @@
+import { Icon } from './Icon'
 import { useEffect, useRef, useState } from 'react'
 
 /**
@@ -72,9 +73,9 @@ export function FindBar() {
       <span className="dim mono find-count">
         {query ? (result ? `${result.active}/${result.matches}` : '0/0') : ''}
       </span>
-      <button className="ghost icon-btn" title="Previous (Shift+Enter)" onClick={() => step(false)}>↑</button>
-      <button className="ghost icon-btn" title="Next (Enter)" onClick={() => step(true)}>↓</button>
-      <button className="ghost icon-btn" title="Close (Esc)" onClick={close}>✕</button>
+      <button className="ghost icon-btn" title="Previous (Shift+Enter)" onClick={() => step(false)}><Icon name="arrow-up" /></button>
+      <button className="ghost icon-btn" title="Next (Enter)" onClick={() => step(true)}><Icon name="arrow-down" /></button>
+      <button className="ghost icon-btn" title="Close (Esc)" onClick={close}><Icon name="close" /></button>
     </div>
   )
 }

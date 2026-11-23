@@ -1,3 +1,4 @@
+import { Icon } from './Icon'
 import { useEffect, useMemo, useReducer, useRef, useState, useDeferredValue } from 'react'
 import {
   connectStream,
@@ -62,25 +63,6 @@ declare global {
   }
 }
 
-
-function MoonIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-    </svg>
-  )
-}
-
-function SunIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <circle cx="12" cy="12" r="4" />
-      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
-    </svg>
-  )
-}
 
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState)
@@ -375,14 +357,17 @@ export default function App() {
     setMocksOpen('socket')
   }
 
-  // arm a response-phase breakpoint on a request's path (exact-path match, like mocks)
-  const armBreakpoint = (row: HttpRow) => {
-    if (!deviceId) return
-    const path = new URL(row.url, 'http://x').pathname
-    const existing = state.breakpointsByDevice[deviceId] ?? []
-    if (existing.some(r => r.urlPattern === path && r.method === row.method)) return
-    const rule: BreakpointRule = { id: newRuleId(), enabled: true, method: row.method, urlPattern: path, phase: 'response' }
-    api.armBreakpoints(deviceId, [...existing, rule])
+  const setPathBreakpoint = (row: HttpRow, path: string, enable: boolean) => {
+    const rules = state.breakpointsByDevice[row.deviceId] ?? []
+    const matches = (rule: BreakpointRule) => rule.method === row.method && rule.urlPattern === path
+    const existing = rules.find(matches)
+    if (!enable) {
+      api.armBreakpoints(row.deviceId, rules.filter(rule => !(rule.enabled && matches(rule))))
+    } else if (existing) {
+      api.armBreakpoints(row.deviceId, rules.map(rule => rule === existing ? { ...rule, enabled: true } : rule))
+    } else {
+      api.armBreakpoints(row.deviceId, [...rules, { id: newRuleId(), enabled: true, method: row.method, urlPattern: path, phase: 'response' }])
+    }
   }
 
   const resolvePausedHit = (hit: PausedHit, action: 'resume' | 'abort', edits?: { status?: number; headers?: Record<string, string>; body?: string }) => {
@@ -507,16 +492,12 @@ export default function App() {
         <span className="spacer" />
 
         <button className="ghost icon-btn" title="Toggle light/dark theme" onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}>
-          {theme === 'light' ? <MoonIcon /> : <SunIcon />}
+          {theme === 'light' ? <Icon name="moon" /> : <Icon name="sun" />}
         </button>
 
         <div className="settings" ref={settingsRef}>
           <button className="ghost" title="Settings (⌘,)" aria-keyshortcuts="Meta+," onClick={() => setShowSettings(v => !v)}>
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
+            <Icon name="settings" size={17} />
           </button>
           {showSettings && (
             <>
@@ -536,10 +517,7 @@ export default function App() {
                       </span>
                       <button className="settings-version-check" title="Check for updates" aria-label="Check for updates"
                         onClick={() => void checkForUpdate(true)} disabled={updateCheck === 'checking'}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                          strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <path d="M21 12a9 9 0 1 1-2.64-6.36L21 8M21 3v5h-5" />
-                        </svg>
+                        <Icon name="refresh" size={16} />
                       </button>
                     </div>
                   </div>
@@ -567,11 +545,7 @@ export default function App() {
                     </strong>
                     <button className="ghost icon-btn" title="Refresh"
                       onClick={() => void refreshAdbStatus()} disabled={adbStatus === 'loading'}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="23 4 23 10 17 10" />
-                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                      </svg>
+                      <Icon name="refresh" size={14} />
                     </button>
                   </div>
                   <div className="settings-adb-summary">{adbSummary}</div>
@@ -588,7 +562,7 @@ export default function App() {
                   </span>
                   <input type="checkbox" role="switch" aria-label="Follow new traffic" aria-describedby="follow-latest-help"
                     checked={followLatest} onChange={e => setFollowLatest(e.target.checked)} />
-                  <span className="track" aria-hidden="true"><i /></span>
+                  <Icon name={followLatest ? 'toggle-on' : 'toggle-off'} size={28} className="track" />
                 </label>
               </div>
             </>
@@ -617,7 +591,7 @@ export default function App() {
             <>
               <span>Relaunching…</span>
               <div className="update-veil">
-                <span className="update-spinner" aria-hidden />
+                <Icon name="loader" size={22} className="update-spinner" />
                 <span>Relaunching…</span>
               </div>
             </>
@@ -634,7 +608,7 @@ export default function App() {
       )}
 
       {updatedTo && (
-        <div className="update-toast" role="status">✓ Updated to {updatedTo}</div>
+        <div className="update-toast" role="status"><Icon name="check" /> Updated to {updatedTo}</div>
       )}
 
       <main className="content">
@@ -647,7 +621,7 @@ export default function App() {
             onOpenMocks={selectedDevice ? () => setMocksOpen('http') : undefined}
             urlFilter={httpFilter} onUrlFilterChange={setHttpFilter}
             armedBreakpoints={deviceBreakpoints.filter(r => r.enabled)}
-            onMock={mockFromRequest} onArm={armBreakpoint} onResolve={resolvePausedHit}
+            onMock={mockFromRequest} onSetBreakpoint={setPathBreakpoint} onResolve={resolvePausedHit}
             onDisarmAll={disarmAllBreakpoints}
             onClear={() => void api.clearHttpEntries()} />
           <SocketView active={tab === 'socket'} events={filteredSocketEvents} query={deferredSearch} conns={state.socketConns} connUrls={state.connUrls} deviceId={deviceId}

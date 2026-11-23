@@ -60,7 +60,7 @@ if(preview){console.log(`HTTP body mock preview: ${url} (in-memory sample data)`
   await page.addInitScript(()=>localStorage.setItem('sniffer-device','body-test'));
   await page.goto(url);
   await page.locator('tbody tr').filter({hasText:'/messages'}).click();
-  await page.getByRole('button',{name:'Mock this request',exact:true}).click();
+  await page.getByRole('button',{name:'Mock this path',exact:true}).click();
   assert.equal(await page.locator('.rule-conditions').evaluate(el=>el.open),false,'Path only starts collapsed');
   await page.waitForResponse(r=>r.url().endsWith('/api/mocks')&&r.status()===200);
   assert.equal(mocks.http[0].queryParams,undefined,'primary action excludes query');
@@ -70,7 +70,9 @@ if(preview){console.log(`HTTP body mock preview: ${url} (in-memory sample data)`
   await page.getByTitle('Close',{exact:true}).click();
   for(const choice of ['With query','With body']){
    await page.getByRole('button',{name:'Choose conditions for mock this request',exact:true}).click();
-   await page.getByRole('menuitem',{name:choice,exact:false}).filter({hasText:choice==='With query'?'Include captured query':'Include captured JSON'}).click();
+   await page.getByRole('menuitemradio',{name:choice,exact:false}).filter({hasText:choice==='With query'?'Include captured query':'Include captured JSON'}).click();
+   assert.equal(await page.locator('.mocks-modal:visible').count(),0,'choosing a scope does not create a rule');
+   await page.getByRole('button',{name:'Mock '+choice.toLowerCase(),exact:true}).click();
    assert.equal(await page.locator('.rule-conditions').evaluate(el=>el.open),true,'explicit conditions open automatically');
    assert.equal(await page.getByRole('tab',{name:choice==='With query'?/Query parameters/:/Body conditions/}).getAttribute('aria-selected'),'true');
    await page.waitForResponse(r=>r.url().endsWith('/api/mocks')&&r.status()===200);
@@ -81,7 +83,8 @@ if(preview){console.log(`HTTP body mock preview: ${url} (in-memory sample data)`
    await page.getByTitle('Close',{exact:true}).click();
   }
   await page.getByRole('button',{name:'Choose conditions for mock this request',exact:true}).click();
-  await page.getByRole('menuitem',{name:/With query \+ body/}).click();
+  await page.getByRole('menuitemradio',{name:/With query \+ body/}).click();
+  await page.getByRole('button',{name:'Mock with query + body',exact:true}).click();
   assert.equal(await page.locator('.rule-conditions').evaluate(el=>el.open),true,'query and body open automatically');
   assert.equal(await page.getByRole('tab',{name:/Body conditions/}).getAttribute('aria-selected'),'true','body takes priority');
   await page.locator('.rule-conditions summary').click();
@@ -285,15 +288,21 @@ if(preview){console.log(`HTTP body mock preview: ${url} (in-memory sample data)`
   await page.screenshot({path:'/tmp/sniffer-split-actions.png',fullPage:true});
   await page.keyboard.press('Escape');
   const armed=page.waitForResponse(r=>r.url().endsWith('/api/breakpoints')&&r.status()===200);
-  await page.getByRole('button',{name:'Break on path',exact:true}).click();await armed;
+  await page.getByRole('button',{name:'Break on this path',exact:true}).click();await armed;
   assert.equal(breakpoints[0].method,'POST');assert.equal(breakpoints[0].urlPattern,'/messages');
   assert.equal(breakpoints[0].queryParams,undefined);assert.equal(breakpoints[0].bodyMatch,undefined);
+  await page.locator('tbody tr').filter({hasText:'/profile'}).click();
+  await page.getByRole('button',{name:'Mock this path',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Break on this path',exact:true}).click();
+  await page.getByRole('button',{name:'Remove breakpoint',exact:true}).click();
+  await page.getByRole('button',{name:'Break on this path',exact:true}).waitFor();
+  assert.deepEqual(breakpoints.map(rule=>rule.urlPattern),['/messages'],'removing one breakpoint preserves the other');
   for(const path of ['/profile','/form']){
-   await page.locator('tbody tr').filter({hasText:path}).click();
+   if(path!=='/profile') await page.locator('tbody tr').filter({hasText:path}).click();
    await page.getByRole('button',{name:'Choose conditions for mock this request',exact:true}).click();
-   assert.equal(await page.getByRole('menuitem',{name:/With body/}).isDisabled(),true);
-   assert.equal(await page.getByRole('menuitem',{name:/With query \+ body/}).isDisabled(),true);
-   assert.equal(await page.getByRole('menuitem',{name:/^With query(?! \+)/}).isDisabled(),path==='/profile');
+   assert.equal(await page.getByRole('menuitemradio',{name:/With body/}).isDisabled(),true);
+   assert.equal(await page.getByRole('menuitemradio',{name:/With query \+ body/}).isDisabled(),true);
+   assert.equal(await page.getByRole('menuitemradio',{name:/^With query(?! \+)/}).isDisabled(),path==='/profile');
    await page.keyboard.press('Escape');
   }
   // Rule numbers are list positions; selecting, duplicating and deleting never rewrites IDs.
