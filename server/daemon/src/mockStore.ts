@@ -69,6 +69,15 @@ export function validSse(rule: Record<string, unknown>): boolean {
     [e.retry, e.delayMs].every(v => v === undefined || (Number.isInteger(v) && v >= 0 && v <= 300000)))
 }
 
+export function validRequestHeaders(headers: unknown): boolean {
+  if (headers === undefined) return true
+  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) return false
+  const entries = Object.entries(headers)
+  return new Set(entries.map(([key]) => key.toLowerCase())).size === entries.length &&
+    entries.every(([key, value]) => /^[!#$%&'*+.^_`|~A-Za-z0-9-]+$/.test(key) &&
+      typeof value === 'string' && !/[\r\n\0]/.test(value))
+}
+
 export function stripUiOnlyFields(mocks: Mocks, capabilities: string[] = []): Mocks {
   const strip = (rules: unknown[]) => rules.map(r => {
     const { starred: _, ...rest } = r as Record<string, unknown>
@@ -85,10 +94,12 @@ export function stripUiOnlyFields(mocks: Mocks, capabilities: string[] = []): Mo
     } catch { return false }
   }
   const http = mocks.http.filter(r => {
-    const rule = r as { urlPattern?: string; queryParams?: unknown; bodyMatch?: unknown; sequence?: unknown; sse?: unknown; delayOnly?: unknown } | null
+    const rule = r as { urlPattern?: string; requestHeaders?: Record<string, string>; queryParams?: unknown; bodyMatch?: unknown; sequence?: unknown; sse?: unknown; delayOnly?: unknown } | null
     if (rule?.sse != null && (!capabilities.includes('http-sse-mocks') || !validSse(rule))) return false
     if (rule?.sequence != null && (!capabilities.includes('http-sequences') || !validSequence(rule))) return false
     if (!supportsCondition(rule?.bodyMatch, 'http-body-mocks')) return false
+    if (!validRequestHeaders(rule?.requestHeaders)) return false
+    if (Object.keys(rule?.requestHeaders ?? {}).length && !capabilities.includes('http-header-mocks')) return false
     if (typeof rule?.urlPattern === 'string' && rule.urlPattern.split('/').some(part => /^\{[A-Za-z_][A-Za-z0-9_]*\}$/.test(part)) &&
         !capabilities.includes('http-path-templates')) return false
     const query = rule?.queryParams

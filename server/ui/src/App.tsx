@@ -337,7 +337,9 @@ export default function App() {
         r.payload.toLowerCase().includes(q)))
   }, [state.socketEvents, state.connUrls, deviceId, deferredSearch, socketFilter])
 
-  const mockFromRequest = (rule: HttpMockRule, targetDeviceId: string) => {
+  const mockSource = useRef<{ ruleId: string; rowId: string } | null>(null)
+  const mockFromRequest = (rule: HttpMockRule, targetDeviceId: string, sourceId: string) => {
+    mockSource.current = { ruleId: rule.id, rowId: sourceId }
     setDeviceId(targetDeviceId)
     setPendingRule(rule)
     setTab('http')
@@ -640,7 +642,7 @@ export default function App() {
         <MocksView scope={mocksOpen}
           deviceId={deviceId}
           appId={selectedDevice.appId ?? null}
-          capabilities={selectedDevice.capabilities}
+          httpRows={state.http} mockSource={mockSource.current} capabilities={selectedDevice.capabilities}
           supportsQueryMocks={selectedDevice.capabilities.includes('http-query-mocks')}
           supportsSseMocks={selectedDevice.capabilities.includes('http-sse-mocks')}
           supportsBodyMocks={selectedDevice.capabilities.includes('http-body-mocks')}

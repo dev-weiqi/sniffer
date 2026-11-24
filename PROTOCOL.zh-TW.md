@@ -78,11 +78,15 @@
 //   (scheme, host, query and fragment stripped). Empty pattern matches nothing.
 // A whole {name} segment matches one nonempty encoded path segment (name: [A-Za-z_][A-Za-z0-9_]*).
 // All other segments are literal. Templates require http-path-templates.
+// Optional requestHeaders: {"Accept-Language":"zh-TW"}. All specified names must be present
+// at interception time (case-insensitive names, exact values, any repeated value). An empty
+// map adds no condition. Nonempty maps require http-header-mocks. All required capabilities
+// must be present or the daemon omits the entire rule. Response headers are separate.
 // Optional queryParams: { "page": "2" } requires every specified decoded key/value to match.
 //   Extra request parameters are ignored. Keys and values are case-sensitive strings; percent
 //   escapes are decoded and + means space. A repeated key matches if any value equals the rule.
 //   An empty string matches ?key or ?key=, but not a missing key.
-//   Matching rules with nonempty queryParams or bodyMatch win before path-only fallback rules, regardless of
+//   Matching rules with nonempty queryParams, requestHeaders or bodyMatch win before path-only fallback rules, regardless of
 //   list position; the first matching rule wins within each group. No match means real traffic.
 //   SDKs advertise "http-query-mocks" in hello.capabilities. The daemon omits conditional rules
 //   for older SDKs, which would otherwise ignore queryParams and match every page.

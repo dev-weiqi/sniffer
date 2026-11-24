@@ -1,3 +1,4 @@
+import { validRequestHeaders } from './mockStore.js'
 import { replaceJsonFields } from './replaceJsonFields.js'
 import { randomUUID } from 'node:crypto'
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv'
@@ -59,6 +60,7 @@ const httpFields = {
   sequence: sequenceSchema,
   method: nullableText, urlPattern: { ...identifier, description: "Request path. A whole {name} segment matches one nonempty segment, e.g. /users/{id}." }, status: { type: 'integer', minimum: 100, maximum: 599 },
   headers: stringMap, body: text, delayOnly: { type: 'boolean' },
+  requestHeaders: { ...stringMap, description: "Require every specified request header. Names ignore case, values match exactly. Use {} to clear." },
   queryParams: { ...stringMap, propertyNames: { pattern: '\\S' } }, bodyMatch: nullableText,
 }
 const socketFields = {
@@ -216,6 +218,7 @@ function validateConditions(args: Record<string, unknown>) {
 }
 
 function validateMockFields(args: Record<string, unknown>, socket: boolean) {
+  if (!validRequestHeaders(args.requestHeaders)) throw new Error('Invalid requestHeaders names or values')
   for (const key of Object.keys(socket ? httpFields : socketFields)) {
     if (key in args) throw new Error(`${key} is not a ${socket ? 'socket' : 'HTTP'} mock field`)
   }

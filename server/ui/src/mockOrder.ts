@@ -40,9 +40,10 @@ export function usesPathTemplate(pattern: string): boolean {
   return pattern.split('/').some(part => parameterSegment.test(part))
 }
 
-export function httpMatcherSignature(rule: Pick<HttpMockRule, 'method' | 'urlPattern' | 'queryParams' | 'bodyMatch'>): string {
+export function httpMatcherSignature(rule: Pick<HttpMockRule, 'method' | 'urlPattern' | 'queryParams' | 'bodyMatch' | 'requestHeaders'>): string {
   return JSON.stringify([
     rule.method?.toUpperCase() ?? 'ANY', rule.urlPattern.split('/').map(part => parameterSegment.test(part) ? null : part),
+    Object.entries(rule.requestHeaders ?? {}).map(([key, value]) => [key.toLowerCase(), value]).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0),
     Object.entries(rule.queryParams ?? {}).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0),
     conditionSignature(rule.bodyMatch),
   ])

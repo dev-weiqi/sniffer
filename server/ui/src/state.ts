@@ -42,6 +42,7 @@ export interface HttpMockRule {
   urlPattern: string
   /** All specified decoded query values must match; other parameters are ignored. */
   queryParams?: Record<string, string>
+  requestHeaders?: Record<string, string>
   /** JSON object of required request body fields; blank means no body constraint. */
   bodyMatch?: string
   status: number

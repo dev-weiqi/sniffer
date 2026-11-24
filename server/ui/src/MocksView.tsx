@@ -2,10 +2,10 @@ import { Icon } from './Icon'
 import { SseEditor } from './SseEditor'
 import { SequenceEditor } from './SequenceEditor'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import type { HttpMockRule, Mocks, SocketConn, SocketMockRule } from './state'
+import type { HttpRow, HttpMockRule, Mocks, SocketConn, SocketMockRule } from './state'
 import { api } from './state'
-import { newRuleId, prettyJson, prettySocketRule, unwrapJsonString, wrapJsonString } from './util'
-import { usesPathTemplate, ruleConflicts, type RuleReference, applyOrder, byOrder, httpMatcherSignature as httpSig, socketMatcherSignature as socketSig, payloadMatchError, loadIds, loadOrder, orderOf, saveIds, saveOrder } from './mockOrder'
+import { urlParts, newRuleId, prettyJson, prettySocketRule, unwrapJsonString, wrapJsonString } from './util'
+import { matchesHttpPath, usesPathTemplate, ruleConflicts, type RuleReference, applyOrder, byOrder, httpMatcherSignature as httpSig, socketMatcherSignature as socketSig, payloadMatchError, loadIds, loadOrder, orderOf, saveIds, saveOrder } from './mockOrder'
 import { pointAt, resolvePushTarget } from './pushTarget'
 import { buildExportRules, countImportedRules, createFullExportSelection, importedCopies, parseImportedRules, type ExportRuleSelection, type ExportRulesSource, type PushEventRule } from './exportMocks'
 import { useConfirm } from './Confirm'
@@ -95,11 +95,13 @@ function saveSelection(sel: MockSelection) {
   try { localStorage.setItem(selectionKey, JSON.stringify(sel)) } catch { /* private mode */ }
 }
 
-export function MocksView({ scope, deviceId, appId, capabilities, supportsQueryMocks, supportsBodyMocks, supportsSseMocks, supportsSocketPayloadMocks, mocks, conns, pendingRule, pendingSocketRule, pushPrefill, onPendingConsumed, onClose }: {
+export function MocksView({ scope, deviceId, appId, httpRows: trafficRows, mockSource, capabilities, supportsQueryMocks, supportsBodyMocks, supportsSseMocks, supportsSocketPayloadMocks, mocks, conns, pendingRule, pendingSocketRule, pushPrefill, onPendingConsumed, onClose }: {
   /** which panel opened it: the API panel manages HTTP rules, the Socket panel the socket ones */
   scope: 'http' | 'socket'
   deviceId: string | null
   appId: string | null
+  mockSource: { ruleId: string; rowId: string } | null
+  httpRows: HttpRow[]
   capabilities: string[]
   supportsQueryMocks: boolean
   supportsSseMocks: boolean
@@ -270,6 +272,7 @@ export function MocksView({ scope, deviceId, appId, capabilities, supportsQueryM
     badge: r.method ?? 'ANY',
     label: r.name || r.urlPattern || '(new rule)',
     sub: [r.name ? r.urlPattern : '', Object.keys(r.queryParams ?? {}).length ? `${Object.keys(r.queryParams!).length} query parameters` : '',
+      Object.keys(r.requestHeaders ?? {}).length ? `${Object.keys(r.requestHeaders!).length} request headers` : '',
       conditionSummary(r.bodyMatch, 'body')].filter(Boolean).join(' · ') || undefined,
     enabled: r.enabled,
     starred: r.starred,
@@ -377,8 +380,10 @@ export function MocksView({ scope, deviceId, appId, capabilities, supportsQueryM
             <div className="mocks-detail">
               {httpAt < 0 ? <div className="empty">No HTTP rules yet — add one to start mocking</div> : (
                 <HttpRuleEditor deviceId={deviceId} key={`${deviceId}:${draft.http[httpAt].id}`} rule={draft.http[httpAt]} number={httpAt + 1} conflicts={httpConflicts.get(draft.http[httpAt].id) ?? []} onSelectConflict={setSelHttp}
+                  sourceId={mockSource?.ruleId === draft.http[httpAt].id ? mockSource.rowId : undefined}
+                  httpRows={trafficRows} capabilities={capabilities}
                   prefilled={prefilledRules.current.has(draft.http[httpAt].id)}
-                  capabilities={capabilities} supportsQueryMocks={supportsQueryMocks} supportsBodyMocks={supportsBodyMocks} supportsSseMocks={supportsSseMocks}
+                  supportsQueryMocks={supportsQueryMocks} supportsBodyMocks={supportsBodyMocks} supportsSseMocks={supportsSseMocks}
                   onDuplicate={() => {
                     const copy = { ...draft.http[httpAt], id: newRuleId(), createdAt: Date.now() }
                     update({ ...draft, http: [...draft.http.slice(0, httpAt + 1), copy, ...draft.http.slice(httpAt + 1)] })
@@ -593,7 +598,8 @@ function exportCategories(source: ExportRulesSource): ExportCategory[] {
     { key: 'http', title: 'HTTP rules', rows: source.http.map(r => ({
       id: r.id, label: r.name || r.urlPattern || '(new rule)',
       sub: [[`${r.method ?? 'ANY'} ${r.urlPattern}`, Object.keys(r.queryParams ?? {}).length ? `${Object.keys(r.queryParams!).length} query parameters` : ''].filter(Boolean).join('?'),
-        conditionSummary(r.bodyMatch, 'body')].filter(Boolean).join(' · '), badge: String(r.status),
+        Object.keys(r.requestHeaders ?? {}).length ? `${Object.keys(r.requestHeaders!).length} request headers` : '',
+      conditionSummary(r.bodyMatch, 'body')].filter(Boolean).join(' · '), badge: String(r.status),
     })) },
     { key: 'socket', title: 'Socket rules', rows: source.socket.map(r => ({
       id: r.id, label: r.name || r.event || '(new rule)',
@@ -948,13 +954,13 @@ function PushRecordCard({ record, number, conns, deviceId, canStar, onChange, on
   )
 }
 
-type ConditionView = { open: boolean; tab: 'query' | 'body' }
+type ConditionView = { open: boolean; tab: 'query' | 'body' | 'headers' }
 
 function useConditionView(key: string, defaultTab: ConditionView['tab'] = 'query', defaultOpen = false) {
   const [view, setView] = useState<ConditionView>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(key) ?? 'null')
-      return { open: typeof saved?.open === 'boolean' ? saved.open : defaultOpen, tab: saved?.tab === 'query' || saved?.tab === 'body' ? saved.tab : defaultTab }
+      return { open: typeof saved?.open === 'boolean' ? saved.open : defaultOpen, tab: saved?.tab === 'query' || saved?.tab === 'body' || saved?.tab === 'headers' ? saved.tab : defaultTab }
     } catch { return { open: defaultOpen, tab: defaultTab } }
   })
   useEffect(() => {
@@ -987,14 +993,16 @@ function RequestConditions({ open, onToggle, count, summary, children }: {
   )
 }
 
-function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, prefilled, capabilities, supportsQueryMocks, supportsBodyMocks, supportsSseMocks, onChange, onDelete, onDuplicate }: {
+function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, prefilled, sourceId, httpRows, capabilities, supportsQueryMocks, supportsBodyMocks, supportsSseMocks, onChange, onDelete, onDuplicate }: {
   prefilled: boolean
+  sourceId?: string
+  httpRows: HttpRow[]
+  capabilities: string[]
   deviceId: string
   rule: HttpMockRule
   number: number
   conflicts: RuleReference[]
   onSelectConflict: (id: string) => void
-  capabilities: string[]
   supportsQueryMocks: boolean
   supportsSseMocks: boolean
   supportsBodyMocks: boolean
@@ -1009,6 +1017,21 @@ function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, p
   const setConditionTab = (tab: ConditionView['tab']) => setConditionView({ tab })
   const conditionError = payloadMatchError(rule.bodyMatch)
   const bodyCount = conditionError ? 0 : Object.keys(JSON.parse(rule.bodyMatch?.trim() || '{}')).length
+  const requestHeaders = rule.requestHeaders ?? {}
+  const requestHeaderCount = Object.keys(requestHeaders).length
+  const [pickerRevision, setPickerRevision] = useState(0)
+  let capture: HttpRow | undefined
+  if (conditionView.open && conditionTab === 'headers') {
+    for (let i = httpRows.length - 1; i >= 0; i--) {
+      const row = httpRows[i]
+      if (row.deviceId !== deviceId) continue
+      if (sourceId ? row.id === sourceId : ((!rule.method || rule.method.toUpperCase() === row.method.toUpperCase()) &&
+          matchesHttpPath(rule.urlPattern, urlParts(row.url).path))) {
+        capture = row
+        break
+      }
+    }
+  }
   const queryCount = Object.keys(rule.queryParams ?? {}).length
   const [sub, setSub] = useState<'body' | 'headers'>('body')
   const bodyRef = useRef<HTMLTextAreaElement>(null)
@@ -1046,18 +1069,20 @@ function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, p
       </div>
       </div>
       <RuleConflicts conflicts={conflicts} onSelect={onSelectConflict} />
-      <RequestConditions open={conditionView.open} onToggle={open => setConditionView({ open })} count={conditionError ? '!' : queryCount + bodyCount}
-        summary={conditionError ? 'Invalid body condition' : queryCount + bodyCount === 0 ? 'Fallback · no conditions' :
-          [queryCount > 0 && `${queryCount} query`, bodyCount > 0 && `${bodyCount} body`].filter(Boolean).join(' · ')}>
+      <RequestConditions open={conditionView.open} onToggle={open => setConditionView({ open })} count={conditionError ? '!' : queryCount + bodyCount + requestHeaderCount}
+        summary={conditionError ? 'Invalid body condition' : queryCount + bodyCount + requestHeaderCount === 0 ? 'Fallback · no conditions' :
+          [requestHeaderCount > 0 && `${requestHeaderCount} headers`, queryCount > 0 && `${queryCount} query`, bodyCount > 0 && `${bodyCount} body`].filter(Boolean).join(' · ')}>
         <div className="condition-content">
           <div className="rule-tabs condition-tabs" role="tablist" aria-label="Request conditions"
             onKeyDown={e => {
               if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return
               e.preventDefault()
               e.stopPropagation()
-              const next = e.key === 'Home' ? 'query' : e.key === 'End' ? 'body' : conditionTab === 'query' ? 'body' : 'query'
-              setConditionTab(next)
-              e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next === 'query' ? 0 : 1]?.focus()
+              const tabs = ['query', 'body', 'headers'] as const
+              const index = tabs.indexOf(conditionTab)
+              const next = e.key === 'Home' ? 0 : e.key === 'End' ? 2 : (index + (e.key === 'ArrowRight' ? 1 : 2)) % 3
+              setConditionTab(tabs[next])
+              e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus()
             }}>
             <button type="button" role="tab" aria-selected={conditionTab === 'query'} tabIndex={conditionTab === 'query' ? 0 : -1}
               aria-controls={`conditions-${rule.id}`}
@@ -1069,8 +1094,32 @@ function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, p
               data-active={conditionTab === 'body' || undefined} onClick={() => setConditionTab('body')}>
               Body conditions<span className="count">{conditionError ? '!' : bodyCount}</span>
             </button>
+            <button type="button" role="tab" aria-selected={conditionTab === 'headers'} tabIndex={conditionTab === 'headers' ? 0 : -1}
+              aria-controls={`conditions-${rule.id}`} data-active={conditionTab === 'headers' || undefined} onClick={() => setConditionTab('headers')}>
+              Request headers<span className="count">{requestHeaderCount}</span>
+            </button>
           </div>
-          {conditionTab === 'query' ? (
+          {conditionTab === 'headers' ? (
+            <section id={`conditions-${rule.id}`} className="condition-panel" role="tabpanel" aria-label="Request headers">
+              {capture && Object.keys(capture.reqHeaders).length > 0 && <details>
+                <summary>{sourceId ? 'Choose from source request' : 'Choose from latest request'}</summary>
+                <div className="hint mono">{capture.method} {capture.url}</div>
+                {Object.entries(capture.reqHeaders).map(([name, value]) => {
+                  const key = Object.keys(requestHeaders).find(k => k.toLowerCase() === name.toLowerCase())
+                  return <label key={name} className="rule-row"><input type="checkbox" checked={key !== undefined} onChange={e => {
+                    const next = { ...requestHeaders, [name]: value }
+                    if (!e.target.checked) {
+                      delete next[name]
+                      if (key !== undefined) delete next[key]
+                    }
+                    onChange({ ...rule, requestHeaders: next })
+                    setPickerRevision(n => n + 1)
+                  }} /> <span className="mono">{name}</span><span className="hint">{value}</span></label>
+                })}
+              </details>}
+              <HeadersEditor key={pickerRevision} value={requestHeaders} onChange={next => onChange({ ...rule, requestHeaders: next })} />
+            </section>
+          ) : conditionTab === 'query' ? (
             <section id={`conditions-${rule.id}`} className="condition-panel query-params" role="tabpanel" aria-label="Query parameters">
               <div className="condition-heading">
                 <span>Query parameters</span>
@@ -1103,6 +1152,8 @@ function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, p
       {conditionError && <div className="hint dup-warning" role="alert">{conditionError}</div>}
       {usesPathTemplate(rule.urlPattern) && !capabilities.includes('http-path-templates') &&
         <p className="hint warn">Update the device SDK to use path templates.</p>}
+      {requestHeaderCount > 0 && !capabilities.includes('http-header-mocks') &&
+        <p className="hint warn">Update the device SDK to use request header matching.</p>}
       {!supportsQueryMocks && queryCount > 0 && (
         <p className="hint warn">Update the device SDK to use query matching. This rule is not sent to this device.</p>
       )}

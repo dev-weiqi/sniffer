@@ -177,3 +177,12 @@ assertEqual(stripUiOnlyFields(streamRules).http.length, 0, 'old SDK never receiv
 assertEqual(stripUiOnlyFields(streamRules, ['http-sse-mocks']).http.length, 1, 'SSE capable SDK receives stream')
 assertEqual(stripUiOnlyFields({ http: [{ sse: { events: [{ id: 'bad\nid' }] } }], socket: [] }, ['http-sse-mocks']).http.length, 0, 'SSE field injection rejected')
 assertEqual(JSON.stringify(parseMockStoreJson(JSON.stringify({ devices: { d: streamRules }, shared: {} })).devices.d), JSON.stringify(streamRules), 'SSE survives persistence')
+
+const templated = { http: [{ id: 't', urlPattern: '/users/{id}', requestHeaders: { Accept: 'text/plain' } }], socket: [] }
+for (const caps of [[], ['http-header-mocks'], ['http-path-templates']]) {
+  assertEqual(stripUiOnlyFields(templated, caps).http.length, 0, 'all required capabilities gate the entire rule')
+}
+assertEqual(stripUiOnlyFields(templated, ['http-header-mocks', 'http-path-templates']).http.length, 1, 'capable device gets combined conditions')
+for (const requestHeaders of [null, [], { 'Bad Name': 'x' }, { A: 'x', a: 'y' }, { A: 1 }]) {
+  assertEqual(stripUiOnlyFields({ http: [{ requestHeaders }], socket: [] }, ['http-header-mocks']).http.length, 0, 'invalid header rule never synced')
+}

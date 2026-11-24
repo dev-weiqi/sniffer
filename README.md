@@ -30,7 +30,7 @@ Rules run inside the SDK on the selected device. HTTP mocks answer before the ne
 socket ack rules answer locally. Mock bodies support `${randomId}`, `${now}` and
 `${randomString(min~max)}`.
 
-Use `/users/{id}` in an HTTP mock to match a single path segment. HTTP rules can combine **Query parameters** and JSON **Body conditions**. Every specified
+Use `/users/{id}` in an HTTP mock to match a single path segment. Under **Request conditions**, combine **Request headers**, **Query parameters**, and JSON **Body conditions**. Select headers from the latest matching request or add them manually. Every specified
 condition must match; other object fields are ignored. **Mock this path** defaults to
 **Path only**. Choose the captured query, complete JSON object body, or both from the menu, then press the main button to create the rule.
 **Mock this ack** defaults to **Event only**; its menu can include JSON object fields from
@@ -40,7 +40,7 @@ SDK must support the selected conditions; update older SDKs before using them.
 HTTP and Socket editors keep **Request conditions** collapsed by default. Creating a mock
 with captured conditions expands them automatically and selects the matching tab (Body when
 both query and body are included). Each device's
-rules remember their expanded state and the selected Query/Body tab in this browser,
+rules remember their expanded state and the selected condition tab in this browser,
 including after closing the panel or reloading. Delay settings remain beside the response.
 **Break on this path** matches the HTTP method and path only, ignoring query and body conditions. Choose **Remove breakpoint** to remove that breakpoint.
 

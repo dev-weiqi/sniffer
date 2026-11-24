@@ -39,8 +39,10 @@ object MockRegistry {
 
     fun matchHttp(method: String, url: String): HttpMockRule? = matchHttp(method, url, null)
 
-    fun matchHttp(method: String, url: String, body: String?): HttpMockRule? = mockLocked {
-        val rule = findHttp(method, url, body) ?: return@mockLocked null
+    fun matchHttp(method: String, url: String, body: String?): HttpMockRule? = matchHttp(method, url, body) { null }
+
+    fun matchHttp(method: String, url: String, body: String?, headerValues: (String) -> List<String>?): HttpMockRule? = mockLocked {
+        val rule = findHttp(method, url, body, headerValues) ?: return@mockLocked null
         if (rule.sse != null && (rule.delayOnly || rule.sequence != null || !rule.sse.valid() || rule.status != 200)) return@mockLocked null
         val sequence = rule.sequence ?: return@mockLocked rule.also { reportHit(it.id, it.syncRevision) }
         // Invalid imported rules must never turn into an unrestricted static mock.
@@ -65,7 +67,7 @@ object MockRegistry {
         if (revision != null) runCatching { Sniffer.report(MockHitMsg(id, revision, now(), stepIndex)) }
     }
 
-    private fun findHttp(method: String, url: String, body: String?): HttpMockRule? {
+    private fun findHttp(method: String, url: String, body: String?, headerValues: (String) -> List<String>?): HttpMockRule? {
         val actual by lazy { body?.takeIf { it.length <= MAX_BODY_CHARS }?.let(::parseJson) }
         val path = pathOf(url)
         val query by lazy {
@@ -83,7 +85,8 @@ object MockRegistry {
             val condition = rule.bodyMatch?.takeUnless { it.isBlank() }
             val expected = condition?.let { parseJson(it) as? JsonObject }
             if (condition != null && expected == null) continue
-            if (rule.queryParams.isEmpty() && expected.isNullOrEmpty()) {
+            if (!rule.requestHeaders.all { (name, value) -> headerValues(name)?.contains(value) == true }) continue
+            if (rule.requestHeaders.isEmpty() && rule.queryParams.isEmpty() && expected.isNullOrEmpty()) {
                 if (fallback == null) fallback = rule
             } else if (rule.queryParams.all { (key, value) ->
                 key.isNotBlank() && query?.contains(key to value) == true

@@ -60,6 +60,16 @@ class SnifferInterceptorTest {
         }.apply { isDaemon = true }.start()
     }
 
+    @Test fun repeated_request_header_matches_any_exact_value() {
+        MockRegistry.update(MockRules(http = listOf(HttpMockRule(id = "headers", urlPattern = "/users/{id}",
+            requestHeaders = mapOf("X-Test" to "Yes"), body = "matched"))))
+        val client = jsonClient()
+        val request = Request.Builder().url("http://example.test/users/42").addHeader("x-test", "yes")
+        assertEquals("""{"real":true}""", client.newCall(request.build()).execute().use { it.body.string() })
+        request.addHeader("x-test", "Yes")
+        assertEquals("matched", client.newCall(request.build()).execute().use { it.body.string() })
+    }
+
     @Test fun exhausted_sequence_does_not_fall_through() {
         MockRegistry.update(MockRules(http = listOf(HttpMockRule(id = "sequence", urlPattern = "/sequence",
             sequence = dev.weiqi.sniffer.core.HttpSequence(listOf(dev.weiqi.sniffer.core.HttpResponseStep(body = "first")), "stop")))))

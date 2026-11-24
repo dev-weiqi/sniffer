@@ -206,6 +206,7 @@ data class HttpMockRule(
     val sse: MockSseStream? = null,
     @kotlinx.serialization.Transient val stepIndex: Int? = null,
     @kotlinx.serialization.Transient val syncRevision: String? = null,
+    val requestHeaders: Map<String, String> = emptyMap(),
 )
 
 @Serializable

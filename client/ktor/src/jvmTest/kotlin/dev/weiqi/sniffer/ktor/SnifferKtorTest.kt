@@ -75,6 +75,21 @@ class SnifferKtorTest {
         setReportSink(null)
     }
 
+    @Test fun path_template_and_all_headers_select_the_mock() = runBlocking {
+        MockRegistry.update(MockRules(http = listOf(HttpMockRule(id = "headers", urlPattern = "/users/{id}",
+            requestHeaders = mapOf("accept-language" to "zh-TW", "X-Version" to "2"), body = "matched"))))
+        val client = HttpClient(MockEngine { respond("real") }) { install(SnifferKtor) }
+        try {
+            val url = "http://example.test/users/42"
+            assertEquals("real", client.get(url) { headers.append("X-Version", "2") }.bodyAsText())
+            assertEquals("matched", client.get(url) {
+                headers.append("Accept-Language", "en")
+                headers.append("Accept-Language", "zh-TW")
+                headers.append("x-version", "2")
+            }.bodyAsText())
+        } finally { client.close() }
+    }
+
     @Test fun sequence_exhaustion_never_reaches_engine() = runBlocking {
         MockRegistry.update(MockRules(http = listOf(HttpMockRule(id = "sequence", urlPattern = "/sequence",
             sequence = dev.weiqi.sniffer.core.HttpSequence(listOf(dev.weiqi.sniffer.core.HttpResponseStep(body = "first")), "stop")))))

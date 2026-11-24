@@ -97,6 +97,8 @@ HTTP 請求與回應是共用 ID 的兩則訊息。method、status、URL 與 use
 
 HTTP 必填 `urlPattern`，比對不含 scheme、host、query 的請求路徑。整段 `{id}` 可比對一個非空路徑區段，需有 `http-path-templates` 能力。選填欄位為 `method`（null 表示不限）、`status`（預設 200）、`headers`、`body`、`delayOnly`、`queryParams`（值為字串）、`bodyMatch`（以字串表示的 JSON 物件）。`delayOnly: true` 只延遲真實請求，不產生模擬回應。
 
+例如 `create_mock({"urlPattern":"/users/{id}","requestHeaders":{"Accept-Language":"zh-TW","X-Version":"2"}})` 要求兩個請求標頭都符合。名稱不分大小寫，值精確比對，同名標頭有任一值符合即可。`update_mock` 會取代整份標頭條件，傳入 `requestHeaders: {}` 即可清除。非空條件需要 `http-header-mocks` 能力。`headers` 仍用來設定回應標頭。
+
 Socket 必須指定 `type: "socket"` 與 `event`。選填欄位為 `transport`（預設 `socketio`，或 `ktor-ws`）、`ackPayload`、`payloadMatch`（以字串表示的 JSON 物件）、`pushEvent`、`pushPayload`。Socket.IO 的 ack／push payload 是 JSON 參數陣列。Ktor WS 使用原始文字訊框，`event` 比對送出內容的子字串，`ackPayload` 是回覆訊框。`pushEvent`／`pushPayload` 只適用於 Socket.IO 的事件回覆。
 
 將 `bodyMatch`／`payloadMatch` 設為 null 或空字串即可移除條件。Query、body、payload 條件分別需要 SDK 的 `http-query-mocks`、`http-body-mocks`、`socket-payload-mocks` 能力，背景服務不會將不支援的條件規則傳給舊 SDK。內容與回覆支援 `${randomId}`、`${now}`、`${randomString(min~max)}`。無效參數會在寫入前遭拒絕。

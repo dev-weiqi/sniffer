@@ -113,6 +113,8 @@ Optional fields: `method` (null matches any), `status` (default 200), `headers`,
 `body`, `delayOnly`, `queryParams` (string values), `bodyMatch` (a JSON object encoded
 as a string). `delayOnly: true` delays the real request instead of mocking a response.
 
+Use `create_mock({"urlPattern":"/users/{id}","requestHeaders":{"Accept-Language":"zh-TW","X-Version":"2"}})` to require both request headers. Header names ignore case. Any one exact value on a repeated header satisfies that condition. `update_mock` replaces the map, and `requestHeaders: {}` clears it. Nonempty maps require `http-header-mocks`. The `headers` field still sets response headers.
+
 Socket requires `type: "socket"` and `event`. Optional fields: `transport`
 (`socketio` by default, or `ktor-ws`), `ackPayload`, `payloadMatch` (a JSON object
 encoded as a string), `pushEvent`, `pushPayload`. Socket.IO ack/push payloads are

@@ -20,6 +20,11 @@ function assert(condition: unknown, message: string): asserts condition {
 const rule = (id: string) => ({ id })
 const idsOf = (items: { id: string }[]) => items.map(r => r.id).join(',')
 
+assert(httpMatcherSignature({method: 'GET', urlPattern: '/users/{uid}', requestHeaders: { Accept: 'en' } }) ===
+  httpMatcherSignature({method: 'GET', urlPattern: '/users/{id}', requestHeaders: { accept: 'en' } }), 'parameter names and header casing do not change matching')
+assert(httpMatcherSignature({method: 'GET', urlPattern: '/users', requestHeaders: { Accept: 'EN' } }) !==
+  httpMatcherSignature({method: 'GET', urlPattern: '/users', requestHeaders: { Accept: 'en' } }), 'header values remain case sensitive')
+
 const matcher = { method: 'GET', urlPattern: '/items' }
 assert(httpMatcherSignature(matcher) === httpMatcherSignature({ ...matcher, queryParams: {} }), 'empty query preserves legacy matcher')
 assert(httpMatcherSignature({ ...matcher, queryParams: { page: '1' } }) !==

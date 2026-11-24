@@ -82,7 +82,7 @@ internal class SnifferInterceptor(
         var injectedDelayMs = 0L
         try {
             val requestBody = reportRequest(id, request)
-            val rule = MockRegistry.matchHttp(request.method, request.url.toString(), requestBody)
+            val rule = MockRegistry.matchHttp(request.method, request.url.toString(), requestBody, request.headers::values)
             if (rule != null) {
                 if (rule.delayMs > 0) Thread.sleep(rule.delayMs)
                 if (rule.delayOnly) injectedDelayMs = rule.delayMs

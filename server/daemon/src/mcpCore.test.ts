@@ -175,14 +175,17 @@ try {
 ctx = makeDaemon()
 let nextId = 0
 runtime = createMcpRuntime({ daemon: ctx.daemon, appId: 'app', randomId: () => `new-${++nextId}` })
-await runtime.call('create_mock', { urlPattern: '/pages', queryParams: { page: '2' }, bodyMatch: '{"limit":20}', delayOnly: true, delayMs: 50, starred: true, name: 'Pages' })
+await runtime.call('create_mock', { urlPattern: '/pages/{id}', requestHeaders: { 'Accept-Language': 'zh-TW' }, queryParams: { page: '2' }, bodyMatch: '{"limit":20}', delayOnly: true, delayMs: 50, starred: true, name: 'Pages' })
 let saved = ctx.calls.at(-1)!.body as { http: Array<Record<string, unknown>>; socket: Array<Record<string, unknown>> }
 assertEqual((saved.http[0].queryParams as Record<string, string>).page, '2', 'query params saved')
+assertEqual(saved.http[0].urlPattern, '/pages/{id}', 'template survives creation')
+assertEqual((saved.http[0].requestHeaders as Record<string, string>)['Accept-Language'], 'zh-TW', 'header condition saved')
 assertEqual(saved.http[0].bodyMatch, '{"limit":20}', 'body condition saved')
 assertEqual(saved.http[0].starred, true, 'shared flag saved')
 assertEqual(saved.http[1].id, 'h1', 'existing rule retained after new priority rule')
-await runtime.call('update_mock', { id: 'new-1', method: null, bodyMatch: null })
+await runtime.call('update_mock', { id: 'new-1', method: null, bodyMatch: null, requestHeaders: {} })
 saved = ctx.calls.at(-1)!.body as typeof saved
+assertEqual(Object.keys(saved.http[0].requestHeaders as object).length, 0, 'header conditions cleared')
 assertEqual(saved.http[0].bodyMatch, null, 'condition can be cleared')
 assertEqual((saved.http[0].queryParams as Record<string, string>).page, '2', 'unmentioned condition survives update')
 await runtime.call('create_mock', { type: 'socket', event: 'pages', transport: 'socketio', payloadMatch: '{"page":2}', pushEvent: 'pages:result', pushPayload: '[{"items":[]}]' })
@@ -201,6 +204,7 @@ for (const [name, args] of [
   ['clear_traffic', { type: 'typo' }],
   ['clear_traffic', { deviceId: 'd1' }],
   ['list_traffic', { limit: -1 }],
+  ['create_mock', { urlPattern: '/x', requestHeaders: { Lang: 'en', lang: 'zh' } }],
   ['create_mock', { urlPattern: '/x', headers: { a: 123 } }],
   ['create_mock', { urlPattern: '/x', queryParams: { ' ': 'x' } }],
   ['create_mock', { urlPattern: '/x', bodyMatch: '[]' }],

@@ -76,7 +76,7 @@ export function HttpView({ active, followLatest, emptyState, mockCount, mockTota
   urlFilter: TrafficFilter
   onUrlFilterChange: (filter: TrafficFilter) => void
   armedBreakpoints: BreakpointRule[]
-  onMock: (rule: HttpMockRule, deviceId: string) => void
+  onMock: (rule: HttpMockRule, deviceId: string, sourceId: string) => void
   onSetBreakpoint: (row: HttpRow, path: string, enable: boolean) => void
   onResolve: (hit: PausedHit, action: 'resume' | 'abort', edits?: ResolveEdits) => void
   onDisarmAll: () => void
@@ -369,7 +369,7 @@ export function HttpDetail({ row, query, armedBreakpoints, onMock, onSetBreakpoi
   row: HttpRow
   query: string
   armedBreakpoints: BreakpointRule[]
-  onMock: (rule: HttpMockRule, deviceId: string) => void
+  onMock: (rule: HttpMockRule, deviceId: string, sourceId: string) => void
   onSetBreakpoint: (row: HttpRow, path: string, enable: boolean) => void
   onClose: () => void
 }) {
@@ -380,7 +380,7 @@ export function HttpDetail({ row, query, armedBreakpoints, onMock, onSetBreakpoi
 
   const breakpointPath = URL.canParse(row.url, 'http://x') ? new URL(row.url, 'http://x').pathname : ''
   const armed = armedBreakpoints.some(rule => rule.method === row.method && rule.urlPattern === breakpointPath)
-  const mockThis = () => onMock(httpMockFromRequest(row), row.deviceId)
+  const mockThis = () => onMock(httpMockFromRequest(row), row.deviceId, row.id)
   const hasQuery = queryParams.length > 0
   const hasBody = !row.reqTruncated && !!jsonObjectCondition(row.reqBody)
 
@@ -390,11 +390,11 @@ export function HttpDetail({ row, query, armedBreakpoints, onMock, onSetBreakpoi
         <MockAction key={`${row.deviceId}:${row.id}`} label="Mock this request" scope="Path only" onDefault={mockThis} options={[
           { label: 'Path only', actionLabel: 'Mock this path', description: 'Any query or body', onSelect: mockThis },
           { label: 'With query', actionLabel: 'Mock with query', description: hasQuery ? 'Include captured query parameters' : 'No query parameters captured', disabled: !hasQuery,
-            onSelect: () => onMock(httpMockFromRequest(row, 'query'), row.deviceId) },
+            onSelect: () => onMock(httpMockFromRequest(row, 'query'), row.deviceId, row.id) },
           { label: 'With body', actionLabel: 'Mock with body', description: hasBody ? 'Include captured JSON body fields' : 'No complete, nonempty JSON object captured', disabled: !hasBody,
-            onSelect: () => onMock(httpMockFromRequest(row, 'body'), row.deviceId) },
+            onSelect: () => onMock(httpMockFromRequest(row, 'body'), row.deviceId, row.id) },
           { label: 'With query + body', actionLabel: 'Mock with query + body', description: 'Include both sets of conditions', disabled: !hasQuery || !hasBody,
-            onSelect: () => onMock(httpMockFromRequest(row, 'both'), row.deviceId) },
+            onSelect: () => onMock(httpMockFromRequest(row, 'both'), row.deviceId, row.id) },
         ]} />
         <div className="detail-break-action">
           <button disabled={!breakpointPath} title={armed ? 'Remove this method and path breakpoint' : 'Pause future responses matching this method and path. Query and body are ignored.'}
