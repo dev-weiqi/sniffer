@@ -85,10 +85,12 @@ export function stripUiOnlyFields(mocks: Mocks, capabilities: string[] = []): Mo
     } catch { return false }
   }
   const http = mocks.http.filter(r => {
-    const rule = r as { queryParams?: unknown; bodyMatch?: unknown; sequence?: unknown; sse?: unknown; delayOnly?: unknown } | null
+    const rule = r as { urlPattern?: string; queryParams?: unknown; bodyMatch?: unknown; sequence?: unknown; sse?: unknown; delayOnly?: unknown } | null
     if (rule?.sse != null && (!capabilities.includes('http-sse-mocks') || !validSse(rule))) return false
     if (rule?.sequence != null && (!capabilities.includes('http-sequences') || !validSequence(rule))) return false
     if (!supportsCondition(rule?.bodyMatch, 'http-body-mocks')) return false
+    if (typeof rule?.urlPattern === 'string' && rule.urlPattern.split('/').some(part => /^\{[A-Za-z_][A-Za-z0-9_]*\}$/.test(part)) &&
+        !capabilities.includes('http-path-templates')) return false
     const query = rule?.queryParams
     if (query === undefined) return true
     if (!query || typeof query !== 'object' || Array.isArray(query)) return false

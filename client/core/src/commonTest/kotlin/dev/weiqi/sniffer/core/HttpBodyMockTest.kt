@@ -6,6 +6,18 @@ import kotlin.test.assertEquals
 
 class HttpBodyMockTest {
     @Test
+    fun named_segment_matches_one_nonempty_raw_segment() {
+        MockRegistry.update(MockRules(http = listOf(HttpMockRule(id = "user", urlPattern = "/users/{id}"))))
+        try {
+            assertEquals("user", MockRegistry.matchHttp("GET", "/users/a%2Fb?q=1")?.id)
+            assertNull(MockRegistry.matchHttp("GET", "/users/a/b"))
+            assertNull(MockRegistry.matchHttp("GET", "/users/"))
+        } finally {
+            MockRegistry.update(MockRules())
+        }
+    }
+
+    @Test
     fun body_condition_must_not_become_a_path_only_rule() {
         MockRegistry.update(SnifferJson.decodeFromString<MockRules>(
             """{"http":[{"id":"conditional","urlPattern":"/messages","bodyMatch":"{\"limit\":20}"}]}"""

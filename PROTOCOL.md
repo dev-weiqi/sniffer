@@ -78,8 +78,10 @@ Timestamps are epoch millis. Bodies are strings; binary bodies are `null`. Bodie
               "status": 200, "headers": {}, "body": "{...}", "delayMs": 0 } ],
   "socket": [ { "id": "s1", "enabled": true, "transport": "socketio", "event": "chat:send",
                 "ackPayload": "[{\"ok\":true}]", "delayMs": 0 } ] }
-// http rule: method null = any; urlPattern is an exact match against the request path
+// HTTP rule: method null = any. Match the raw request path
 //   (scheme, host, query and fragment stripped). Empty pattern matches nothing.
+// A whole {name} segment matches one nonempty encoded path segment (name: [A-Za-z_][A-Za-z0-9_]*).
+// All other segments are literal. Templates require http-path-templates.
 // Optional queryParams: { "page": "2" } requires every specified decoded key/value to match.
 //   Extra request parameters are ignored. Keys and values are case-sensitive strings; percent
 //   escapes are decoded and + means space. A repeated key matches if any value equals the rule.
@@ -131,7 +133,7 @@ Timestamps are epoch millis. Bodies are strings; binary bodies are `null`. Bodie
 { "type": "breakpoint-rules",
   "rules": [ { "id": "b1", "enabled": true, "method": "GET",
                "urlPattern": "/api/orders", "phase": "response" } ] }
-// same matching semantics as a mock (method null = any; urlPattern is an exact path match).
+// Breakpoints use an exact path. A null method matches any method.
 //   The SDK pauses a matching response (before the app reads it) and blocks until the resolve
 //   below. Golden rule 3: a pause only happens while connected, and the SDK releases every paused
 //   call (as if resumed unchanged) if the daemon connection drops.

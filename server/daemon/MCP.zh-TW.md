@@ -95,7 +95,7 @@ HTTP 請求與回應是共用 ID 的兩則訊息。method、status、URL 與 use
 
 共用欄位為 `enabled`、`name`、`starred`、`delayMs`（非負毫秒）。`starred` 會將規則分享給相同 App ID 的裝置，修改或刪除也影響這些裝置。新規則放在所屬群組前面，共享規則優先於裝置專屬規則。ID 與建立時間由工具產生。
 
-HTTP 必填 `urlPattern`，精確比對不含 scheme、host、query 的請求路徑。選填欄位為 `method`（null 表示不限）、`status`（預設 200）、`headers`、`body`、`delayOnly`、`queryParams`（值為字串）、`bodyMatch`（以字串表示的 JSON 物件）。`delayOnly: true` 只延遲真實請求，不產生模擬回應。
+HTTP 必填 `urlPattern`，比對不含 scheme、host、query 的請求路徑。整段 `{id}` 可比對一個非空路徑區段，需有 `http-path-templates` 能力。選填欄位為 `method`（null 表示不限）、`status`（預設 200）、`headers`、`body`、`delayOnly`、`queryParams`（值為字串）、`bodyMatch`（以字串表示的 JSON 物件）。`delayOnly: true` 只延遲真實請求，不產生模擬回應。
 
 Socket 必須指定 `type: "socket"` 與 `event`。選填欄位為 `transport`（預設 `socketio`，或 `ktor-ws`）、`ackPayload`、`payloadMatch`（以字串表示的 JSON 物件）、`pushEvent`、`pushPayload`。Socket.IO 的 ack／push payload 是 JSON 參數陣列。Ktor WS 使用原始文字訊框，`event` 比對送出內容的子字串，`ackPayload` 是回覆訊框。`pushEvent`／`pushPayload` 只適用於 Socket.IO 的事件回覆。
 

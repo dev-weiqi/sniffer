@@ -640,6 +640,7 @@ export default function App() {
         <MocksView scope={mocksOpen}
           deviceId={deviceId}
           appId={selectedDevice.appId ?? null}
+          capabilities={selectedDevice.capabilities}
           supportsQueryMocks={selectedDevice.capabilities.includes('http-query-mocks')}
           supportsSseMocks={selectedDevice.capabilities.includes('http-sse-mocks')}
           supportsBodyMocks={selectedDevice.capabilities.includes('http-body-mocks')}

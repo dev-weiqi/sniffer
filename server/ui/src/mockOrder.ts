@@ -26,9 +26,23 @@ export function ruleConflicts<T extends { id: string; enabled: boolean }>(rules:
   return conflicts
 }
 
+const parameterSegment = /^\{[A-Za-z_][A-Za-z0-9_]*\}$/
+
+export function matchesHttpPath(pattern: string, path: string): boolean {
+  if (pattern === path || !pattern.includes('{')) return pattern === path
+  const expected = pattern.split('/')
+  const actual = path.split('/')
+  return expected.length === actual.length && expected.every((part, i) =>
+    part === actual[i] || (parameterSegment.test(part) && actual[i].length > 0))
+}
+
+export function usesPathTemplate(pattern: string): boolean {
+  return pattern.split('/').some(part => parameterSegment.test(part))
+}
+
 export function httpMatcherSignature(rule: Pick<HttpMockRule, 'method' | 'urlPattern' | 'queryParams' | 'bodyMatch'>): string {
   return JSON.stringify([
-    rule.method?.toUpperCase() ?? 'ANY', rule.urlPattern,
+    rule.method?.toUpperCase() ?? 'ANY', rule.urlPattern.split('/').map(part => parameterSegment.test(part) ? null : part),
     Object.entries(rule.queryParams ?? {}).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0),
     conditionSignature(rule.bodyMatch),
   ])

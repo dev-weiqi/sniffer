@@ -57,7 +57,7 @@ const sseSchema = { type: ['object', 'null'], additionalProperties: false, requi
 const httpFields = {
   sse: sseSchema,
   sequence: sequenceSchema,
-  method: nullableText, urlPattern: identifier, status: { type: 'integer', minimum: 100, maximum: 599 },
+  method: nullableText, urlPattern: { ...identifier, description: "Request path. A whole {name} segment matches one nonempty segment, e.g. /users/{id}." }, status: { type: 'integer', minimum: 100, maximum: 599 },
   headers: stringMap, body: text, delayOnly: { type: 'boolean' },
   queryParams: { ...stringMap, propertyNames: { pattern: '\\S' } }, bodyMatch: nullableText,
 }

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { HttpMockRule, Mocks, SocketConn, SocketMockRule } from './state'
 import { api } from './state'
 import { newRuleId, prettyJson, prettySocketRule, unwrapJsonString, wrapJsonString } from './util'
-import { ruleConflicts, type RuleReference, applyOrder, byOrder, httpMatcherSignature as httpSig, socketMatcherSignature as socketSig, payloadMatchError, loadIds, loadOrder, orderOf, saveIds, saveOrder } from './mockOrder'
+import { usesPathTemplate, ruleConflicts, type RuleReference, applyOrder, byOrder, httpMatcherSignature as httpSig, socketMatcherSignature as socketSig, payloadMatchError, loadIds, loadOrder, orderOf, saveIds, saveOrder } from './mockOrder'
 import { pointAt, resolvePushTarget } from './pushTarget'
 import { buildExportRules, countImportedRules, createFullExportSelection, importedCopies, parseImportedRules, type ExportRuleSelection, type ExportRulesSource, type PushEventRule } from './exportMocks'
 import { useConfirm } from './Confirm'
@@ -95,11 +95,12 @@ function saveSelection(sel: MockSelection) {
   try { localStorage.setItem(selectionKey, JSON.stringify(sel)) } catch { /* private mode */ }
 }
 
-export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supportsBodyMocks, supportsSseMocks, supportsSocketPayloadMocks, mocks, conns, pendingRule, pendingSocketRule, pushPrefill, onPendingConsumed, onClose }: {
+export function MocksView({ scope, deviceId, appId, capabilities, supportsQueryMocks, supportsBodyMocks, supportsSseMocks, supportsSocketPayloadMocks, mocks, conns, pendingRule, pendingSocketRule, pushPrefill, onPendingConsumed, onClose }: {
   /** which panel opened it: the API panel manages HTTP rules, the Socket panel the socket ones */
   scope: 'http' | 'socket'
   deviceId: string | null
   appId: string | null
+  capabilities: string[]
   supportsQueryMocks: boolean
   supportsSseMocks: boolean
   supportsBodyMocks: boolean
@@ -377,7 +378,7 @@ export function MocksView({ scope, deviceId, appId, supportsQueryMocks, supports
               {httpAt < 0 ? <div className="empty">No HTTP rules yet — add one to start mocking</div> : (
                 <HttpRuleEditor deviceId={deviceId} key={`${deviceId}:${draft.http[httpAt].id}`} rule={draft.http[httpAt]} number={httpAt + 1} conflicts={httpConflicts.get(draft.http[httpAt].id) ?? []} onSelectConflict={setSelHttp}
                   prefilled={prefilledRules.current.has(draft.http[httpAt].id)}
-                  supportsQueryMocks={supportsQueryMocks} supportsBodyMocks={supportsBodyMocks} supportsSseMocks={supportsSseMocks}
+                  capabilities={capabilities} supportsQueryMocks={supportsQueryMocks} supportsBodyMocks={supportsBodyMocks} supportsSseMocks={supportsSseMocks}
                   onDuplicate={() => {
                     const copy = { ...draft.http[httpAt], id: newRuleId(), createdAt: Date.now() }
                     update({ ...draft, http: [...draft.http.slice(0, httpAt + 1), copy, ...draft.http.slice(httpAt + 1)] })
@@ -986,13 +987,14 @@ function RequestConditions({ open, onToggle, count, summary, children }: {
   )
 }
 
-function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, prefilled, supportsQueryMocks, supportsBodyMocks, supportsSseMocks, onChange, onDelete, onDuplicate }: {
+function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, prefilled, capabilities, supportsQueryMocks, supportsBodyMocks, supportsSseMocks, onChange, onDelete, onDuplicate }: {
   prefilled: boolean
   deviceId: string
   rule: HttpMockRule
   number: number
   conflicts: RuleReference[]
   onSelectConflict: (id: string) => void
+  capabilities: string[]
   supportsQueryMocks: boolean
   supportsSseMocks: boolean
   supportsBodyMocks: boolean
@@ -1037,7 +1039,7 @@ function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, p
           <option value="">ANY</option>
           {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map(m => <option key={m}>{m}</option>)}
         </select>
-        <input ref={urlRef} className="grow mono" placeholder="exact path, e.g. /api/users/3" value={rule.urlPattern}
+        <input ref={urlRef} className="grow mono" aria-label="Request path" title="Use {name} for one path segment" placeholder="Path, e.g. /api/users/{id}" value={rule.urlPattern}
           onChange={e => onChange({ ...rule, urlPattern: e.target.value })} />
         <button className="ghost icon-btn" title="Duplicate rule" onClick={() => onDuplicate()}><Icon name="copy" size={16} /></button>
         <button className="ghost icon-btn danger" title="Delete rule" onClick={onDelete}><Icon name="trash" size={16} /></button>
@@ -1099,6 +1101,8 @@ function HttpRuleEditor({ deviceId, rule, number, conflicts, onSelectConflict, p
         </div>
       </RequestConditions>
       {conditionError && <div className="hint dup-warning" role="alert">{conditionError}</div>}
+      {usesPathTemplate(rule.urlPattern) && !capabilities.includes('http-path-templates') &&
+        <p className="hint warn">Update the device SDK to use path templates.</p>}
       {!supportsQueryMocks && queryCount > 0 && (
         <p className="hint warn">Update the device SDK to use query matching. This rule is not sent to this device.</p>
       )}

@@ -30,7 +30,7 @@ Rules run inside the SDK on the selected device. HTTP mocks answer before the ne
 socket ack rules answer locally. Mock bodies support `${randomId}`, `${now}` and
 `${randomString(min~max)}`.
 
-HTTP rules can combine **Query parameters** and JSON **Body conditions**. Every specified
+Use `/users/{id}` in an HTTP mock to match a single path segment. HTTP rules can combine **Query parameters** and JSON **Body conditions**. Every specified
 condition must match; other object fields are ignored. **Mock this path** defaults to
 **Path only**. Choose the captured query, complete JSON object body, or both from the menu, then press the main button to create the rule.
 **Mock this ack** defaults to **Event only**; its menu can include JSON object fields from

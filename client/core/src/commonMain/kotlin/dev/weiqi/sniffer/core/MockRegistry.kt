@@ -26,9 +26,17 @@ object MockRegistry {
             socket = newRules.socket.map { it.copy(syncRevision = newRules.revision) })
     }
 
-    // Exact-path match: [urlPattern] must equal the request's path (scheme, host, query and
-    // fragment stripped). "/api/" no longer catches "/api/systems/v1/app-version". An empty
-    // pattern matches nothing (a bare path always starts with "/").
+    private val pathParameter by lazy { Regex("""\{[A-Za-z_][A-Za-z0-9_]*\}""") }
+
+    private fun matchesPath(pattern: String, path: String): Boolean {
+        if ('{' !in pattern || pattern == path) return pattern == path
+        val expected = pattern.split('/')
+        val actual = path.split('/')
+        return expected.size == actual.size && expected.indices.all { i ->
+            expected[i] == actual[i] || (actual[i].isNotEmpty() && pathParameter.matches(expected[i]))
+        }
+    }
+
     fun matchHttp(method: String, url: String): HttpMockRule? = matchHttp(method, url, null)
 
     fun matchHttp(method: String, url: String, body: String?): HttpMockRule? = mockLocked {
@@ -70,7 +78,7 @@ object MockRegistry {
         }
         var fallback: HttpMockRule? = null
         for (rule in rules.http) {
-            if (!rule.enabled || rule.urlPattern.isEmpty() || path != rule.urlPattern ||
+            if (!rule.enabled || rule.urlPattern.isEmpty() || !matchesPath(rule.urlPattern, path) ||
                 (rule.method != null && !rule.method.equals(method, ignoreCase = true))) continue
             val condition = rule.bodyMatch?.takeUnless { it.isBlank() }
             val expected = condition?.let { parseJson(it) as? JsonObject }
