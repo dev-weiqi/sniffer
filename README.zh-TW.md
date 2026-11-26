@@ -25,7 +25,7 @@ Sniffer 擷取偵錯版 App 的 HTTP 與 Socket 流量，讓你透過本機 UI �
 
 規則在所選裝置的 SDK 內執行。HTTP 模擬在發出網路請求前回應，socket ack 規則則在本機回應。模擬內容支援 `${randomId}`、`${now}` 與 `${randomString(min~max)}`。
 
-HTTP 規則的路徑可用 `/users/{id}` 比對單一區段。在 **Request conditions** 可從最近一筆符合路徑與方法的請求多選標頭，或手動新增。**Request headers** 可與 **Query parameters**、JSON **Body conditions** 一起使用，所有指定條件都必須符合，其他物件欄位則忽略。**Mock this path** 預設為 **Path only**，可從選單選擇已擷取的查詢參數、完整 JSON 物件內容，或兩者，再按主按鈕建立規則。**Mock this ack** 預設為 **Event only**，可從選單加入第一個送出參數中的 JSON 物件欄位。回應資料與這些條件分開設定。裝置 SDK 必須支援所選條件，舊版 SDK 請先更新。
+HTTP 規則的路徑可用 `/users/{id}` 比對單一區段。在 **Request conditions** 可從最近一筆符合路徑與方法的請求多選標頭，或手動新增。**Request headers** 可與 **Query parameters**、JSON **Body conditions** 一起使用，所有指定條件都必須符合，其他物件欄位則忽略。**Mock this path** 預設為 **Path only**，可從選單選擇已擷取的查詢參數、完整 JSON 物件內容，或兩者，再按主按鈕建立規則。**Mock this ack** 預設為 **Event only**，可從選單加入第一個送出參數中的 JSON 物件欄位。回應資料與這些條件分開設定。裝置 SDK 必須支援所選條件，具名路徑區段與請求標頭條件需要 SDK 0.10.0 以上版本。
 
 HTTP 與 Socket 編輯器預設收合 **Request conditions**。建立模擬時若帶入擷取條件，會自動展開並選取對應分頁，同時包含 Query 與 Body 時選取 Body。每個裝置的規則都會在此瀏覽器記住展開狀態及所選的條件分頁，關閉面板或重新載入後也會保留。延遲設定仍放在回應旁邊。**Break on this path** 只比對 HTTP 方法與路徑，忽略 Query 與 Body 條件。按 **Remove breakpoint** 可移除該中斷點。
 
@@ -70,7 +70,7 @@ SNIFFER_BIND=0.0.0.0 sniffer start
 
 ```bash
 npm install -g @dev-weiqi/sniffer@latest
-npm install -g @dev-weiqi/sniffer@0.9.4
+npm install -g @dev-weiqi/sniffer@0.10.0
 ```
 
 ## 桌面應用程式
@@ -95,7 +95,7 @@ xattr -d com.apple.quarantine /Applications/Sniffer.app
 | Ktor WebSocket | `io.github.dev-weiqi.sniffer:ktor-ws` |
 
 ```kotlin
-val snifferVersion = "0.9.0"
+val snifferVersion = "0.10.0"
 
 dependencies {
     debugImplementation("io.github.dev-weiqi.sniffer:core:$snifferVersion")

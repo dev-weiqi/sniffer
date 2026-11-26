@@ -95,6 +95,8 @@ HTTP 請求與回應是共用 ID 的兩則訊息。method、status、URL 與 use
 
 共用欄位為 `enabled`、`name`、`starred`、`delayMs`（非負毫秒）。`starred` 會將規則分享給相同 App ID 的裝置，修改或刪除也影響這些裝置。新規則放在所屬群組前面，共享規則優先於裝置專屬規則。ID 與建立時間由工具產生。
 
+具名路徑區段與請求標頭條件需要裝置 SDK 0.10.0 以上版本。
+
 HTTP 必填 `urlPattern`，比對不含 scheme、host、query 的請求路徑。整段 `{id}` 可比對一個非空路徑區段，需有 `http-path-templates` 能力。選填欄位為 `method`（null 表示不限）、`status`（預設 200）、`headers`、`body`、`delayOnly`、`queryParams`（值為字串）、`bodyMatch`（以字串表示的 JSON 物件）。`delayOnly: true` 只延遲真實請求，不產生模擬回應。
 
 例如 `create_mock({"urlPattern":"/users/{id}","requestHeaders":{"Accept-Language":"zh-TW","X-Version":"2"}})` 要求兩個請求標頭都符合。名稱不分大小寫，值精確比對，同名標頭有任一值符合即可。`update_mock` 會取代整份標頭條件，傳入 `requestHeaders: {}` 即可清除。非空條件需要 `http-header-mocks` 能力。`headers` 仍用來設定回應標頭。

@@ -35,7 +35,7 @@ condition must match; other object fields are ignored. **Mock this path** defaul
 **Path only**. Choose the captured query, complete JSON object body, or both from the menu, then press the main button to create the rule.
 **Mock this ack** defaults to **Event only**; its menu can include JSON object fields from
 the first outgoing argument. Response data stays separate from these conditions. The device
-SDK must support the selected conditions; update older SDKs before using them.
+SDK must support the selected conditions. Named path segments and request header conditions require SDK 0.10.0 or later.
 
 HTTP and Socket editors keep **Request conditions** collapsed by default. Creating a mock
 with captured conditions expands them automatically and selects the matching tab (Body when
@@ -88,7 +88,7 @@ Update, or pin a version:
 
 ```bash
 npm install -g @dev-weiqi/sniffer@latest
-npm install -g @dev-weiqi/sniffer@0.9.4
+npm install -g @dev-weiqi/sniffer@0.10.0
 ```
 
 ## Desktop app
@@ -119,7 +119,7 @@ builds: same API, empty implementation.
 | Ktor WebSocket | `io.github.dev-weiqi.sniffer:ktor-ws` |
 
 ```kotlin
-val snifferVersion = "0.9.0"
+val snifferVersion = "0.10.0"
 
 dependencies {
     debugImplementation("io.github.dev-weiqi.sniffer:core:$snifferVersion")

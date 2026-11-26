@@ -108,6 +108,8 @@ Common fields: `enabled`, `name`, `starred`, `delayMs` (nonnegative milliseconds
 it affects those devices too. New rules are inserted first within their group;
 shared rules precede device-only rules. IDs and creation timestamps are generated.
 
+Named path segments and request header conditions require device SDK 0.10.0 or later.
+
 HTTP requires `urlPattern`, a request path without scheme, host or query. A whole segment such as `{id}` matches one nonempty segment (`http-path-templates`).
 Optional fields: `method` (null matches any), `status` (default 200), `headers`,
 `body`, `delayOnly`, `queryParams` (string values), `bodyMatch` (a JSON object encoded
