@@ -12,6 +12,8 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -48,8 +50,7 @@ object Sniffer {
 
     internal var reportSinkForTests: ((DeviceMessage) -> Unit)? = null
 
-    @Volatile
-    private var capabilities: Set<String> = setOf("mock-observability", "http-path-templates", "http-header-mocks", "http-query-mocks", "http-body-mocks", "socket-payload-mocks")
+    private val capabilities = MutableStateFlow(setOf("mock-observability", "http-path-templates", "http-header-mocks", "http-query-mocks", "http-body-mocks", "socket-payload-mocks"))
 
     @Volatile
     private var pushHandlers: Map<String, (event: String, payload: String) -> Unit> = emptyMap()
@@ -116,8 +117,8 @@ object Sniffer {
      * hears about a socket when it connects or disconnects -- so without replaying them here it
      * stays blind to those sockets until the app restarts, and saved push events lose their target.
      */
-    internal fun handshakeMessages(hello: Hello): List<DeviceMessage> =
-        listOf(hello.copy(capabilities = capabilities.toList())) + liveConnections.values
+    internal fun handshakeMessages(hello: Hello, registered: Set<String> = capabilities.value): List<DeviceMessage> =
+        listOf(hello.copy(capabilities = registered.toList())) + liveConnections.values
 
     /**
      * Pauses the calling response until the daemon resolves breakpoint [hit], returning how to
@@ -129,7 +130,7 @@ object Sniffer {
 
     /** Plugin modules register their capability; it shows up in hello.capabilities. */
     fun registerCapability(name: String) {
-        capabilities = capabilities + name
+        capabilities.update { it + name }
     }
 
     /** Socket modules register a handler for push-event (server→client injection). */
@@ -177,8 +178,14 @@ object Sniffer {
 
     /** The wire session, identical whichever side opened the socket. */
     private suspend fun WebSocketSession.runSession(hello: Hello) {
-        for (msg in handshakeMessages(hello)) send(SnifferJson.encodeToString(msg))
+        val initial = capabilities.value
+        for (msg in handshakeMessages(hello, initial)) send(SnifferJson.encodeToString(msg))
         Breakpoints.connected = true
+        val updates = launch {
+            capabilities.collect { current ->
+                if (current != initial) send(SnifferJson.encodeToString<DeviceMessage>(hello.copy(capabilities = current.toList())))
+            }
+        }
         val sender = launch {
             for (msg in queue) send(SnifferJson.encodeToString<DeviceMessage>(msg))
         }
@@ -190,6 +197,7 @@ object Sniffer {
             Breakpoints.connected = false
             // release every paused response before tearing the connection down
             Breakpoints.releaseAll()
+            updates.cancel()
             sender.cancel()
         }
     }

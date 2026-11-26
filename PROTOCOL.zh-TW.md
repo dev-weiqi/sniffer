@@ -21,6 +21,8 @@
 
 ## 裝置 → 背景服務
 
+外掛註冊新能力時，SDK 會在同一條連線再次送出 `hello`，其中包含完整的能力清單。背景服務會更新裝置資訊，並重新下發裝置支援的 mock 規則。
+
 ```jsonc
 // first message after connecting
 { "type": "hello", "deviceId": "279f756", "deviceName": "sdk_gphone64_arm64",

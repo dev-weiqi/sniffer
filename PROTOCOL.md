@@ -25,6 +25,8 @@ Timestamps are epoch millis. Bodies are strings; binary bodies are `null`. Bodie
 
 ## Device → Daemon
 
+The SDK sends another `hello` on the same connection when a plugin registers new capabilities. Each `hello` carries the full capability list. The daemon updates the device and resends its supported mock rules.
+
 ```jsonc
 // first message after connecting
 { "type": "hello", "deviceId": "279f756", "deviceName": "sdk_gphone64_arm64",

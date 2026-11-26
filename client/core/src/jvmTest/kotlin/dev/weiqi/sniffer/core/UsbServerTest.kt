@@ -7,6 +7,7 @@ import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
 import io.ktor.websocket.send
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +25,35 @@ import kotlin.test.assertTrue
     real client and the frames must round-trip through RawWebSocket. */
 class UsbServerTest {
     private fun freePort() = ServerSocket(0).use { it.localPort }
+
+    @Test
+    fun capabilities_registered_after_hello_reach_the_same_session() = runBlocking {
+        val port = freePort()
+        val initial = CompletableDeferred<Hello>()
+        val updated = CompletableDeferred<Hello>()
+        val capability = "test-" + newId()
+        val server = launch {
+            serveUsb(port, accept = { true }) {
+                val first = SnifferJson.decodeFromString<DeviceMessage>((incoming.receive() as Frame.Text).readText()) as Hello
+                check(initial.complete(first)) { "Unexpected reconnect" }
+                for (frame in incoming) {
+                    if (frame !is Frame.Text) continue
+                    val message = SnifferJson.decodeFromString<DeviceMessage>(frame.readText())
+                    if (message is Hello) updated.complete(message)
+                }
+            }
+        }
+        try {
+            Sniffer.start(appId = "late-registration", host = "127.0.0.1", port = port, deviceName = "JUnit")
+            val first = withTimeout(8000) { initial.await() }
+            assertTrue(capability !in first.capabilities)
+            Sniffer.registerCapability(capability)
+            assertEquals(first.copy(capabilities = first.capabilities + capability), withTimeout(3000) { updated.await() })
+        } finally {
+            Sniffer.stop()
+            server.cancelAndJoin()
+        }
+    }
 
     @Test
     fun outbound_transport_reuses_websocket_framing_without_an_http_client_engine() = runBlocking {
